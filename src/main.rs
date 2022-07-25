@@ -178,12 +178,13 @@ impl eframe::App for MyApp {
             ScrollArea::vertical()
                 .min_scrolled_height(row_height)
                 .max_height((row_height + ui.spacing().item_spacing.y) * 5.0)
-                .show_viewport(ui, |ui, _viewport| {
+                .show_rows(ui, row_height, segments.len(), |ui, row_range| {
                     for row_index in 0..segments.len() {
                         let this_row_is_highlighted = match current_split_index {
                             None => false,
                             Some(i) => i == row_index,
                         };
+                        if !row_range.contains(&row_index) && !this_row_is_highlighted { continue; }
                         let row_time = match segments[row_index].split_time().real_time {
                             None => time,
                             Some(rt) => rt.to_duration(),
