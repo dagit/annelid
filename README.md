@@ -3,7 +3,7 @@
 ![Action Shot](data/inaction.png)
 
 This is a simple barebones re-imagining of LiveSplit + autosplitter for SNES
-(sd2snes/fxpak). It's named for the [phylum of segmented
+(sd2snes/fxpak + qusb2snes or SNI). It's named for the [phylum of segmented
 worms](https://en.wikipedia.org/wiki/Annelid), because segments (and maybe
 because it's a bit ugly).
 
@@ -13,6 +13,32 @@ added. The Super Metroid support is based on
 
 It's written in Rust using `egui`. This means it should work on Windows, macOS,
 and Linux. However, I've only tested it on Linux.
+
+# Dependencies
+
+You will need qusb2snes or SNI so that the autosplitter can read the SNES memory (console or emulator). Beyond that, it should build and run anywhere that supports websockets, Rust, and egui.
+
+# Getting Started
+
+You'll need to install Rust. I recommend using [rustup](http://rustup.rs). Once you have the rust toolchain installed, clone this repository, and then type:
+
+```sh
+cargo build --release
+```
+
+If the build is successful, you can run it with:
+
+```sh
+cargo run --release
+```
+
+If you see the message:
+
+```
+Error: "No devices present"
+```
+
+That means you need to turn on your SNES and make sure that qusb2snes is connected to it. Then try the `run` command again.
 
 # TODO
 
