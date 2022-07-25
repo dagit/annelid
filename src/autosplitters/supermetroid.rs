@@ -1,8 +1,9 @@
 #![allow(non_upper_case_globals)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::ops::Index;
+use std::time::Instant;
 
 lazy_static! {
     static ref roomIDEnum: HashMap<&'static str, u32> = {
@@ -238,6 +239,7 @@ lazy_static! {
     };
 }
 
+#[derive(Clone)]
 pub struct Settings {
     data: HashMap<String, (bool, Option<String>)>,
 }
@@ -1109,7 +1111,7 @@ impl Settings {
 }
 #[allow(non_snake_case)]
 // TODO: probably makes sense to move this to the SNESState impl
-pub fn split(settings: &Settings, snes: &mut SNESState) -> bool {
+fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     // Ammo pickup section
     let firstMissile = settings.get("firstMissile")
         && snes["maxMissiles"].old == 0
@@ -1901,11 +1903,13 @@ pub fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         || nonStandardCategoryFinish;
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Width {
     Byte,
     Word,
 }
 
+#[derive(Clone)]
 pub struct MemoryWatcher {
     address: u32,
     current: u32,
@@ -1942,15 +1946,38 @@ impl MemoryWatcher {
 }
 
 #[allow(non_snake_case)]
+#[derive(Clone)]
 pub struct SNESState {
     vars: HashMap<String, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
+    latency_samples: VecDeque<u128>,
+    data: Vec<u8>,
+    // The MemoryWatchers are not in a good
+    // state until they've been updated
+    // twice, due to having both old and current
+    // fields. So the first time we update, we
+    // need to do it twice.
+    do_extra_update: bool,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SNESSummary {
+    pub latency_average: f32,
+    pub latency_stddev: f32,
+    pub start: bool,
+    pub reset: bool,
+    pub split: bool,
 }
 
 impl SNESState {
     pub fn new() -> SNESState {
+        let mut data = Vec::with_capacity(0x10000);
+        data.resize(0x10000, 0);
         SNESState {
+            do_extra_update: true,
+            data: data,
+            latency_samples: VecDeque::from([]),
             pickedUpHundredthMissile: false,
             pickedUpSporeSpawnSuper: false,
             vars: HashMap::from([
@@ -2130,18 +2157,22 @@ impl SNESState {
         }
     }
 
-    fn update(&mut self, memory: &Vec<u8>) {
+    fn update(&mut self) {
         for watcher in self.vars.iter_mut() {
-            watcher.1.update_value(memory);
+            if self.do_extra_update {
+                watcher.1.update_value(&self.data);
+                self.do_extra_update = false;
+            }
+            watcher.1.update_value(&self.data);
         }
     }
 
     pub fn fetch_all(
         &mut self,
         client: &mut crate::usb2snes::SyncClient,
-    ) -> Result<(), Box<dyn Error>> {
-        let mut data = Vec::with_capacity(0x10000);
-        data.resize(0x10000, 0);
+        settings: &Settings,
+    ) -> Result<SNESSummary, Box<dyn Error>> {
+        let start_time = Instant::now();
         let snes_data = client.get_addresses(&vec![
             (0xf5008B, 2),
             (0xf5079B, 3),
@@ -2154,27 +2185,51 @@ impl SNESState {
         ])?;
         // TODO: refactor this
         for i in 0..2 {
-            data[0x008b + i] = snes_data[0][i];
+            self.data[0x008b + i] = snes_data[0][i];
         }
         for i in 0..3 {
-            data[0x079b + i] = snes_data[1][i];
+            self.data[0x079b + i] = snes_data[1][i];
         }
-        data[0x0998] = snes_data[2][0];
+        self.data[0x0998] = snes_data[2][0];
         for i in 0..61 {
-            data[0x09a4 + i] = snes_data[3][i];
+            self.data[0x09a4 + i] = snes_data[3][i];
         }
-        data[0x0a28] = snes_data[4][0];
+        self.data[0x0a28] = snes_data[4][0];
         for i in 0..66 {
-            data[0x0f8c + i] = snes_data[5][i];
+            self.data[0x0f8c + i] = snes_data[5][i];
         }
         for i in 0..14 {
-            data[0xd821 + i] = snes_data[6][i];
+            self.data[0xd821 + i] = snes_data[6][i];
         }
         for i in 0..20 {
-            data[0xd870 + i] = snes_data[7][i];
+            self.data[0xd870 + i] = snes_data[7][i];
         }
-        self.update(&data);
-        Ok(())
+        self.update();
+        let start = self.start();
+        let reset = self.reset();
+        let split = split(&settings, self);
+        let elapsed = start_time.elapsed().as_millis();
+        if self.latency_samples.len() == 1000 {
+            self.latency_samples.pop_front();
+        }
+        self.latency_samples.push_back(elapsed);
+        let average_latency: f32 =
+            self.latency_samples.iter().sum::<u128>() as f32 / self.latency_samples.len() as f32;
+        let mut s = 0;
+        for x in self.latency_samples.iter() {
+            let y = *x as i128;
+            let avg = average_latency as i128;
+            let diff = y - avg;
+            s += diff * diff;
+        }
+        let stddev = (s as f32 / (self.latency_samples.len() as f32 - 1.0)).sqrt();
+        Ok(SNESSummary {
+            latency_average: average_latency,
+            latency_stddev: stddev,
+            start: start,
+            reset: reset,
+            split: split,
+        })
     }
 
     pub fn start(&self) -> bool {

@@ -19,6 +19,8 @@ egui = "*"
 lazy_static = "1.4.0"
 strum = "0.22"
 strum_macros = "0.22"
+time = "0.3"
+parking_lot = "*"
 
 
 [profile.dev]

@@ -5,22 +5,23 @@ pub mod autosplitters;
 pub mod routes;
 pub mod usb2snes;
 
-use autosplitters::supermetroid::{SNESState, Settings};
+use autosplitters::supermetroid::SNESState;
 use eframe::egui;
 use egui::containers::ScrollArea;
-use livesplit_core::Timer;
-use std::collections::VecDeque;
+use livesplit_core::{SharedTimer, Timer};
+use parking_lot::RwLock;
 use std::error::Error;
-use std::time::Instant;
+use std::sync::Arc;
+use std::thread;
 
 #[allow(non_snake_case)]
 struct MyApp {
-    client: usb2snes::SyncClient,
-    snes: SNESState,
-    settings: Settings,
-    timer: Timer,
-    latency_samples: VecDeque<u128>,
+    timer: SharedTimer,
     remaining_space: egui::Vec2,
+    timer_precision: Precision,
+    // Stored as (avg, stddev), doing it this way lets
+    // use a single lock for both
+    latency: Arc<RwLock<(f32, f32)>>,
 }
 
 impl MyApp {}
@@ -107,76 +108,38 @@ fn columns_dyn<'c, R>(
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        ctx.set_visuals(egui::Visuals::dark()); // Switch to light mode
-        let start = Instant::now();
-        match self.snes.fetch_all(&mut self.client) {
-            Err(e) => {
-                println!("{}", e);
-                frame.quit();
-                return;
-            }
-            Ok(()) => {}
-        }
-        let elapsed = start.elapsed().as_millis();
-        self.latency_samples.push_back(elapsed);
-        if self.latency_samples.len() > 1000 {
-            self.latency_samples.pop_front();
-        }
-        let average_latency: u128 =
-            self.latency_samples.iter().sum::<u128>() / self.latency_samples.len() as u128;
-        let mut s = 0;
-        for x in self.latency_samples.iter() {
-            let y = *x as i128;
-            let avg = average_latency as i128;
-            let diff = y - avg;
-            s += diff * diff;
-        }
-        let stddev = (s as f64 / (self.latency_samples.len() as f64 - 1f64)).sqrt();
-        if self.snes.start() {
-            self.timer.start();
-        }
-        if self.snes.reset() {
-            self.timer.reset(true);
-        }
-        if autosplitters::supermetroid::split(&self.settings, &mut self.snes) {
-            self.timer.split();
-        }
+        ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
         egui::CentralPanel::default().show(ctx, |ui| {
             //egui::containers::Area::new("area").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(mk_text(
                     &format!(
                         "{} - {}",
-                        self.timer.run().game_name(),
-                        self.timer.run().category_name()
+                        self.timer.read().run().game_name(),
+                        self.timer.read().run().category_name()
                     ),
                     42.0,
                     egui::Color32::WHITE,
                 ));
+                let latency = self.latency.read();
                 ui.label(mk_text(
-                    &format!("latency {}ms ± {:02}ms", average_latency, stddev.round()),
+                    &format!("latency {}ms ± {}ms", latency.0.round(), latency.1.round()),
                     10.0,
                     egui::Color32::GRAY,
                 ));
             });
-            let time =
-                (self.timer.run().offset() + self.timer.current_attempt_duration()).to_duration();
-            let ms_str = format!("{:02}", time.subsec_milliseconds());
-            let time_str = format!(
-                "{:02}:{:02}:{:02}.{ms:.*}",
-                time.whole_hours(),
-                time.whole_minutes() % 60,
-                time.whole_seconds() % 60,
-                2,
-                ms = ms_str
-            );
-            let current_split_index = self.timer.current_split_index();
+            let time = (self.timer.read().run().offset()
+                + self.timer.read().current_attempt_duration())
+            .to_duration();
+            let time_str = format_time(&time, self.timer_precision);
+            let current_split_index = self.timer.read().current_split_index();
             let font_id = epaint::text::FontId {
                 size: 32.0,
                 family: epaint::text::FontFamily::Proportional,
             };
             let row_height = ui.fonts().row_height(&font_id);
-            let segments = self.timer.run().segments();
+            let timer = self.timer.read();
+            let segments = timer.run().segments();
             //let split_index = std::cmp::min(current_split_index.unwrap_or(0), segments.len() - 1);
             //ui.label(segments[split_index].name());
             let total_width = ui.available_width() - ui.spacing().item_spacing.x * 3.0;
@@ -225,17 +188,8 @@ impl eframe::App for MyApp {
                             None => time,
                             Some(rt) => rt.to_duration(),
                         };
-                        //let row_time = livesplit_core::TimeSpan::zero().to_duration();
                         let row_pb_time = segments[row_index].personal_best_split_time();
-                        let ms_str = format!("{:02}", row_time.subsec_milliseconds());
-                        let time_str = format!(
-                            "{:02}:{:02}:{:02}.{ms:.*}",
-                            row_time.whole_hours(),
-                            row_time.whole_minutes() % 60,
-                            row_time.whole_seconds() % 60,
-                            2,
-                            ms = ms_str
-                        );
+                        let time_str = format_time(&row_time, self.timer_precision);
                         let frame = egui::Frame::none();
                         let frame = if this_row_is_highlighted {
                             frame.fill(egui::Color32::BLUE)
@@ -349,7 +303,6 @@ impl eframe::App for MyApp {
             );
             self.remaining_space = ui.available_size_before_wrap();
         });
-        ctx.request_repaint();
         let mut sz = ctx.input().screen_rect.size();
         sz.y -= self.remaining_space.y;
         frame.set_window_size(sz);
@@ -357,23 +310,69 @@ impl eframe::App for MyApp {
     }
 }
 
-fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let mut client = usb2snes::SyncClient::connect();
-    client.set_name("annelid".to_owned())?;
-    println!("Server version is {:?}", client.app_version());
-    let mut devices = client.list_device()?;
-    if devices.len() != 1 {
-        if devices.len() < 1 {
-            Err("No devices present")?;
-        } else {
-            Err(format!("You need to select a device: {:#?}", devices))?;
+#[derive(Copy, Clone, Debug)]
+pub enum Precision {
+    Seconds,
+    TenthsOfSeconds,
+    HundredthsOfSeconds,
+}
+
+fn format_time(time: &time::Duration, timer_precision: Precision) -> String {
+    let mut time_str = "".to_owned();
+
+    if time.whole_hours() > 0 {
+        time_str += &format!("{}:", time.whole_hours());
+    }
+
+    if time.whole_hours() > 0 && time.whole_minutes() > 0 {
+        time_str += &format!("{:02}:", time.whole_minutes() % 60);
+    } else if time.whole_minutes() > 0 {
+        time_str += &format!("{}:", time.whole_minutes() % 60);
+    }
+
+    if time.whole_minutes() > 0 && time.whole_seconds() > 0 {
+        time_str += &format!("{:02}", time.whole_seconds() % 60);
+    } else {
+        time_str += &format!("{}", time.whole_seconds() % 60);
+    }
+
+    if time.subsec_milliseconds() > 0 {
+        match timer_precision {
+            Precision::Seconds => {}
+            Precision::TenthsOfSeconds => {
+                time_str += "";
+                let ms_str = format!("{:01}", time.subsec_milliseconds());
+                time_str += &format!(".{ms:.*}", 1, ms = ms_str);
+            }
+            Precision::HundredthsOfSeconds => {
+                let ms_str = format!("{:02}", time.subsec_milliseconds());
+                time_str += &format!(".{ms:.*}", 2, ms = ms_str);
+            }
         }
     }
-    let device = devices.pop().ok_or("Device list was empty")?;
-    println!("Using device: {}", device);
-    client.attach(&device)?;
-    println!("Connected.");
-    println!("{:#?}", client.info()?);
+
+    time_str
+}
+
+fn print_on_error<F>(f: F)
+where
+    F: FnOnce() -> std::result::Result<(), Box<dyn Error>>,
+{
+    match f() {
+        Ok(()) => {}
+        Err(e) => {
+            println!("{}", e);
+        }
+    }
+}
+
+fn main() -> std::result::Result<(), Box<dyn Error>> {
+    let polling_rate = 20.0;
+    let (settings, run) = routes::supermetroid::hundo();
+    //let (settings, run) = routes::supermetroid::anypercent();
+    let timer = Timer::new(run)
+        .expect("Run with at least one segment provided")
+        .into_shared();
     let options = eframe::NativeOptions {
         always_on_top: true,
         // TODO: fix me
@@ -381,20 +380,57 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         ..eframe::NativeOptions::default()
     };
     println!("size = {:#?}", options.initial_window_size);
-    let mut snes = SNESState::new();
-    // We need to initialize the memory state before entering the polling loop
-    snes.fetch_all(&mut client)?;
-
-    let (settings, run) = routes::supermetroid::hundo();
-    //let (settings, run) = routes::supermetroid::anypercent();
+    let latency = Arc::new(RwLock::new((0.0, 0.0)));
 
     let app = MyApp {
-        client: client,
-        snes: snes,
-        settings: settings,
-        latency_samples: VecDeque::from([]),
-        timer: Timer::new(run).expect("Run with at least one segment provided"),
+        timer: timer.clone(),
         remaining_space: egui::Vec2 { x: 0.0, y: 0.0 },
+        timer_precision: Precision::TenthsOfSeconds,
+        latency: latency.clone(),
     };
-    eframe::run_native("Annelid", options, Box::new(|_cc| Box::new(app)));
+    eframe::run_native("Annelid", options, Box::new(move |cc| {
+        let context = cc.egui_ctx.clone();
+        let _handle = thread::spawn(move || {
+            print_on_error(move || -> std::result::Result<(), Box<dyn Error>> {
+                let mut client = usb2snes::SyncClient::connect();
+                client.set_name("annelid".to_owned())?;
+                println!("Server version is {:?}", client.app_version());
+                let mut devices = client.list_device()?;
+                if devices.len() != 1 {
+                    if devices.len() < 1 {
+                        Err("No devices present")?;
+                    } else {
+                        Err(format!("You need to select a device: {:#?}", devices))?;
+                    }
+                }
+                let device = devices.pop().ok_or("Device list was empty")?;
+                println!("Using device: {}", device);
+                client.attach(&device)?;
+                println!("Connected.");
+                println!("{:#?}", client.info()?);
+                let mut snes = SNESState::new();
+                loop {
+                    let summary = snes.fetch_all(&mut client, &settings)?;
+                    if summary.start {
+                        timer.write().start();
+                    }
+                    if summary.reset {
+                        timer.write().reset(true);
+                    }
+                    if summary.split {
+                        timer.write().split();
+                    }
+                    {
+                        *latency.write() = (summary.latency_average, summary.latency_stddev);
+                    }
+                    context.request_repaint();
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        (1000.0 / polling_rate) as u64,
+                    ));
+                }
+            })
+        });
+
+        Box::new(app)
+    }));
 }
