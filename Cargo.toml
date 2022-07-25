@@ -1,0 +1,26 @@
+[package]
+name = "annelid"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#clap = "*"
+serde = { version = "1.0.132", features = ["derive"] }
+serde_json = "1.0.73"
+#scan_fmt = "0.2.6"
+websocket = "0.26.2"
+livesplit-core = "*"
+epaint = "*"
+eframe = "*"
+egui = "*"
+#egui_extras = "*"
+lazy_static = "1.4.0"
+strum = "0.22"
+strum_macros = "0.22"
+
+
+[profile.dev]
+opt-level = 2
+debug = true
