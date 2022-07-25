@@ -20,10 +20,10 @@ and Linux. However, I've only tested it on Linux.
     configuring autosplit behavior.
   * [ ] Named settings that can be saved/loaded
   * [ ] Right-click menu for:
-  *     - Settings editor
-  *     - Save/Load splits and settings
-  *     - Way to select your usb2snes server
-  *     - Toggle for latency display
+        - Settings editor
+        - Save/Load splits and settings
+        - Way to select your usb2snes server
+        - Toggle for latency display
   * [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
   * [ ] Make sure the logic for starting a new run starts from a fresh snes state
   * [ ] Implement comparisons
