@@ -16,17 +16,17 @@ and Linux. However, I've only tested it on Linux.
 
 # TODO
 
-  [ ] Settings editor. A tree view with checkboxes should work pretty well for
-  configuring autosplit behavior.
-  [ ] Named settings that can be saved/loaded
-  [ ] Right-click menu for:
-      - Settings editor
-      - Save/Load splits and settings
-      - Way to select your usb2snes server
-      - Toggle for latency display
-  [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
-  [ ] Make sure the logic for starting a new run starts from a fresh snes state
-  [ ] Implement comparisons
-  [ ] Fix the horizontal sizing, currently hard coded
-  [ ] Allow it to start up without a connection and stay running when the
+  * [ ] Settings editor. A tree view with checkboxes should work pretty well for
+    configuring autosplit behavior.
+  * [ ] Named settings that can be saved/loaded
+  * [ ] Right-click menu for:
+  *     - Settings editor
+  *     - Save/Load splits and settings
+  *     - Way to select your usb2snes server
+  *     - Toggle for latency display
+  * [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
+  * [ ] Make sure the logic for starting a new run starts from a fresh snes state
+  * [ ] Implement comparisons
+  * [ ] Fix the horizontal sizing, currently hard coded
+  * [ ] Allow it to start up without a connection and stay running when the
   connection dies
