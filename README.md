@@ -51,8 +51,8 @@ That means you need to turn on your SNES and make sure that qusb2snes is connect
     * Way to select your usb2snes server
     * Toggle for latency display
   * [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
-  * [ ] Make sure the logic for starting a new run starts from a fresh snes state
+  * [X] Make sure the logic for starting a new run starts from a fresh snes state
   * [ ] Implement comparisons
   * [ ] Fix the horizontal sizing, currently hard coded
-  * [ ] Allow it to start up without a connection and stay running when the
+  * [X] Allow it to start up without a connection and stay running when the
   connection dies

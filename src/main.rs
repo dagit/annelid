@@ -368,6 +368,7 @@ where
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let polling_rate = 20.0;
+    let frame_rate = 30.0;
     let (settings, run) = routes::supermetroid::hundo();
     //let (settings, run) = routes::supermetroid::anypercent();
     let timer = Timer::new(run)
@@ -388,49 +389,67 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         timer_precision: Precision::TenthsOfSeconds,
         latency: latency.clone(),
     };
-    eframe::run_native("Annelid", options, Box::new(move |cc| {
-        let context = cc.egui_ctx.clone();
-        let _handle = thread::spawn(move || {
-            print_on_error(move || -> std::result::Result<(), Box<dyn Error>> {
-                let mut client = usb2snes::SyncClient::connect();
-                client.set_name("annelid".to_owned())?;
-                println!("Server version is {:?}", client.app_version());
-                let mut devices = client.list_device()?;
-                if devices.len() != 1 {
-                    if devices.len() < 1 {
-                        Err("No devices present")?;
-                    } else {
-                        Err(format!("You need to select a device: {:#?}", devices))?;
+    eframe::run_native(
+        "Annelid",
+        options,
+        Box::new(move |cc| {
+            let context = cc.egui_ctx.clone();
+            // This thread is essentially just a refresh rate timer
+            // it ensures that the gui thread is redrawn at the requested frame_rate,
+            // possibly more often.
+            let _frame_rate_thread = thread::spawn(move || loop {
+                context.request_repaint();
+                std::thread::sleep(std::time::Duration::from_millis(
+                    (1000.0 / frame_rate) as u64,
+                ));
+            });
+            // This thread deals with polling the SNES at a fixed rate.
+            let _snes_polling_thread = thread::spawn(move || loop {
+                let timer = timer.clone();
+                let settings = settings.clone();
+                let latency = latency.clone();
+                print_on_error(move || -> std::result::Result<(), Box<dyn Error>> {
+                    let mut client = usb2snes::SyncClient::connect();
+                    client.set_name("annelid".to_owned())?;
+                    println!("Server version is {:?}", client.app_version()?);
+                    let mut devices = client.list_device()?;
+                    if devices.len() != 1 {
+                        if devices.len() < 1 {
+                            Err("No devices present")?;
+                        } else {
+                            Err(format!("You need to select a device: {:#?}", devices))?;
+                        }
                     }
-                }
-                let device = devices.pop().ok_or("Device list was empty")?;
-                println!("Using device: {}", device);
-                client.attach(&device)?;
-                println!("Connected.");
-                println!("{:#?}", client.info()?);
-                let mut snes = SNESState::new();
-                loop {
-                    let summary = snes.fetch_all(&mut client, &settings)?;
-                    if summary.start {
-                        timer.write().start();
+                    let device = devices.pop().ok_or("Device list was empty")?;
+                    println!("Using device: {}", device);
+                    client.attach(&device)?;
+                    println!("Connected.");
+                    println!("{:#?}", client.info()?);
+                    let mut snes = SNESState::new();
+                    loop {
+                        let summary = snes.fetch_all(&mut client, &settings)?;
+                        if summary.start {
+                            timer.write().start();
+                        }
+                        if summary.reset {
+                            timer.write().reset(true);
+                            snes = SNESState::new();
+                        }
+                        if summary.split {
+                            timer.write().split();
+                        }
+                        {
+                            *latency.write() = (summary.latency_average, summary.latency_stddev);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            (1000.0 / polling_rate) as u64,
+                        ));
                     }
-                    if summary.reset {
-                        timer.write().reset(true);
-                    }
-                    if summary.split {
-                        timer.write().split();
-                    }
-                    {
-                        *latency.write() = (summary.latency_average, summary.latency_stddev);
-                    }
-                    context.request_repaint();
-                    std::thread::sleep(std::time::Duration::from_millis(
-                        (1000.0 / polling_rate) as u64,
-                    ));
-                }
-            })
-        });
+                });
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            });
 
-        Box::new(app)
-    }));
+            Box::new(app)
+        }),
+    );
 }
