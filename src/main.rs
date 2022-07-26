@@ -8,7 +8,8 @@ pub mod usb2snes;
 use autosplitters::supermetroid::SNESState;
 use eframe::egui;
 use egui::containers::ScrollArea;
-use livesplit_core::{SharedTimer, Timer};
+use livesplit_core::layout::{ComponentSettings, LayoutSettings};
+use livesplit_core::{Layout, SharedTimer, Timer};
 use parking_lot::RwLock;
 use std::error::Error;
 use std::sync::Arc;
@@ -184,7 +185,9 @@ impl eframe::App for MyApp {
                             None => false,
                             Some(i) => i == row_index,
                         };
-                        if !row_range.contains(&row_index) && !this_row_is_highlighted { continue; }
+                        if !row_range.contains(&row_index) && !this_row_is_highlighted {
+                            continue;
+                        }
                         let row_time = match segments[row_index].split_time().real_time {
                             None => time,
                             Some(rt) => rt.to_duration(),
@@ -367,6 +370,76 @@ where
     }
 }
 
+struct LiveSplitCoreRenderer {
+    texture: Option<egui::TextureHandle>,
+    layout: Layout,
+    timer: SharedTimer,
+    renderer: livesplit_core::rendering::software::Renderer,
+}
+
+impl eframe::App for LiveSplitCoreRenderer {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
+        egui::Area::new("livesplit").show(ctx, |ui| {
+            let sz = ctx.input().screen_rect.size();
+            let texture: &mut egui::TextureHandle = self.texture.get_or_insert_with(|| {
+                let sz = [sz.x as usize, sz.y as usize];
+                let buffer = vec![0; 4 * sz[0] * sz[1]];
+                let blank = egui::ColorImage::from_rgba_unmultiplied(sz, &buffer.as_slice());
+                ui.ctx().load_texture("frame", blank)
+            });
+
+            // a local scope so the timer lock has a smaller scope
+            let layout_state = {
+                let timer = self.timer.read();
+                let snapshot = timer.snapshot();
+                self.layout.state(&snapshot)
+            };
+            let sz_vec2 = [sz.x as f32, sz.y as f32];
+            let szu32 = [sz.x as u32, sz.y as u32];
+            let sz = [sz.x as usize, sz.y as usize];
+            self.renderer.render(&layout_state, szu32);
+            let raw_frame = self.renderer.image_data();
+            // Note: Don't use from_rgba_unmultiplied() here. It's super slow.
+            let pixels = raw_frame
+                .chunks_exact(4)
+                .map(|p| egui::Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3]))
+                .collect();
+            let raw_frame = epaint::image::ColorImage { size: sz, pixels };
+
+            texture.set(raw_frame);
+            ui.image(texture.id(), sz_vec2);
+        });
+    }
+}
+
+fn customize_layout(layout: &mut LayoutSettings) {
+    layout.components.iter_mut().for_each(customize_component);
+}
+
+fn customize_component(component: &mut ComponentSettings) {
+    match component {
+        ComponentSettings::Splits(splits) => customize_splits(splits),
+        ComponentSettings::Timer(timer) => customize_timer(timer),
+        _ => (),
+    }
+}
+
+fn customize_splits(splits: &mut livesplit_core::component::splits::Settings) {
+    use livesplit_core::timing::formatter::Accuracy;
+    splits.visual_split_count = 5;
+    splits.split_preview_count = 2;
+    splits.split_time_accuracy = Accuracy::Tenths;
+    splits.segment_time_accuracy = Accuracy::Tenths;
+    splits.always_show_last_split = true;
+    splits.delta_drop_decimals = true;
+}
+
+fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
+    use livesplit_core::timing::formatter::Accuracy;
+    timer.accuracy = Accuracy::Tenths;
+}
+
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let polling_rate = 20.0;
     let frame_rate = 30.0;
@@ -384,11 +457,21 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     println!("size = {:#?}", options.initial_window_size);
     let latency = Arc::new(RwLock::new((0.0, 0.0)));
 
-    let app = MyApp {
+    //let app = MyApp {
+    //    timer: timer.clone(),
+    //    remaining_space: egui::Vec2 { x: 0.0, y: 0.0 },
+    //    timer_precision: Precision::TenthsOfSeconds,
+    //    latency: latency.clone(),
+    //};
+    let mut layout_settings = Layout::default_layout().settings();
+    customize_layout(&mut layout_settings);
+    let layout = Layout::from_settings(layout_settings);
+
+    let app = LiveSplitCoreRenderer {
+        texture: None,
         timer: timer.clone(),
-        remaining_space: egui::Vec2 { x: 0.0, y: 0.0 },
-        timer_precision: Precision::TenthsOfSeconds,
-        latency: latency.clone(),
+        layout: layout,
+        renderer: livesplit_core::rendering::software::Renderer::new(),
     };
     eframe::run_native(
         "Annelid",
