@@ -1,5 +1,6 @@
 #![allow(non_upper_case_globals)]
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::ops::Index;
@@ -239,7 +240,7 @@ lazy_static! {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
     data: HashMap<String, (bool, Option<String>)>,
 }
@@ -1010,6 +1011,44 @@ impl Settings {
             Some((_, x)) => (value, x.clone()),
         };
         self.data.insert(var, val);
+    }
+
+    /// The keys which have no parent defined
+    pub fn roots(&self) -> Vec<String> {
+        let mut rs = vec![];
+        for (key, (_, parent)) in self.data.iter() {
+            if let None = parent {
+                rs.push(key.to_owned());
+            }
+        }
+        rs
+    }
+
+    /// The immediate childern (if any)
+    pub fn children(&self, key: &str) -> Vec<String> {
+        let mut rs = vec![];
+        for (k, (_, parent)) in self.data.iter() {
+            if let Some(parent) = parent {
+                if key == parent {
+                    rs.push(k.to_owned())
+                }
+            }
+        }
+        rs
+    }
+
+    pub fn lookup(&mut self, var: &str) -> bool {
+        match self.data.get(var) {
+            None => panic!(),
+            Some((b, _)) => *b,
+        }
+    }
+
+    pub fn lookup_mut(&mut self, var: &str) -> &mut bool {
+        match self.data.get_mut(var) {
+            None => panic!(),
+            Some((b, _)) => b,
+        }
     }
 
     pub fn split_on_misc_upgrades(&mut self) {

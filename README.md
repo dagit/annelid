@@ -1,6 +1,8 @@
 # About
 
 ![Action Shot](data/inaction.png)
+![Menu](data/context-menu.png)
+![Settings Editor](data/settings-editor.png)
 
 This is a simple barebones re-imagining of LiveSplit + autosplitter for SNES
 (sd2snes/fxpak + qusb2snes or SNI). It's named for the [phylum of segmented
@@ -16,7 +18,7 @@ and Linux. However, I've only tested it on Linux.
 
 # Dependencies
 
-You will need qusb2snes or SNI so that the autosplitter can read the SNES memory (console or emulator). Beyond that, it should build and run anywhere that supports websockets, Rust, and egui.
+You will need qusb2snes or SNI so that the autosplitter can read the SNES memory (console or emulator). Beyond that, it should build and run on Windows, macOS, and Linux.
 
 # Getting Started
 
@@ -38,21 +40,21 @@ If you see the message:
 Error: "No devices present"
 ```
 
-That means you need to turn on your SNES and make sure that qusb2snes is connected to it. Then try the `run` command again.
+That means you need to turn on your SNES and make sure that qusb2snes is connected to it.
 
 # TODO
 
-  * [ ] Settings editor. A tree view with checkboxes should work pretty well for
+  * [X] Settings editor. A tree view with checkboxes should work pretty well for
     configuring autosplit behavior.
-  * [ ] Named settings that can be saved/loaded
-  * [ ] Right-click menu for:
-    * Settings editor
-    * Save/Load splits and settings
-    * Way to select your usb2snes server
-    * Toggle for latency display
+  * [X] Named settings that can be saved/loaded
+  * [X] Right-click menu for:
+    * [X] Settings editor
+    * [X] Save/Load splits and settings
+    * [ ] Way to select your usb2snes server
+    * [ ] Toggle for latency display
   * [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
   * [X] Make sure the logic for starting a new run starts from a fresh snes state
-  * [ ] Implement comparisons
-  * [ ] Fix the horizontal sizing, currently hard coded
+  * [X] Implement comparisons
+  * [X] Fix the horizontal sizing, currently hard coded
   * [X] Allow it to start up without a connection and stay running when the
   connection dies
