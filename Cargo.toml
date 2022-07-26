@@ -21,6 +21,8 @@ strum = "0.22"
 strum_macros = "0.22"
 time = "0.3"
 parking_lot = "*"
+native-dialog = "0.6.3"
+directories = "4.0.1"
 
 
 [profile.dev]

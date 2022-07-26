@@ -358,6 +358,26 @@ fn format_time(time: &time::Duration, timer_precision: Precision) -> String {
     time_str
 }
 
+fn messagebox_on_error<F>(f: F)
+where
+    F: FnOnce() -> std::result::Result<(), Box<dyn Error>>,
+{
+    use native_dialog::{MessageDialog, MessageType};
+    match f() {
+        Ok(()) => {}
+        Err(e) => {
+            println!("{}", e);
+            MessageDialog::new()
+                .set_type(MessageType::Error)
+                .set_title("Error")
+                .set_text(&format!("{}", e))
+                .show_alert()
+                .unwrap();
+            return;
+        }
+    }
+}
+
 fn print_on_error<F>(f: F)
 where
     F: FnOnce() -> std::result::Result<(), Box<dyn Error>>,
@@ -378,38 +398,133 @@ struct LiveSplitCoreRenderer {
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
-        egui::Area::new("livesplit").show(ctx, |ui| {
-            let sz = ctx.input().screen_rect.size();
-            let texture: &mut egui::TextureHandle = self.texture.get_or_insert_with(|| {
+        egui::Area::new("livesplit")
+            .show(ctx, |ui| {
+                let sz = ctx.input().screen_rect.size();
+                let texture: &mut egui::TextureHandle = self.texture.get_or_insert_with(|| {
+                    let sz = [sz.x as usize, sz.y as usize];
+                    let buffer = vec![0; 4 * sz[0] * sz[1]];
+                    let blank = egui::ColorImage::from_rgba_unmultiplied(sz, &buffer.as_slice());
+                    ui.ctx().load_texture("frame", blank)
+                });
+
+                // a local scope so the timer lock has a smaller scope
+                let layout_state = {
+                    let timer = self.timer.read();
+                    let snapshot = timer.snapshot();
+                    self.layout.state(&snapshot)
+                };
+                let sz_vec2 = [sz.x as f32, sz.y as f32];
+
+                let szu32 = [sz.x as u32, sz.y as u32];
                 let sz = [sz.x as usize, sz.y as usize];
-                let buffer = vec![0; 4 * sz[0] * sz[1]];
-                let blank = egui::ColorImage::from_rgba_unmultiplied(sz, &buffer.as_slice());
-                ui.ctx().load_texture("frame", blank)
+                self.renderer.render(&layout_state, szu32);
+                let raw_frame = self.renderer.image_data();
+                // Note: Don't use from_rgba_unmultiplied() here. It's super slow.
+                let pixels = raw_frame
+                    .chunks_exact(4)
+                    .map(|p| egui::Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3]))
+                    .collect();
+                let raw_frame = epaint::image::ColorImage { size: sz, pixels };
+
+                texture.set(raw_frame);
+                ui.image(texture.id(), sz_vec2);
+            })
+            .response
+            .context_menu(|ui| {
+                ui.menu_button("Import From LiveSplit", |ui| {
+                    let empty_path = "".to_owned();
+                    let document_dir = match directories::UserDirs::new() {
+                        None => empty_path,
+                        Some(d) => match d.document_dir() {
+                            None => empty_path,
+                            Some(d) => d.to_str().unwrap_or("").to_owned(),
+                        },
+                    };
+                    if ui.button("Import Layout").clicked() {
+                        ui.close_menu();
+                        messagebox_on_error(|| {
+                            use native_dialog::FileDialog;
+                            let path = FileDialog::new()
+                                .set_location(&document_dir)
+                                .add_filter("LiveSplit Layout", &["lsl"])
+                                .add_filter("Any file", &["*"])
+                                .show_open_single_file()?;
+                            let path = match path {
+                                Some(path) => path,
+                                None => return Ok(()),
+                            };
+                            let f = std::fs::File::open(path)?;
+                            self.layout =
+                                livesplit_core::layout::parser::parse(std::io::BufReader::new(f))?;
+                            Ok(())
+                        });
+                    }
+                    if ui.button("Import Splits").clicked() {
+                        ui.close_menu();
+                        messagebox_on_error(|| {
+                            use livesplit_core::run::parser::composite;
+                            use native_dialog::FileDialog;
+                            let path = FileDialog::new()
+                                .set_location(&document_dir)
+                                .add_filter("LiveSplit Splits", &["lss"])
+                                .add_filter("Any file", &["*"])
+                                .show_open_single_file()?;
+                            let path = match path {
+                                Some(path) => path,
+                                None => return Ok(()),
+                            };
+                            let f = std::fs::File::open(path.clone())?;
+                            *self.timer.write() = Timer::new(
+                                composite::parse(
+                                    std::io::BufReader::new(f),
+                                    path.parent().map(|p| p.to_path_buf()),
+                                    true,
+                                )?
+                                .run,
+                            )?;
+                            Ok(())
+                        });
+                    }
+                });
+                ui.separator();
+                ui.menu_button("Run Control", |ui| {
+                    if ui.button("Start").clicked() {
+                        self.timer.write().start();
+                        ui.close_menu()
+                    }
+                    if ui.button("Split").clicked() {
+                        self.timer.write().split();
+                        ui.close_menu()
+                    }
+                    if ui.button("Skip Split").clicked() {
+                        self.timer.write().skip_split();
+                        ui.close_menu()
+                    }
+                    if ui.button("Undo Split").clicked() {
+                        self.timer.write().undo_split();
+                        ui.close_menu()
+                    }
+                    if ui.button("Pause").clicked() {
+                        self.timer.write().pause();
+                        ui.close_menu()
+                    }
+                    if ui.button("Resume").clicked() {
+                        self.timer.write().resume();
+                        ui.close_menu()
+                    }
+                    if ui.button("Reset").clicked() {
+                        self.timer.write().reset(true);
+                        ui.close_menu()
+                    }
+                });
+                ui.separator();
+                if ui.button("Quit").clicked() {
+                    frame.quit();
+                }
             });
-
-            // a local scope so the timer lock has a smaller scope
-            let layout_state = {
-                let timer = self.timer.read();
-                let snapshot = timer.snapshot();
-                self.layout.state(&snapshot)
-            };
-            let sz_vec2 = [sz.x as f32, sz.y as f32];
-            let szu32 = [sz.x as u32, sz.y as u32];
-            let sz = [sz.x as usize, sz.y as usize];
-            self.renderer.render(&layout_state, szu32);
-            let raw_frame = self.renderer.image_data();
-            // Note: Don't use from_rgba_unmultiplied() here. It's super slow.
-            let pixels = raw_frame
-                .chunks_exact(4)
-                .map(|p| egui::Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3]))
-                .collect();
-            let raw_frame = epaint::image::ColorImage { size: sz, pixels };
-
-            texture.set(raw_frame);
-            ui.image(texture.id(), sz_vec2);
-        });
     }
 }
 
@@ -449,7 +564,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .expect("Run with at least one segment provided")
         .into_shared();
     let options = eframe::NativeOptions {
-        always_on_top: true,
+        //always_on_top: true,
         // TODO: fix me
         initial_window_size: Some(egui::vec2(470.0, 337.0)),
         ..eframe::NativeOptions::default()
