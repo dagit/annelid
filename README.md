@@ -58,3 +58,5 @@ That means you need to turn on your SNES and make sure that qusb2snes is connect
   * [X] Fix the horizontal sizing, currently hard coded
   * [X] Allow it to start up without a connection and stay running when the
   connection dies
+  * [ ] Do something to avoid refiring splits in the case of reset or death mid
+    run.

@@ -243,12 +243,14 @@ lazy_static! {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
     data: HashMap<String, (bool, Option<String>)>,
+    modified_after_creation: bool,
 }
 
 impl Settings {
     pub fn new() -> Self {
         let mut settings = Settings {
             data: HashMap::new(),
+            modified_after_creation: false,
         };
         // Split on Missiles, Super Missiles, and Power Bombs
         settings.insert("ammoPickups".to_owned(), true);
@@ -987,14 +989,17 @@ impl Settings {
         settings.insert("sporeSpawnRTAFinish".to_owned(), false);
         // Split on the end of a 100 Missile RTA run, when the text box clears after collecting the hundredth missile
         settings.insert("hundredMissileRTAFinish".to_owned(), false);
+        settings.modified_after_creation = false;
         settings
     }
 
     fn insert(&mut self, name: String, value: bool) {
+        self.modified_after_creation = true;
         self.data.insert(name, (value, None));
     }
 
     fn insert_with_parent(&mut self, name: String, value: bool, parent: String) {
+        self.modified_after_creation = true;
         self.data.insert(name, (value, Some(parent)));
     }
 
@@ -1045,10 +1050,17 @@ impl Settings {
     }
 
     pub fn lookup_mut(&mut self, var: &str) -> &mut bool {
+        // TODO: this is a conservative overapproximation. We don't actually
+        // know if the caller wrote to the &mut bool we gave them.
+        self.modified_after_creation = true;
         match self.data.get_mut(var) {
             None => panic!(),
             Some((b, _)) => b,
         }
+    }
+
+    pub fn has_been_modified(&self) -> bool {
+        self.modified_after_creation
     }
 
     pub fn split_on_misc_upgrades(&mut self) {

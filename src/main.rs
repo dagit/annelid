@@ -8,7 +8,7 @@ pub mod usb2snes;
 use autosplitters::supermetroid::{SNESState, Settings};
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
-use livesplit_core::{Layout, SharedTimer, Timer, Run, Segment};
+use livesplit_core::{Layout, Run, Segment, SharedTimer, Timer};
 use parking_lot::RwLock;
 use std::error::Error;
 use std::sync::Arc;
@@ -133,7 +133,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         Some(d) => d.to_str().unwrap_or("").to_owned(),
                     },
                 };
-                ui.menu_button("Import From LiveSplit", |ui| {
+                ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
                         messagebox_on_error(|| {
@@ -173,6 +173,39 @@ impl eframe::App for LiveSplitCoreRenderer {
                                     true,
                                 )?
                                 .run,
+                            )?;
+                            Ok(())
+                        });
+                    }
+                    if ui.button("Save Splits as...").clicked() {
+                        ui.close_menu();
+                        // TODO: refactor this to a function
+                        messagebox_on_error(|| {
+                            let mut fname = self.timer.read().run().extended_file_name(false);
+                            if fname == "" {
+                                fname += "annelid.lss";
+                            } else {
+                                fname += ".lss";
+                            }
+                            let path = FileDialog::new()
+                                .set_location(&document_dir)
+                                .set_filename(&fname)
+                                .add_filter("LiveSplit Splits", &["lss"])
+                                .add_filter("Any file", &["*"])
+                                .show_save_single_file()?;
+                            let path = match path {
+                                Some(path) => path,
+                                None => return Ok(()),
+                            };
+                            let f = std::fs::OpenOptions::new()
+                                .create(true)
+                                .write(true)
+                                .truncate(true)
+                                .open(path)?;
+                            let writer = std::io::BufWriter::new(f);
+                            livesplit_core::run::saver::livesplit::save_timer(
+                                &*self.timer.read(),
+                                writer,
                             )?;
                             Ok(())
                         });
@@ -240,9 +273,15 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Save Configuration").clicked() {
                         ui.close_menu();
                         messagebox_on_error(|| {
+                            let mut fname = self.timer.read().run().extended_file_name(false);
+                            if fname == "" {
+                                fname += "annelid.asc";
+                            } else {
+                                fname += ".asc";
+                            }
                             let path = FileDialog::new()
                                 .set_location(&document_dir)
-                                .set_filename("annelid.asc")
+                                .set_filename(&fname)
                                 .add_filter("Autosplitter Configuration", &["asc"])
                                 .add_filter("Any file", &["*"])
                                 .show_save_single_file()?;
@@ -262,6 +301,81 @@ impl eframe::App for LiveSplitCoreRenderer {
                 });
                 ui.separator();
                 if ui.button("Quit").clicked() {
+                    use native_dialog::{MessageDialog, MessageType};
+                    if self.timer.read().run().has_been_modified() {
+                        let save_requested = MessageDialog::new()
+                            .set_type(MessageType::Error)
+                            .set_title("Error")
+                            .set_text(&"Splits have been modified. Save splits?")
+                            .show_confirm()
+                            .unwrap();
+                        if save_requested {
+                            messagebox_on_error(|| {
+                                let mut fname = self.timer.read().run().extended_file_name(false);
+                                if fname == "" {
+                                    fname += "annelid.lss";
+                                } else {
+                                    fname += ".lss";
+                                }
+                                let path = FileDialog::new()
+                                    .set_location(&document_dir)
+                                    .set_filename(&fname)
+                                    .add_filter("LiveSplit Splits", &["lss"])
+                                    .add_filter("Any file", &["*"])
+                                    .show_save_single_file()?;
+                                let path = match path {
+                                    Some(path) => path,
+                                    None => return Ok(()),
+                                };
+                                let f = std::fs::OpenOptions::new()
+                                    .create(true)
+                                    .write(true)
+                                    .truncate(true)
+                                    .open(path)?;
+                                let writer = std::io::BufWriter::new(f);
+                                livesplit_core::run::saver::livesplit::save_timer(
+                                    &*self.timer.read(),
+                                    writer,
+                                )?;
+                                Ok(())
+                            });
+                        }
+                    }
+                    if self.settings.read().has_been_modified() {
+                        let save_requested = MessageDialog::new()
+                            .set_type(MessageType::Error)
+                            .set_title("Error")
+                            .set_text(&"Autosplit config may have been modified. Save autosplitter config?")
+                            .show_confirm()
+                            .unwrap();
+                        if save_requested {
+                            messagebox_on_error(|| {
+                                let mut fname = self.timer.read().run().extended_file_name(false);
+                                if fname == "" {
+                                    fname += "annelid.asc";
+                                } else {
+                                    fname += ".asc";
+                                }
+                                let path = FileDialog::new()
+                                    .set_location(&document_dir)
+                                    .set_filename(&fname)
+                                    .add_filter("Autosplitter Configuration", &["asc"])
+                                    .add_filter("Any file", &["*"])
+                                    .show_save_single_file()?;
+                                let path = match path {
+                                    Some(path) => path,
+                                    None => return Ok(()),
+                                };
+                                let f = std::fs::OpenOptions::new()
+                                    .create(true)
+                                    .write(true)
+                                    .truncate(true)
+                                    .open(path)?;
+                                serde_json::to_writer(&f, &*self.settings.read())?;
+                                Ok(())
+                            });
+                        }
+                    }
                     frame.quit();
                 }
             });
@@ -386,8 +500,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                             timer.write().start();
                         }
                         if summary.reset {
-                            timer.write().reset(true);
-                            snes = SNESState::new();
+                            // For now let the user manually reset
+                            //timer.write().reset(true);
+                            //snes = SNESState::new();
                         }
                         if summary.split {
                             timer.write().split();
