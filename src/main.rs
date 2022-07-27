@@ -71,9 +71,11 @@ fn show_children(
                     ui.checkbox(settings.lookup_mut(key), key);
                 })
                 .body(|ui| {
-                    ui.scope(|ui| {
-                        ui.set_enabled(settings.lookup(key));
-                        show_children(settings, ui, ctx, &mut children);
+                    ui.indent(id, |ui| {
+                        ui.scope(|ui| {
+                            ui.set_enabled(settings.lookup(key));
+                            show_children(settings, ui, ctx, &mut children);
+                        });
                     });
                 });
         } else {
