@@ -243,8 +243,7 @@ lazy_static! {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
     data: HashMap<String, (bool, Option<String>)>,
-    // This will default to false
-    #[serde(default = "bool::default")]
+    #[serde(skip)]
     modified_after_creation: bool,
 }
 
