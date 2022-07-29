@@ -764,7 +764,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                             *latency.write() = (summary.latency_average, summary.latency_stddev);
                         }
                         // If the timer gets reset, we need to make a fresh snes state
-                        if let Some(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 snes = SNESState::new();
                         }
                         std::thread::sleep(std::time::Duration::from_millis(
