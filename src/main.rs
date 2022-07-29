@@ -453,6 +453,16 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let mut roots = settings.roots();
                 show_children(&mut settings, ui, ctx, &mut roots);
             });
+        ctx.input().events.iter().for_each(|e| {
+            if let egui::Event::Scroll(v) = e {
+                if v.y > 0.0 {
+                    self.layout.scroll_up();
+                } else {
+                    self.layout.scroll_down();
+                }
+            }
+        });
+
         if self.is_exiting {
             self.confirm_save();
             frame.quit();
