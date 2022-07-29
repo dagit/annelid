@@ -490,7 +490,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let options = eframe::NativeOptions {
         ..eframe::NativeOptions::default()
     };
-    println!("size = {:#?}", options.initial_window_size);
     let latency = Arc::new(RwLock::new((0.0, 0.0)));
 
     let layout_settings = Layout::default_layout().settings();
