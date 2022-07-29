@@ -26,6 +26,7 @@ directories = "4.0.1"
 roxmltree = "0.14.1"
 
 
-[profile.dev]
-opt-level = 2
-debug = true
+# Remember to test with --release
+#[profile.dev]
+#opt-level = 2
+#debug = true
