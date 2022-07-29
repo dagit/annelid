@@ -117,9 +117,7 @@ jobs:
         env:
           VERSION: '${{ steps.get_version.outputs.VERSION }}'
           REPOSITORY_NAME: '${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}'
-        with:
-          command: build
-          args: --release
+        run: cargo build --release && cargo install --force cargo-strip && cargo strip
       - uses: actions/upload-artifact@master
         with:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}
@@ -141,13 +139,13 @@ jobs:
         shell: bash
       - uses: actions/download-artifact@master
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu
+          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu
       - uses: actions/download-artifact@master
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin
+          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin
       - uses: actions/download-artifact@master
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
+          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
       - id: create_release
         uses: actions/create-release@v1.0.0
         env:
