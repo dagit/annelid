@@ -52,6 +52,8 @@ struct LiveSplitCoreRenderer {
     renderer: livesplit_core::rendering::software::Renderer,
     show_settings_editor: bool,
     settings: Arc<RwLock<Settings>>,
+    can_exit: bool,
+    is_exiting: bool,
 }
 
 fn show_children(
@@ -86,7 +88,98 @@ fn show_children(
     });
 }
 
+impl LiveSplitCoreRenderer {
+    fn confirm_save(&mut self) {
+        use native_dialog::{FileDialog, MessageDialog, MessageType};
+        let empty_path = "".to_owned();
+        let document_dir = match directories::UserDirs::new() {
+            None => empty_path,
+            Some(d) => match d.document_dir() {
+                None => empty_path,
+                Some(d) => d.to_str().unwrap_or("").to_owned(),
+            },
+        };
+        if self.timer.read().run().has_been_modified() {
+            let save_requested = MessageDialog::new()
+                .set_type(MessageType::Error)
+                .set_title("Error")
+                .set_text("Splits have been modified. Save splits?")
+                .show_confirm()
+                .unwrap();
+            if save_requested {
+                messagebox_on_error(|| {
+                    let mut fname = self.timer.read().run().extended_file_name(false);
+                    if fname.is_empty() {
+                        fname += "annelid.lss";
+                    } else {
+                        fname += ".lss";
+                    }
+                    let path = FileDialog::new()
+                        .set_location(&document_dir)
+                        .set_filename(&fname)
+                        .add_filter("LiveSplit Splits", &["lss"])
+                        .add_filter("Any file", &["*"])
+                        .show_save_single_file()?;
+                    let path = match path {
+                        Some(path) => path,
+                        None => return Ok(()),
+                    };
+                    let f = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path)?;
+                    let writer = std::io::BufWriter::new(f);
+                    livesplit_core::run::saver::livesplit::save_timer(&*self.timer.read(), writer)?;
+                    Ok(())
+                });
+            }
+        }
+        if self.settings.read().has_been_modified() {
+            let save_requested = MessageDialog::new()
+                .set_type(MessageType::Error)
+                .set_title("Error")
+                .set_text("Autosplit config may have been modified. Save autosplitter config?")
+                .show_confirm()
+                .unwrap();
+            if save_requested {
+                messagebox_on_error(|| {
+                    let mut fname = self.timer.read().run().extended_file_name(false);
+                    if fname.is_empty() {
+                        fname += "annelid.asc";
+                    } else {
+                        fname += ".asc";
+                    }
+                    let path = FileDialog::new()
+                        .set_location(&document_dir)
+                        .set_filename(&fname)
+                        .add_filter("Autosplitter Configuration", &["asc"])
+                        .add_filter("Any file", &["*"])
+                        .show_save_single_file()?;
+                    let path = match path {
+                        Some(path) => path,
+                        None => return Ok(()),
+                    };
+                    let f = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path)?;
+                    serde_json::to_writer(&f, &*self.settings.read())?;
+                    Ok(())
+                });
+            }
+        }
+        self.can_exit = true;
+    }
+}
+
 impl eframe::App for LiveSplitCoreRenderer {
+    fn on_exit_event(&mut self) -> bool {
+        self.is_exiting = true;
+        self.can_exit
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
         let settings_editor = egui::containers::Window::new("Settings Editor");
@@ -170,15 +263,23 @@ impl eframe::App for LiveSplitCoreRenderer {
                                         if d.tag_name().name() == "Y" {
                                             y = d.text().and_then(|d| f32::from_str(d).ok());
                                         }
-                                        if mode.is_some() && d.tag_name().name() == format!("{}Width", mode.unwrap()) {
+                                        if mode.is_some()
+                                            && d.tag_name().name()
+                                                == format!("{}Width", mode.unwrap())
+                                        {
                                             width = d.text().and_then(|d| f32::from_str(d).ok());
                                         }
-                                        if mode.is_some() && d.tag_name().name() == format!("{}Height", mode.unwrap()) {
+                                        if mode.is_some()
+                                            && d.tag_name().name()
+                                                == format!("{}Height", mode.unwrap())
+                                        {
                                             height = d.text().and_then(|d| f32::from_str(d).ok());
                                         }
-                                        if let (Some(x), Some(y), Some(width), Some(height)) = (x,y,width,height) {
-                                                frame.set_window_size(egui::Vec2::new(width, height));
-                                                frame.set_window_pos(egui::Pos2::new(x,y));
+                                        if let (Some(x), Some(y), Some(width), Some(height)) =
+                                            (x, y, width, height)
+                                        {
+                                            frame.set_window_size(egui::Vec2::new(width, height));
+                                            frame.set_window_pos(egui::Pos2::new(x, y));
                                         }
                                     });
                                 }
@@ -337,81 +438,6 @@ impl eframe::App for LiveSplitCoreRenderer {
                 });
                 ui.separator();
                 if ui.button("Quit").clicked() {
-                    use native_dialog::{MessageDialog, MessageType};
-                    if self.timer.read().run().has_been_modified() {
-                        let save_requested = MessageDialog::new()
-                            .set_type(MessageType::Error)
-                            .set_title("Error")
-                            .set_text("Splits have been modified. Save splits?")
-                            .show_confirm()
-                            .unwrap();
-                        if save_requested {
-                            messagebox_on_error(|| {
-                                let mut fname = self.timer.read().run().extended_file_name(false);
-                                if fname.is_empty() {
-                                    fname += "annelid.lss";
-                                } else {
-                                    fname += ".lss";
-                                }
-                                let path = FileDialog::new()
-                                    .set_location(&document_dir)
-                                    .set_filename(&fname)
-                                    .add_filter("LiveSplit Splits", &["lss"])
-                                    .add_filter("Any file", &["*"])
-                                    .show_save_single_file()?;
-                                let path = match path {
-                                    Some(path) => path,
-                                    None => return Ok(()),
-                                };
-                                let f = std::fs::OpenOptions::new()
-                                    .create(true)
-                                    .write(true)
-                                    .truncate(true)
-                                    .open(path)?;
-                                let writer = std::io::BufWriter::new(f);
-                                livesplit_core::run::saver::livesplit::save_timer(
-                                    &*self.timer.read(),
-                                    writer,
-                                )?;
-                                Ok(())
-                            });
-                        }
-                    }
-                    if self.settings.read().has_been_modified() {
-                        let save_requested = MessageDialog::new()
-                            .set_type(MessageType::Error)
-                            .set_title("Error")
-                            .set_text("Autosplit config may have been modified. Save autosplitter config?")
-                            .show_confirm()
-                            .unwrap();
-                        if save_requested {
-                            messagebox_on_error(|| {
-                                let mut fname = self.timer.read().run().extended_file_name(false);
-                                if fname.is_empty() {
-                                    fname += "annelid.asc";
-                                } else {
-                                    fname += ".asc";
-                                }
-                                let path = FileDialog::new()
-                                    .set_location(&document_dir)
-                                    .set_filename(&fname)
-                                    .add_filter("Autosplitter Configuration", &["asc"])
-                                    .add_filter("Any file", &["*"])
-                                    .show_save_single_file()?;
-                                let path = match path {
-                                    Some(path) => path,
-                                    None => return Ok(()),
-                                };
-                                let f = std::fs::OpenOptions::new()
-                                    .create(true)
-                                    .write(true)
-                                    .truncate(true)
-                                    .open(path)?;
-                                serde_json::to_writer(&f, &*self.settings.read())?;
-                                Ok(())
-                            });
-                        }
-                    }
                     frame.quit();
                 }
             });
@@ -427,6 +453,10 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let mut roots = settings.roots();
                 show_children(&mut settings, ui, ctx, &mut roots);
             });
+        if self.is_exiting {
+            self.confirm_save();
+            frame.quit();
+        }
     }
 }
 
@@ -492,6 +522,8 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         renderer: livesplit_core::rendering::software::Renderer::new(),
         show_settings_editor: false,
         settings: settings.clone(),
+        can_exit: false,
+        is_exiting: false,
     };
     eframe::run_native(
         "Annelid",
