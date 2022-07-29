@@ -6,8 +6,7 @@
 
 This is a simple barebones re-imagining of LiveSplit + autosplitter for SNES
 (sd2snes/fxpak + qusb2snes or SNI). It's named for the [phylum of segmented
-worms](https://en.wikipedia.org/wiki/Annelid), because segments (and maybe
-because it's a bit ugly).
+worms](https://en.wikipedia.org/wiki/Annelid), because segments.
 
 It currently only supports Super Metroid, but other SNES games could be easily
 added. The Super Metroid support is based on
@@ -21,6 +20,15 @@ and Linux. However, I've only tested it on Linux.
 You will need qusb2snes or SNI so that the autosplitter can read the SNES memory (console or emulator). Beyond that, it should build and run on Windows, macOS, and Linux.
 
 # Getting Started
+
+The easiest way to get Annelid is to download a release build for your OS:
+[Releases](https://github.com/dagit/annelid/releases)
+
+Once you have Annelid running, you can right-click to import a layout and splits
+from LiveSplit. Then use the Autosplitter editor to create an autosplitter logic
+that matches your splits.
+
+# Building
 
 You'll need to install Rust. I recommend using [rustup](http://rustup.rs). Once you have the rust toolchain installed, clone this repository, and then type:
 
