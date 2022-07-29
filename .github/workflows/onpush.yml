@@ -126,6 +126,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: ${{ github.ref == 'refs/heads/master' }}
+          automatic_release_tag: "latest"
           title: "Pre-release of ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}"
           path: ./target/release/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}${{ matrix.suffix }}
           files: |
