@@ -765,7 +765,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                         }
                         // If the timer gets reset, we need to make a fresh snes state
                         if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                snes = SNESState::new();
+                            snes = SNESState::new();
                         }
                         std::thread::sleep(std::time::Duration::from_millis(
                             (1000.0 / polling_rate) as u64,
