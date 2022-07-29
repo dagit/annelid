@@ -6,10 +6,12 @@ pub mod routes;
 pub mod usb2snes;
 
 use autosplitters::supermetroid::{SNESState, Settings};
+use clap::Parser;
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::{Layout, Run, Segment, SharedTimer, Timer};
 use parking_lot::RwLock;
+use serde_derive::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::Arc;
 use std::thread;
@@ -45,6 +47,33 @@ where
     }
 }
 
+#[derive(Deserialize, Serialize, Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct AppConfig {
+    #[clap(name = "load-splits", short = 's', long, value_parser)]
+    recent_splits: Option<String>,
+    #[clap(name = "load-layout", short = 'l', long, value_parser)]
+    recent_layout: Option<String>,
+    #[clap(name = "load-autosplitter", short = 'a', long, value_parser)]
+    recent_autosplitter: Option<String>,
+}
+
+impl AppConfig {
+    fn new() -> Self {
+        AppConfig {
+            recent_splits: None,
+            recent_layout: None,
+            recent_autosplitter: None,
+        }
+    }
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        AppConfig::new()
+    }
+}
+
 struct LiveSplitCoreRenderer {
     texture: Option<egui::TextureHandle>,
     layout: Layout,
@@ -55,6 +84,9 @@ struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
+    project_dirs: directories::ProjectDirs,
+    app_config: AppConfig,
+    app_config_loaded: bool,
 }
 
 fn show_children(
@@ -125,30 +157,198 @@ impl LiveSplitCoreRenderer {
         self.can_exit = true;
     }
 
-    fn save_splits_dialog(&mut self, default_dir: &str) {
-        let mut fname = self.timer.read().run().extended_file_name(false);
-        if fname.is_empty() {
-            fname += "annelid.lss";
-        } else {
-            fname += ".lss";
-        }
-        self.save_dialog(default_dir, &fname, ("LiveSplit Splits", "lss"), |me, f| {
-            let writer = std::io::BufWriter::new(f);
-            livesplit_core::run::saver::livesplit::save_timer(&*me.timer.read(), writer)?;
+    fn save_app_config(&self) {
+        messagebox_on_error(|| {
+            use std::io::Write;
+            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+            let f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(config_path)?;
+            let mut writer = std::io::BufWriter::new(f);
+            let toml = toml::to_string_pretty(&self.app_config)?;
+            writer.write_all(toml.as_bytes())?;
+            writer.flush()?;
             Ok(())
         });
     }
 
+    fn load_app_config(&mut self, frame: &mut eframe::Frame) {
+        messagebox_on_error(|| {
+            use std::io::Read;
+            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+            let saved_config: AppConfig = std::fs::File::open(config_path)
+                .and_then(|mut f| {
+                    let mut buffer = String::new();
+                    f.read_to_string(&mut buffer)?;
+                    Ok(toml::from_str(&buffer)?)
+                })
+                .unwrap_or_default();
+            // Let the CLI options take precedent if any provided
+            if self.app_config.recent_layout.is_none() {
+                self.app_config.recent_layout = saved_config.recent_layout;
+            }
+            if self.app_config.recent_splits.is_none() {
+                self.app_config.recent_splits = saved_config.recent_splits;
+            }
+            if self.app_config.recent_autosplitter.is_none() {
+                self.app_config.recent_autosplitter = saved_config.recent_autosplitter;
+            }
+            // Now that we've converged on a config, try loading what we can
+            if let Some(layout) = &self.app_config.recent_layout {
+                let f = std::fs::File::open(layout)?;
+                self.load_layout(f, frame)?;
+            }
+            if let Some(splits) = &self.app_config.recent_splits {
+                let f = std::fs::File::open(splits)?;
+                let path = std::path::Path::new(splits)
+                    .parent()
+                    .ok_or("failed to find parent directory")?;
+                self.load_splits(f, path.to_path_buf())?;
+            }
+            if let Some(autosplitter) = &self.app_config.recent_autosplitter {
+                let f = std::fs::File::open(autosplitter)?;
+                self.load_autosplitter(f)?;
+            }
+            Ok(())
+        });
+    }
+
+    fn load_layout(
+        &mut self,
+        f: std::fs::File,
+        frame: &mut eframe::Frame,
+    ) -> Result<(), Box<dyn Error>> {
+        use std::io::Read;
+        let mut reader = std::io::BufReader::new(f);
+        let mut layout_file = String::new();
+        reader.read_to_string(&mut layout_file)?;
+        let layout_buf = std::io::BufReader::new(layout_file.as_bytes());
+
+        self.layout = livesplit_core::layout::parser::parse(layout_buf)?;
+        let doc = roxmltree::Document::parse(&layout_file)?;
+        doc.root().children().for_each(|d| {
+            if d.tag_name().name() == "Layout" {
+                use std::str::FromStr;
+                let mut mode = None;
+                let mut x = None;
+                let mut y = None;
+                let mut width = None;
+                let mut height = None;
+                d.children().for_each(|d| {
+                    if d.tag_name().name() == "Mode" {
+                        mode = d.text();
+                    }
+                    if d.tag_name().name() == "X" {
+                        x = d.text().and_then(|d| f32::from_str(d).ok());
+                    }
+                    if d.tag_name().name() == "Y" {
+                        y = d.text().and_then(|d| f32::from_str(d).ok());
+                    }
+                    if mode.is_some() && d.tag_name().name() == format!("{}Width", mode.unwrap()) {
+                        width = d.text().and_then(|d| f32::from_str(d).ok());
+                    }
+                    if mode.is_some() && d.tag_name().name() == format!("{}Height", mode.unwrap()) {
+                        height = d.text().and_then(|d| f32::from_str(d).ok());
+                    }
+                    if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height) {
+                        frame.set_window_size(egui::Vec2::new(width, height));
+                        frame.set_window_pos(egui::Pos2::new(x, y));
+                    }
+                });
+            }
+        });
+        Ok(())
+    }
+
+    fn load_splits(
+        &mut self,
+        f: std::fs::File,
+        path: std::path::PathBuf,
+    ) -> Result<(), Box<dyn Error>> {
+        use livesplit_core::run::parser::composite;
+        *self.timer.write() = Timer::new(
+            composite::parse(
+                std::io::BufReader::new(f),
+                path.parent().map(|p| p.to_path_buf()),
+                true,
+            )?
+            .run,
+        )?;
+        Ok(())
+    }
+
+    fn load_autosplitter(&mut self, f: std::fs::File) -> Result<(), Box<dyn Error>> {
+        *self.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
+        Ok(())
+    }
+
+    fn save_splits_dialog(&mut self, default_dir: &str) {
+        let mut fname = self.timer.read().run().extended_file_name(false);
+        let splits = self.app_config.recent_splits.as_ref().unwrap_or_else(|| {
+            if fname.is_empty() {
+                fname += "annelid.lss";
+            } else {
+                fname += ".lss";
+            }
+            &fname
+        });
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .recent_splits
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
+        self.save_dialog(
+            &dir,
+            &splits.clone(),
+            ("LiveSplit Splits", "lss"),
+            |me, f| {
+                let writer = std::io::BufWriter::new(f);
+                livesplit_core::run::saver::livesplit::save_timer(&*me.timer.read(), writer)?;
+                Ok(())
+            },
+        );
+    }
+
     fn save_autosplitter_dialog(&mut self, default_dir: &str) {
         let mut fname = self.timer.read().run().extended_file_name(false);
-        if fname.is_empty() {
-            fname += "annelid.asc";
-        } else {
-            fname += ".asc";
-        }
+        let autosplitter = self
+            .app_config
+            .recent_autosplitter
+            .as_ref()
+            .unwrap_or_else(|| {
+                if fname.is_empty() {
+                    fname += "annelid.asc";
+                } else {
+                    fname += ".asc";
+                }
+                &fname
+            });
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .recent_autosplitter
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
         self.save_dialog(
-            default_dir,
-            &fname,
+            &dir,
+            &autosplitter.clone(),
             ("Autosplitter Configuration", "asc"),
             |me, f| {
                 serde_json::to_writer(&f, &*me.settings.read())?;
@@ -187,76 +387,65 @@ impl LiveSplitCoreRenderer {
     }
 
     fn open_layout_dialog(&mut self, default_dir: &str, frame: &mut eframe::Frame) {
-        self.open_dialog(default_dir, ("LiveSplit Layout", "lsl"), |me, f, _| {
-            use std::io::Read;
-            let mut reader = std::io::BufReader::new(f);
-            let mut layout_file = String::new();
-            reader.read_to_string(&mut layout_file)?;
-            let layout_buf = std::io::BufReader::new(layout_file.as_bytes());
-
-            me.layout = livesplit_core::layout::parser::parse(layout_buf)?;
-            let doc = roxmltree::Document::parse(&layout_file)?;
-            doc.root().children().for_each(|d| {
-                if d.tag_name().name() == "Layout" {
-                    use std::str::FromStr;
-                    let mut mode = None;
-                    let mut x = None;
-                    let mut y = None;
-                    let mut width = None;
-                    let mut height = None;
-                    d.children().for_each(|d| {
-                        if d.tag_name().name() == "Mode" {
-                            mode = d.text();
-                        }
-                        if d.tag_name().name() == "X" {
-                            x = d.text().and_then(|d| f32::from_str(d).ok());
-                        }
-                        if d.tag_name().name() == "Y" {
-                            y = d.text().and_then(|d| f32::from_str(d).ok());
-                        }
-                        if mode.is_some()
-                            && d.tag_name().name() == format!("{}Width", mode.unwrap())
-                        {
-                            width = d.text().and_then(|d| f32::from_str(d).ok());
-                        }
-                        if mode.is_some()
-                            && d.tag_name().name() == format!("{}Height", mode.unwrap())
-                        {
-                            height = d.text().and_then(|d| f32::from_str(d).ok());
-                        }
-                        if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height)
-                        {
-                            frame.set_window_size(egui::Vec2::new(width, height));
-                            frame.set_window_pos(egui::Pos2::new(x, y));
-                        }
-                    });
-                }
-            });
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .recent_layout
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
+        self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
+            me.load_layout(f, frame)?;
+            me.app_config.recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
     }
 
     fn open_splits_dialog(&mut self, default_dir: &str) {
-        self.open_dialog(default_dir, ("LiveSplit Splits", "lss"), |me, f, path| {
-            use livesplit_core::run::parser::composite;
-            *me.timer.write() = Timer::new(
-                composite::parse(
-                    std::io::BufReader::new(f),
-                    path.parent().map(|p| p.to_path_buf()),
-                    true,
-                )?
-                .run,
-            )?;
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .recent_splits
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
+        self.open_dialog(&dir, ("LiveSplit Splits", "lss"), |me, f, path| {
+            me.load_splits(f, path.clone())?;
+            me.app_config.recent_splits = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
     }
 
     fn open_autosplitter_dialog(&mut self, default_dir: &str) {
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .recent_autosplitter
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
         self.open_dialog(
-            default_dir,
+            &dir,
             ("Autosplitter Configuration", "asc"),
-            |me, f, _| {
-                *me.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
+            |me, f, path| {
+                me.load_autosplitter(f)?;
+                me.app_config.recent_autosplitter =
+                    Some(path.into_os_string().into_string().expect("utf8"));
                 Ok(())
             },
         );
@@ -297,6 +486,10 @@ impl eframe::App for LiveSplitCoreRenderer {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if !self.app_config_loaded {
+            self.load_app_config(frame);
+            self.app_config_loaded = true;
+        }
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
         let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit")
@@ -436,6 +629,7 @@ impl eframe::App for LiveSplitCoreRenderer {
 
         if self.is_exiting {
             self.confirm_save();
+            self.save_app_config();
             frame.quit();
         }
     }
@@ -477,6 +671,7 @@ enum ThreadEvent {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
+    let cli_config = AppConfig::parse();
     let polling_rate = 20.0;
     let frame_rate = 30.0;
     let settings = Settings::new();
@@ -499,6 +694,12 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     use std::sync::mpsc::sync_channel;
     let (sync_sender, sync_receiver) = sync_channel(0);
 
+    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
+        .ok_or("Unable to computer configuration directory")?;
+
+    let preference_dir = project_dirs.preference_dir();
+    std::fs::create_dir_all(preference_dir)?;
+
     let app = LiveSplitCoreRenderer {
         texture: None,
         timer: timer.clone(),
@@ -509,7 +710,11 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         can_exit: false,
         is_exiting: false,
         thread_chan: sync_sender,
+        project_dirs,
+        app_config: cli_config,
+        app_config_loaded: false,
     };
+
     eframe::run_native(
         "Annelid",
         options,

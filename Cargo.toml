@@ -24,6 +24,9 @@ parking_lot = "*"
 native-dialog = "0.6.3"
 directories = "4.0.1"
 roxmltree = "0.14.1"
+clap = { version = "3.2.15", features = ["clap_derive", "derive"] }
+toml = "0.5.9"
+serde_derive = "1.0.140"
 
 
 # Remember to test with --release
