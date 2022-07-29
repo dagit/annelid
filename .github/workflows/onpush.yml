@@ -117,7 +117,9 @@ jobs:
         env:
           VERSION: '${{ steps.get_version.outputs.VERSION }}'
           REPOSITORY_NAME: '${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}'
-        run: cargo build --release && cargo install --force cargo-strip && cargo strip
+      - run: cargo build --release
+      - run: cargo install --force cargo-strip
+      - run: cargo strip
       - uses: actions/upload-artifact@master
         with:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}
