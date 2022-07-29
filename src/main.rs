@@ -179,9 +179,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                                         }
                                         match (x,y,width,height) {
                                             (Some(x),Some(y),Some(width),Some(height)) => {
-                                            frame.set_window_size(egui::Vec2::new(width, height));
-                                            frame.set_window_pos(egui::Pos2::new(x,y));
-                                        }
+                                                frame.set_window_size(egui::Vec2::new(width, height));
+                                                frame.set_window_pos(egui::Pos2::new(x,y));
+                                            }
                                             _ => {}
                                         }
                                     });

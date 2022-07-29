@@ -247,7 +247,6 @@ pub struct Settings {
     modified_after_creation: bool,
 }
 
-
 impl Settings {
     pub fn new() -> Self {
         let mut settings = Settings {
