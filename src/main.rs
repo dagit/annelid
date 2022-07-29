@@ -148,9 +148,46 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 Some(path) => path,
                                 None => return Ok(()),
                             };
-                            let f = std::fs::File::open(path)?;
+                            let f = std::fs::File::open(path.clone())?;
                             self.layout =
                                 livesplit_core::layout::parser::parse(std::io::BufReader::new(f))?;
+                            let layout_file = std::fs::read_to_string(path)?;
+                            let doc = roxmltree::Document::parse(&layout_file)?;
+                            doc.root().children().for_each(|d| {
+                                if d.tag_name().name() == "Layout" {
+                                    use std::str::FromStr;
+                                    let mut mode = None;
+                                    let mut x = None;
+                                    let mut y = None;
+                                    let mut width = None;
+                                    let mut height = None;
+                                    d.children().for_each(|d| {
+                                        if d.tag_name().name() == "Mode" {
+                                            mode = d.text();
+                                        }
+                                        if d.tag_name().name() == "X" {
+                                            x = d.text().and_then(|d| f32::from_str(d).ok());
+                                        }
+                                        if d.tag_name().name() == "Y" {
+                                            y = d.text().and_then(|d| f32::from_str(d).ok());
+                                        }
+                                        if mode.is_some() && d.tag_name().name() == format!("{}Width", mode.unwrap()) {
+                                            width = d.text().and_then(|d| f32::from_str(d).ok());
+                                        }
+                                        if mode.is_some() && d.tag_name().name() == format!("{}Height", mode.unwrap()) {
+                                            height = d.text().and_then(|d| f32::from_str(d).ok());
+                                        }
+                                        match (x,y,width,height) {
+                                            (Some(x),Some(y),Some(width),Some(height)) => {
+                                            frame.set_window_size(egui::Vec2::new(width, height));
+                                            frame.set_window_pos(egui::Pos2::new(x,y));
+                                        }
+                                            _ => {}
+                                        }
+                                    });
+                                }
+                            });
+
                             Ok(())
                         });
                     }
@@ -209,6 +246,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 &*self.timer.read(),
                                 writer,
                             )?;
+                            self.timer.write().mark_as_unmodified();
                             Ok(())
                         });
                     }
