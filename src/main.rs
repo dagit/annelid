@@ -90,7 +90,7 @@ fn show_children(
 
 impl LiveSplitCoreRenderer {
     fn confirm_save(&mut self) {
-        use native_dialog::{FileDialog, MessageDialog, MessageType};
+        use native_dialog::{MessageDialog, MessageType};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -107,32 +107,7 @@ impl LiveSplitCoreRenderer {
                 .show_confirm()
                 .unwrap();
             if save_requested {
-                messagebox_on_error(|| {
-                    let mut fname = self.timer.read().run().extended_file_name(false);
-                    if fname.is_empty() {
-                        fname += "annelid.lss";
-                    } else {
-                        fname += ".lss";
-                    }
-                    let path = FileDialog::new()
-                        .set_location(&document_dir)
-                        .set_filename(&fname)
-                        .add_filter("LiveSplit Splits", &["lss"])
-                        .add_filter("Any file", &["*"])
-                        .show_save_single_file()?;
-                    let path = match path {
-                        Some(path) => path,
-                        None => return Ok(()),
-                    };
-                    let f = std::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path)?;
-                    let writer = std::io::BufWriter::new(f);
-                    livesplit_core::run::saver::livesplit::save_timer(&*self.timer.read(), writer)?;
-                    Ok(())
-                });
+                self.save_splits_dialog(&document_dir);
             }
         }
         if self.settings.read().has_been_modified() {
@@ -143,34 +118,174 @@ impl LiveSplitCoreRenderer {
                 .show_confirm()
                 .unwrap();
             if save_requested {
-                messagebox_on_error(|| {
-                    let mut fname = self.timer.read().run().extended_file_name(false);
-                    if fname.is_empty() {
-                        fname += "annelid.asc";
-                    } else {
-                        fname += ".asc";
-                    }
-                    let path = FileDialog::new()
-                        .set_location(&document_dir)
-                        .set_filename(&fname)
-                        .add_filter("Autosplitter Configuration", &["asc"])
-                        .add_filter("Any file", &["*"])
-                        .show_save_single_file()?;
-                    let path = match path {
-                        Some(path) => path,
-                        None => return Ok(()),
-                    };
-                    let f = std::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path)?;
-                    serde_json::to_writer(&f, &*self.settings.read())?;
-                    Ok(())
-                });
+                self.save_autosplitter_dialog(&document_dir);
             }
         }
         self.can_exit = true;
+    }
+
+    fn save_splits_dialog(&mut self, default_dir: &str) {
+        let mut fname = self.timer.read().run().extended_file_name(false);
+        if fname.is_empty() {
+            fname += "annelid.lss";
+        } else {
+            fname += ".lss";
+        }
+        self.save_dialog(default_dir, &fname, ("LiveSplit Splits", "lss"), |me, f| {
+            let writer = std::io::BufWriter::new(f);
+            livesplit_core::run::saver::livesplit::save_timer(&*me.timer.read(), writer)?;
+            Ok(())
+        });
+    }
+
+    fn save_autosplitter_dialog(&mut self, default_dir: &str) {
+        let mut fname = self.timer.read().run().extended_file_name(false);
+        if fname.is_empty() {
+            fname += "annelid.asc";
+        } else {
+            fname += ".asc";
+        }
+        self.save_dialog(
+            default_dir,
+            &fname,
+            ("Autosplitter Configuration", "asc"),
+            |me, f| {
+                serde_json::to_writer(&f, &*me.settings.read())?;
+                Ok(())
+            },
+        );
+    }
+
+    fn save_dialog(
+        &mut self,
+        default_dir: &str,
+        default_fname: &str,
+        file_type: (&str, &str),
+        save_action: impl FnOnce(&mut Self, std::fs::File) -> Result<(), Box<dyn Error>>,
+    ) {
+        use native_dialog::FileDialog;
+        messagebox_on_error(|| {
+            let path = FileDialog::new()
+                .set_location(default_dir)
+                .set_filename(default_fname)
+                .add_filter(file_type.0, &[file_type.1])
+                .add_filter("Any file", &["*"])
+                .show_save_single_file()?;
+            let path = match path {
+                Some(path) => path,
+                None => return Ok(()),
+            };
+            let f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)?;
+            save_action(self, f)?;
+            Ok(())
+        });
+    }
+
+    fn open_layout_dialog(&mut self, default_dir: &str, frame: &mut eframe::Frame) {
+        self.open_dialog(default_dir, ("LiveSplit Layout", "lsl"), |me, f, _| {
+            use std::io::Read;
+            let mut reader = std::io::BufReader::new(f);
+            let mut layout_file = String::new();
+            reader.read_to_string(&mut layout_file)?;
+            let layout_buf = std::io::BufReader::new(layout_file.as_bytes());
+
+            me.layout = livesplit_core::layout::parser::parse(layout_buf)?;
+            let doc = roxmltree::Document::parse(&layout_file)?;
+            doc.root().children().for_each(|d| {
+                if d.tag_name().name() == "Layout" {
+                    use std::str::FromStr;
+                    let mut mode = None;
+                    let mut x = None;
+                    let mut y = None;
+                    let mut width = None;
+                    let mut height = None;
+                    d.children().for_each(|d| {
+                        if d.tag_name().name() == "Mode" {
+                            mode = d.text();
+                        }
+                        if d.tag_name().name() == "X" {
+                            x = d.text().and_then(|d| f32::from_str(d).ok());
+                        }
+                        if d.tag_name().name() == "Y" {
+                            y = d.text().and_then(|d| f32::from_str(d).ok());
+                        }
+                        if mode.is_some()
+                            && d.tag_name().name() == format!("{}Width", mode.unwrap())
+                        {
+                            width = d.text().and_then(|d| f32::from_str(d).ok());
+                        }
+                        if mode.is_some()
+                            && d.tag_name().name() == format!("{}Height", mode.unwrap())
+                        {
+                            height = d.text().and_then(|d| f32::from_str(d).ok());
+                        }
+                        if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height)
+                        {
+                            frame.set_window_size(egui::Vec2::new(width, height));
+                            frame.set_window_pos(egui::Pos2::new(x, y));
+                        }
+                    });
+                }
+            });
+            Ok(())
+        });
+    }
+
+    fn open_splits_dialog(&mut self, default_dir: &str) {
+        self.open_dialog(default_dir, ("LiveSplit Splits", "lss"), |me, f, path| {
+            use livesplit_core::run::parser::composite;
+            *me.timer.write() = Timer::new(
+                composite::parse(
+                    std::io::BufReader::new(f),
+                    path.parent().map(|p| p.to_path_buf()),
+                    true,
+                )?
+                .run,
+            )?;
+            Ok(())
+        });
+    }
+
+    fn open_autosplitter_dialog(&mut self, default_dir: &str) {
+        self.open_dialog(
+            default_dir,
+            ("Autosplitter Configuration", "asc"),
+            |me, f, _| {
+                *me.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
+                Ok(())
+            },
+        );
+    }
+
+    fn open_dialog(
+        &mut self,
+        default_dir: &str,
+        file_type: (&str, &str),
+        open_action: impl FnOnce(
+            &mut Self,
+            std::fs::File,
+            std::path::PathBuf,
+        ) -> Result<(), Box<dyn Error>>,
+    ) {
+        use native_dialog::FileDialog;
+        messagebox_on_error(|| {
+            let path = FileDialog::new()
+                .set_location(&default_dir)
+                .add_filter(file_type.0, &[file_type.1])
+                .add_filter("Any file", &["*"])
+                .show_open_single_file()?;
+            let path = match path {
+                Some(path) => path,
+                None => return Ok(()),
+            };
+            let f = std::fs::File::open(path.clone())?;
+            open_action(self, f, path)?;
+            Ok(())
+        });
     }
 }
 
@@ -218,7 +333,6 @@ impl eframe::App for LiveSplitCoreRenderer {
             })
             .response
             .context_menu(|ui| {
-                use native_dialog::FileDialog;
                 let empty_path = "".to_owned();
                 let document_dir = match directories::UserDirs::new() {
                     None => empty_path,
@@ -230,122 +344,15 @@ impl eframe::App for LiveSplitCoreRenderer {
                 ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
-                        messagebox_on_error(|| {
-                            let path = FileDialog::new()
-                                .set_location(&document_dir)
-                                .add_filter("LiveSplit Layout", &["lsl"])
-                                .add_filter("Any file", &["*"])
-                                .show_open_single_file()?;
-                            let path = match path {
-                                Some(path) => path,
-                                None => return Ok(()),
-                            };
-                            let f = std::fs::File::open(path.clone())?;
-                            self.layout =
-                                livesplit_core::layout::parser::parse(std::io::BufReader::new(f))?;
-                            let layout_file = std::fs::read_to_string(path)?;
-                            let doc = roxmltree::Document::parse(&layout_file)?;
-                            doc.root().children().for_each(|d| {
-                                if d.tag_name().name() == "Layout" {
-                                    use std::str::FromStr;
-                                    let mut mode = None;
-                                    let mut x = None;
-                                    let mut y = None;
-                                    let mut width = None;
-                                    let mut height = None;
-                                    d.children().for_each(|d| {
-                                        if d.tag_name().name() == "Mode" {
-                                            mode = d.text();
-                                        }
-                                        if d.tag_name().name() == "X" {
-                                            x = d.text().and_then(|d| f32::from_str(d).ok());
-                                        }
-                                        if d.tag_name().name() == "Y" {
-                                            y = d.text().and_then(|d| f32::from_str(d).ok());
-                                        }
-                                        if mode.is_some()
-                                            && d.tag_name().name()
-                                                == format!("{}Width", mode.unwrap())
-                                        {
-                                            width = d.text().and_then(|d| f32::from_str(d).ok());
-                                        }
-                                        if mode.is_some()
-                                            && d.tag_name().name()
-                                                == format!("{}Height", mode.unwrap())
-                                        {
-                                            height = d.text().and_then(|d| f32::from_str(d).ok());
-                                        }
-                                        if let (Some(x), Some(y), Some(width), Some(height)) =
-                                            (x, y, width, height)
-                                        {
-                                            frame.set_window_size(egui::Vec2::new(width, height));
-                                            frame.set_window_pos(egui::Pos2::new(x, y));
-                                        }
-                                    });
-                                }
-                            });
-
-                            Ok(())
-                        });
+                        self.open_layout_dialog(&document_dir, frame);
                     }
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
-                        messagebox_on_error(|| {
-                            use livesplit_core::run::parser::composite;
-                            let path = FileDialog::new()
-                                .set_location(&document_dir)
-                                .add_filter("LiveSplit Splits", &["lss"])
-                                .add_filter("Any file", &["*"])
-                                .show_open_single_file()?;
-                            let path = match path {
-                                Some(path) => path,
-                                None => return Ok(()),
-                            };
-                            let f = std::fs::File::open(path.clone())?;
-                            *self.timer.write() = Timer::new(
-                                composite::parse(
-                                    std::io::BufReader::new(f),
-                                    path.parent().map(|p| p.to_path_buf()),
-                                    true,
-                                )?
-                                .run,
-                            )?;
-                            Ok(())
-                        });
+                        self.open_splits_dialog(&document_dir);
                     }
                     if ui.button("Save Splits as...").clicked() {
                         ui.close_menu();
-                        // TODO: refactor this to a function
-                        messagebox_on_error(|| {
-                            let mut fname = self.timer.read().run().extended_file_name(false);
-                            if fname.is_empty() {
-                                fname += "annelid.lss";
-                            } else {
-                                fname += ".lss";
-                            }
-                            let path = FileDialog::new()
-                                .set_location(&document_dir)
-                                .set_filename(&fname)
-                                .add_filter("LiveSplit Splits", &["lss"])
-                                .add_filter("Any file", &["*"])
-                                .show_save_single_file()?;
-                            let path = match path {
-                                Some(path) => path,
-                                None => return Ok(()),
-                            };
-                            let f = std::fs::OpenOptions::new()
-                                .create(true)
-                                .write(true)
-                                .truncate(true)
-                                .open(path)?;
-                            let writer = std::io::BufWriter::new(f);
-                            livesplit_core::run::saver::livesplit::save_timer(
-                                &*self.timer.read(),
-                                writer,
-                            )?;
-                            self.timer.write().mark_as_unmodified();
-                            Ok(())
-                        });
+                        self.save_splits_dialog(&document_dir);
                     }
                 });
                 ui.menu_button("Run Control", |ui| {
@@ -391,49 +398,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                     if ui.button("Load Configuration").clicked() {
                         ui.close_menu();
-                        messagebox_on_error(|| {
-                            let path = FileDialog::new()
-                                .set_location(&document_dir)
-                                .add_filter("Autosplitter Configuration", &["asc"])
-                                .add_filter("Any file", &["*"])
-                                .show_open_single_file()?;
-                            let path = match path {
-                                Some(path) => path,
-                                None => return Ok(()),
-                            };
-                            let f = std::fs::File::open(path)?;
-                            *self.settings.write() =
-                                serde_json::from_reader(std::io::BufReader::new(f))?;
-                            Ok(())
-                        });
+                        self.open_autosplitter_dialog(&document_dir);
                     }
                     if ui.button("Save Configuration").clicked() {
                         ui.close_menu();
-                        messagebox_on_error(|| {
-                            let mut fname = self.timer.read().run().extended_file_name(false);
-                            if fname.is_empty() {
-                                fname += "annelid.asc";
-                            } else {
-                                fname += ".asc";
-                            }
-                            let path = FileDialog::new()
-                                .set_location(&document_dir)
-                                .set_filename(&fname)
-                                .add_filter("Autosplitter Configuration", &["asc"])
-                                .add_filter("Any file", &["*"])
-                                .show_save_single_file()?;
-                            let path = match path {
-                                Some(path) => path,
-                                None => return Ok(()),
-                            };
-                            let f = std::fs::OpenOptions::new()
-                                .create(true)
-                                .write(true)
-                                .truncate(true)
-                                .open(path)?;
-                            serde_json::to_writer(&f, &*self.settings.read())?;
-                            Ok(())
-                        });
+                        self.save_autosplitter_dialog(&document_dir);
                     }
                 });
                 ui.separator();
