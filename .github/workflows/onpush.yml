@@ -144,13 +144,16 @@ jobs:
         with:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
           path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/
+      - id: tag_date
+        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%M-%d')
+        shell: bash
       - id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.tag_date.outputs.TAG_NAME }}
           draft: false
           prerelease: true
       - uses: actions/upload-release-asset@v1
