@@ -122,10 +122,7 @@ impl SyncClient {
         if self.devel {
             println!("Send command : {:?}", command);
         }
-        let nspace: Option<String> = match space {
-            None => None,
-            Some(sp) => Some(sp.to_string()),
-        };
+        let nspace = space.map(|sp| sp.to_string());
         let query = USB2SnesQuery {
             Opcode: command.to_string(),
             Space: nspace,
@@ -156,7 +153,7 @@ impl SyncClient {
         Ok(serde_json::from_str(&textreply)?)
     }
     pub fn set_name(&mut self, name: String) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Name, vec![name])?)
+        self.send_command(Command::Name, vec![name])
     }
     pub fn app_version(&mut self) -> Result<String, Box<dyn Error>> {
         self.send_command(Command::AppVersion, vec![])?;
@@ -169,7 +166,7 @@ impl SyncClient {
         Ok(usbreply.Results)
     }
     pub fn attach(&mut self, device: &String) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Attach, vec![device.to_string()])?)
+        self.send_command(Command::Attach, vec![device.to_string()])
     }
 
     pub fn info(&mut self) -> Result<Infos, Box<dyn Error>> {
@@ -184,13 +181,13 @@ impl SyncClient {
         })
     }
     pub fn reset(&mut self) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Reset, vec![])?)
+        self.send_command(Command::Reset, vec![])
     }
     pub fn menu(&mut self) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Menu, vec![])?)
+        self.send_command(Command::Menu, vec![])
     }
-    pub fn boot(&mut self, toboot: &String) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Boot, vec![toboot.clone()])?)
+    pub fn boot(&mut self, toboot: String) -> Result<(), Box<dyn Error>> {
+        self.send_command(Command::Boot, vec![toboot])
     }
 
     pub fn ls(&mut self, path: &String) -> Result<Vec<USB2SnesFileInfo>, Box<dyn Error>> {
@@ -231,10 +228,10 @@ impl SyncClient {
         }
         Ok(())
     }
-    pub fn get_file(&mut self, path: &String) -> Result<Vec<u8>, Box<dyn Error>> {
-        self.send_command(Command::GetFile, vec![path.clone()])?;
+    pub fn get_file(&mut self, path: String) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.send_command(Command::GetFile, vec![path])?;
         let string_hex = self.get_reply()?.Results[0].to_string();
-        let size = usize::from_str_radix(&string_hex.to_string(), 16)?;
+        let size = usize::from_str_radix(&string_hex, 16)?;
         let mut data: Vec<u8> = vec![];
         data.reserve(size);
         loop {
@@ -251,8 +248,8 @@ impl SyncClient {
         }
         Ok(data)
     }
-    pub fn remove_path(&mut self, path: &String) -> Result<(), Box<dyn Error>> {
-        Ok(self.send_command(Command::Remove, vec![path.clone()])?)
+    pub fn remove_path(&mut self, path: String) -> Result<(), Box<dyn Error>> {
+        self.send_command(Command::Remove, vec![path])
     }
     pub fn get_address(&mut self, address: u32, size: usize) -> Result<Vec<u8>, Box<dyn Error>> {
         self.send_command_with_space(

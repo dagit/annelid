@@ -1007,7 +1007,7 @@ impl Settings {
     fn get(&self, var: &str) -> bool {
         match self.data[var] {
             (b, None) => b,
-            (b, Some(ref p)) => b && self.get(&p),
+            (b, Some(ref p)) => b && self.get(p),
         }
     }
 
@@ -1023,7 +1023,7 @@ impl Settings {
     pub fn roots(&self) -> Vec<String> {
         let mut rs = vec![];
         for (key, (_, parent)) in self.data.iter() {
-            if let None = parent {
+            if parent.is_none() {
                 rs.push(key.to_owned());
             }
         }
@@ -1161,7 +1161,15 @@ impl Settings {
         self.set("babyMetroidRoom".to_owned(), true);
     }
 }
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[allow(non_snake_case)]
+#[allow(clippy::all)]
 // TODO: probably makes sense to move this to the SNESState impl
 fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     // Ammo pickup section
@@ -1943,7 +1951,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         println!("Split due to non standard category finish");
     }
 
-    return pickup
+    pickup
         || unlock
         || beam
         || energyUpgrade
@@ -1952,7 +1960,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         || bossDefeat
         || escape
         || takeoff
-        || nonStandardCategoryFinish;
+        || nonStandardCategoryFinish
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -1972,16 +1980,16 @@ pub struct MemoryWatcher {
 impl MemoryWatcher {
     pub fn new(address: u32, width: Width) -> MemoryWatcher {
         MemoryWatcher {
-            address: address,
+            address,
             current: 0,
             old: 0,
-            width: width,
+            width,
         }
     }
 }
 
 impl MemoryWatcher {
-    fn update_value(&mut self, memory: &Vec<u8>) {
+    fn update_value(&mut self, memory: &[u8]) {
         match self.width {
             Width::Byte => {
                 self.old = self.current;
@@ -2024,11 +2032,10 @@ pub struct SNESSummary {
 
 impl SNESState {
     pub fn new() -> SNESState {
-        let mut data = Vec::with_capacity(0x10000);
-        data.resize(0x10000, 0);
+        let data = vec![0; 0x10000];
         SNESState {
             do_extra_update: true,
-            data: data,
+            data,
             latency_samples: VecDeque::from([]),
             pickedUpHundredthMissile: false,
             pickedUpSporeSpawnSuper: false,
@@ -2225,15 +2232,15 @@ impl SNESState {
         settings: &Settings,
     ) -> Result<SNESSummary, Box<dyn Error>> {
         let start_time = Instant::now();
-        let snes_data = client.get_addresses(&vec![
-            (0xf5008B, 2),
-            (0xf5079B, 3),
-            (0xf50998, 1),
-            (0xf509A4, 61),
-            (0xf50A28, 1),
-            (0xf50F8C, 66),
-            (0xf5D821, 14),
-            (0xf5D870, 20),
+        let snes_data = client.get_addresses(&[
+            (0xF5008B, 2),
+            (0xF5079B, 3),
+            (0xF50998, 1),
+            (0xF509A4, 61),
+            (0xF50A28, 1),
+            (0xF50F8C, 66),
+            (0xF5D821, 14),
+            (0xF5D870, 20),
         ])?;
         // TODO: refactor this
         for i in 0..2 {
@@ -2259,7 +2266,7 @@ impl SNESState {
         self.update();
         let start = self.start();
         let reset = self.reset();
-        let split = split(&settings, self);
+        let split = split(settings, self);
         let elapsed = start_time.elapsed().as_millis();
         if self.latency_samples.len() == 1000 {
             self.latency_samples.pop_front();
@@ -2278,9 +2285,9 @@ impl SNESState {
         Ok(SNESSummary {
             latency_average: average_latency,
             latency_stddev: stddev,
-            start: start,
-            reset: reset,
-            split: split,
+            start,
+            reset,
+            split,
         })
     }
 
@@ -2295,6 +2302,12 @@ impl SNESState {
 
     pub fn reset(&self) -> bool {
         self["roomID"].old != 0 && self["roomID"].current == 0
+    }
+}
+
+impl Default for SNESState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

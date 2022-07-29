@@ -29,7 +29,6 @@ where
                 .set_text(&format!("{}", e))
                 .show_alert()
                 .unwrap();
-            return;
         }
     }
 }
@@ -59,13 +58,13 @@ fn show_children(
     settings: &mut Settings,
     ui: &mut egui::Ui,
     ctx: &egui::Context,
-    roots: &mut Vec<String>,
+    roots: &mut [String],
 ) {
     roots.sort();
     roots.iter().for_each(|key| {
         let mut children = settings.children(key);
         let id = ui.make_persistent_id(key);
-        if children.len() > 0 {
+        if !children.is_empty() {
             egui::collapsing_header::CollapsingState::load_with_default_open(ctx, id, false)
                 .show_header(ui, |ui| {
                     ui.checkbox(settings.lookup_mut(key), key);
@@ -98,7 +97,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let texture: &mut egui::TextureHandle = self.texture.get_or_insert_with(|| {
                     let sz = [sz.x as usize, sz.y as usize];
                     let buffer = vec![0; 4 * sz[0] * sz[1]];
-                    let blank = egui::ColorImage::from_rgba_unmultiplied(sz, &buffer.as_slice());
+                    let blank = egui::ColorImage::from_rgba_unmultiplied(sz, buffer.as_slice());
                     ui.ctx().load_texture("frame", blank)
                 });
 
@@ -177,12 +176,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                                         if mode.is_some() && d.tag_name().name() == format!("{}Height", mode.unwrap()) {
                                             height = d.text().and_then(|d| f32::from_str(d).ok());
                                         }
-                                        match (x,y,width,height) {
-                                            (Some(x),Some(y),Some(width),Some(height)) => {
+                                        if let (Some(x), Some(y), Some(width), Some(height)) = (x,y,width,height) {
                                                 frame.set_window_size(egui::Vec2::new(width, height));
                                                 frame.set_window_pos(egui::Pos2::new(x,y));
-                                            }
-                                            _ => {}
                                         }
                                     });
                                 }
@@ -221,7 +217,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         // TODO: refactor this to a function
                         messagebox_on_error(|| {
                             let mut fname = self.timer.read().run().extended_file_name(false);
-                            if fname == "" {
+                            if fname.is_empty() {
                                 fname += "annelid.lss";
                             } else {
                                 fname += ".lss";
@@ -314,7 +310,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         ui.close_menu();
                         messagebox_on_error(|| {
                             let mut fname = self.timer.read().run().extended_file_name(false);
-                            if fname == "" {
+                            if fname.is_empty() {
                                 fname += "annelid.asc";
                             } else {
                                 fname += ".asc";
@@ -346,13 +342,13 @@ impl eframe::App for LiveSplitCoreRenderer {
                         let save_requested = MessageDialog::new()
                             .set_type(MessageType::Error)
                             .set_title("Error")
-                            .set_text(&"Splits have been modified. Save splits?")
+                            .set_text("Splits have been modified. Save splits?")
                             .show_confirm()
                             .unwrap();
                         if save_requested {
                             messagebox_on_error(|| {
                                 let mut fname = self.timer.read().run().extended_file_name(false);
-                                if fname == "" {
+                                if fname.is_empty() {
                                     fname += "annelid.lss";
                                 } else {
                                     fname += ".lss";
@@ -385,13 +381,13 @@ impl eframe::App for LiveSplitCoreRenderer {
                         let save_requested = MessageDialog::new()
                             .set_type(MessageType::Error)
                             .set_title("Error")
-                            .set_text(&"Autosplit config may have been modified. Save autosplitter config?")
+                            .set_text("Autosplit config may have been modified. Save autosplitter config?")
                             .show_confirm()
                             .unwrap();
                         if save_requested {
                             messagebox_on_error(|| {
                                 let mut fname = self.timer.read().run().extended_file_name(false);
-                                if fname == "" {
+                                if fname.is_empty() {
                                     fname += "annelid.asc";
                                 } else {
                                     fname += ".asc";
@@ -492,7 +488,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let app = LiveSplitCoreRenderer {
         texture: None,
         timer: timer.clone(),
-        layout: layout,
+        layout,
         renderer: livesplit_core::rendering::software::Renderer::new(),
         show_settings_editor: false,
         settings: settings.clone(),
@@ -522,7 +518,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                     println!("Server version is {:?}", client.app_version()?);
                     let mut devices = client.list_device()?;
                     if devices.len() != 1 {
-                        if devices.len() < 1 {
+                        if devices.is_empty() {
                             Err("No devices present")?;
                         } else {
                             Err(format!("You need to select a device: {:#?}", devices))?;
