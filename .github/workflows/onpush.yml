@@ -145,7 +145,7 @@ jobs:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
           path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/
       - id: tag_date
-        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%M-%d')
+        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%m-%d')
         shell: bash
       - id: create_release
         uses: actions/create-release@v1
