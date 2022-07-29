@@ -144,8 +144,9 @@ jobs:
         with:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
           path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/
+      - uses: fufuhu/get-commit-id@v1
       - id: tag_date
-        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%m-%d')
+        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }}
         shell: bash
       - id: create_release
         uses: actions/create-release@v1
