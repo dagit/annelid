@@ -54,6 +54,7 @@ struct LiveSplitCoreRenderer {
     settings: Arc<RwLock<Settings>>,
     can_exit: bool,
     is_exiting: bool,
+    thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
 }
 
 fn show_children(
@@ -385,9 +386,10 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                     ui.separator();
                     if ui.button("Reset").clicked() {
-                        // TODO: this should also tell the snes watcher thread
-                        // to create a new snes state
                         self.timer.write().reset(true);
+                        self.thread_chan
+                            .send(ThreadEvent::TimerReset)
+                            .expect("thread chan to exist");
                         ui.close_menu()
                     }
                 });
@@ -470,6 +472,10 @@ fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
     timer.accuracy = Accuracy::Tenths;
 }
 
+enum ThreadEvent {
+    TimerReset,
+}
+
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let polling_rate = 20.0;
     let frame_rate = 30.0;
@@ -482,9 +488,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .expect("Run with at least one segment provided")
         .into_shared();
     let options = eframe::NativeOptions {
-        //always_on_top: true,
-        // TODO: fix me
-        initial_window_size: Some(egui::vec2(470.0, 337.0)),
         ..eframe::NativeOptions::default()
     };
     println!("size = {:#?}", options.initial_window_size);
@@ -493,6 +496,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let layout_settings = Layout::default_layout().settings();
     //customize_layout(&mut layout_settings);
     let layout = Layout::from_settings(layout_settings);
+
+    use std::sync::mpsc::sync_channel;
+    let (sync_sender, sync_receiver) = sync_channel(0);
 
     let app = LiveSplitCoreRenderer {
         texture: None,
@@ -503,6 +509,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         settings: settings.clone(),
         can_exit: false,
         is_exiting: false,
+        thread_chan: sync_sender,
     };
     eframe::run_native(
         "Annelid",
@@ -520,10 +527,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             });
             // This thread deals with polling the SNES at a fixed rate.
             let _snes_polling_thread = thread::spawn(move || loop {
-                let timer = timer.clone();
-                let settings = settings.clone();
-                let latency = latency.clone();
-                print_on_error(move || -> std::result::Result<(), Box<dyn Error>> {
+                print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
                     let mut client = usb2snes::SyncClient::connect();
                     client.set_name("annelid".to_owned())?;
                     println!("Server version is {:?}", client.app_version()?);
@@ -547,15 +551,19 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                             timer.write().start();
                         }
                         if summary.reset {
-                            // For now let the user manually reset
-                            //timer.write().reset(true);
-                            //snes = SNESState::new();
+                            // TODO: we could reset the timer here, but make it a config option
                         }
                         if summary.split {
                             timer.write().split();
                         }
                         {
                             *latency.write() = (summary.latency_average, summary.latency_stddev);
+                        }
+                        // If the timer gets reset, we need to make a fresh snes state
+                        match sync_receiver.try_recv()? {
+                            ThreadEvent::TimerReset => {
+                                snes = SNESState::new();
+                            }
                         }
                         std::thread::sleep(std::time::Duration::from_millis(
                             (1000.0 / polling_rate) as u64,
