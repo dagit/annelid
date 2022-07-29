@@ -136,9 +136,6 @@ jobs:
       - id: get_repository_name
         run: echo ::set-output name=REPOSITORY_NAME::$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//")
         shell: bash
-      - uses: actions/download-artifact@master
-        with:
-          name: version
       - id: get_version
         run: 'echo ::set-output name=VERSION::0.1.0'
         shell: bash
