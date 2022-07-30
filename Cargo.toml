@@ -27,6 +27,66 @@ roxmltree = "0.14.1"
 clap = { version = "3.2.15", features = ["clap_derive", "derive"] }
 toml = "0.5.9"
 serde_derive = "1.0.140"
+fltk = { version = "1.3.12", features = ["fltk-bundled"] }
+
+[package.metadata.appimage]
+auto_link = true
+# https://github.com/AppImage/pkg2appimage/blob/master/excludelist
+auto_link_exclude_list = [
+  "libc.so*",
+  "libdl.so*",
+  "libpthread.so*",
+  "ld-linux.so*",
+  "ld-linux-x86-64.so*",
+  "libanl.so*",
+  "libBrokenLocale.so*",
+  "libcidn.so*",
+  "libm.so*",
+  "libmvec.so*",
+  "libnss_compat.so*",
+  "libnss_dns.so*",
+  "libnss_files.so*",
+  "libnss_hesiod.so*",
+  "libnss_nisplus.so*",
+  "libnss_nis.so*",
+  "libresolv.so*",
+  "librt.so*",
+  "libthread_db.so*",
+  "libutil.so*",
+  "libstdc++.so*",
+  "libGL.so*",
+  "libEGL.so*",
+  "libGLdispatch.so*",
+  "libGLX.so*",
+  "libOpenGL.so*",
+  "libdrm.so*",
+  "libglapi.so*",
+  "libgbm.so*",
+  "libxcb.so*",
+  "libX11.so*",
+  "libasound.so*",
+  "libfontconfig.so*",
+  "libthai.so*",
+#  "libfreetype.so*",
+#  "libharfbuzz.so*",
+  "libcom_err.so*",
+  "libexpat.so*",
+  "libgcc_s.so*",
+  "libgpg-error.so*",
+  "libICE.so*",
+  "libSM.so*",
+  "libusb-1.0.so*",
+  "libuuid.so*",
+  "libz.so*",
+  "libgpg-error.so*",
+  "libjack.so*",
+]
+
+[[bin]]
+name = "annelid"
+path = "src/main.rs"
+test = false
+doc = false
 
 
 # Remember to test with --release

@@ -35,6 +35,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 fn print_on_error<F>(f: F)
 where
     F: FnOnce() -> std::result::Result<(), Box<dyn Error>>,
@@ -670,7 +671,8 @@ enum ThreadEvent {
     TimerReset,
 }
 
-fn main() -> std::result::Result<(), Box<dyn Error>> {
+#[allow(dead_code)]
+fn main_egui() -> std::result::Result<(), Box<dyn Error>> {
     let cli_config = AppConfig::parse();
     let polling_rate = 20.0;
     let frame_rate = 30.0;
@@ -778,4 +780,13 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             Box::new(app)
         }),
     );
+}
+
+use fltk::{app, prelude::*, window::Window};
+fn main () {
+    let app = app::App::default();
+    let mut wind = Window::new(100, 100, 400, 300, "Hello from rust");
+    wind.end();
+    wind.show();
+    app.run().unwrap();
 }

@@ -74,24 +74,12 @@ jobs:
           args: -- -D warnings
 
 
-  build:
+  build-ubuntu:
     needs:
       - check
       - test
       - lints
-    runs-on: '${{ matrix.os }}'
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            suffix: ''
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            suffix: ''
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            suffix: .exe
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -116,12 +104,16 @@ jobs:
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo strip
+      - run: cargo install --force cargo-appimage
+      - run: wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
+      - run: chmod a+x appimagetool
+      - run: PATH=./:$PATH cargo appimage
       - uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}
-          path: ./target/release/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}${{ matrix.suffix }}
+          name: annelid-0.1.0-x86_64.AppImage
+          path: annelid-0.1.0-x86_64.AppImage
   release:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/feature/fltk-exploration'
     needs:
       - build
     runs-on: ubuntu-latest
@@ -134,16 +126,8 @@ jobs:
         shell: bash
       - uses: actions/download-artifact@v3
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu
-          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu/
-      - uses: actions/download-artifact@v3
-        with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin
-          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin/
-      - uses: actions/download-artifact@v3
-        with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc
-          path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/
+          name: annelid-0.1.0-x86_64.AppImage
+          path: annelid-0.1.0-x86_64.AppImage/
       - id: get_commit_id
         run: echo ::set-output name=SHORT_COMMIT_ID::$(git rev-parse --short HEAD)
         shell: bash
@@ -157,29 +141,13 @@ jobs:
         with:
           tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
           release_name: Release ${{ steps.tag_date.outputs.TAG_NAME }}
-          draft: false
+          draft: true
           prerelease: true
       - uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}
-          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu
-          asset_content_type: application/octet-stream
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}
-          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin
-          asset_content_type: application/octet-stream
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}.exe
-          asset_name:  ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc.exe
+          asset_path: ./annelid-0.1.0-x86_64.AppImage/annelid-0.1.0-x86_64.AppImage
+          asset_name: annelid-0.1.0-x86_64.AppImage
           asset_content_type: application/octet-stream

@@ -56,6 +56,7 @@ dependencies = [
  "eframe",
  "egui",
  "epaint",
+ "fltk",
  "lazy_static",
  "livesplit-core",
  "native-dialog",
@@ -518,6 +519,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2dd04ddaf88237dc3b8d8f9a3c1004b506b54b3313403944054d23c0870c521"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils 0.8.11",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -526,6 +537,16 @@ dependencies = [
  "autocfg 1.1.0",
  "cfg-if 0.1.10",
  "lazy_static",
+]
+
+[[package]]
+name = "crossbeam-utils"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51887d4adc7b564537b15adcfb307936f8075dfcd5f00dde9a9f1d29383682bc"
+dependencies = [
+ "cfg-if 1.0.0",
+ "once_cell",
 ]
 
 [[package]]
@@ -820,6 +841,29 @@ name = "float-ord"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bad48618fdb549078c333a7a8528acb57af271d0433bdecd523eb620628364e"
+
+[[package]]
+name = "fltk"
+version = "1.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b23e9952a97c05f16980e9e4c8f1947a446e2f73f6dea9a1635284b4b865f184"
+dependencies = [
+ "bitflags",
+ "crossbeam-channel",
+ "fltk-sys",
+ "lazy_static",
+ "paste",
+ "ttf-parser 0.15.2",
+]
+
+[[package]]
+name = "fltk-sys"
+version = "1.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc98ac94df90651d5ca5082b2990ce817422e046078d5c3906a046823c52802a"
+dependencies = [
+ "cmake",
+]
 
 [[package]]
 name = "fnv"
@@ -1997,6 +2041,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
+
+[[package]]
 name = "pathfinder_geometry"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2798,7 +2848,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb2d1b8f4548dbf5e1f7818512e9c406860678f29c300cdf0ebac72d1a3a1671"
 dependencies = [
- "crossbeam-utils",
+ "crossbeam-utils 0.7.2",
  "futures",
 ]
 
@@ -2819,7 +2869,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09bc590ec4ba8ba87652da2068d150dcada2cfa2e07faae270a5e0409aa51351"
 dependencies = [
- "crossbeam-utils",
+ "crossbeam-utils 0.7.2",
  "futures",
  "lazy_static",
  "log 0.4.17",
