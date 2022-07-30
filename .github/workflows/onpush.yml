@@ -146,7 +146,7 @@ jobs:
       - run: cargo strip
       - uses: actions/upload-artifact@v3
         with:
-          name: annelid-0.1.0-x86_64.win/
+          name: annelid-0.1.0-x86_64.win
           path: ./target/release/annelid.exe
   build-macos:
     #needs:
@@ -180,7 +180,7 @@ jobs:
       - run: cargo strip
       - uses: actions/upload-artifact@v3
         with:
-          name: annelid-0.1.0-x86_64.macos/
+          name: annelid-0.1.0-x86_64.macos
           path: ./target/release/annelid
   release:
     if: github.ref == 'refs/heads/feature/fltk-exploration'
