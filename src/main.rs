@@ -71,7 +71,7 @@ struct AppConfig {
     hot_key_pause: Option<HotKey>,
 }
 
-#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 enum YesOrNo {
     #[default]
     Yes,
@@ -134,7 +134,7 @@ struct LiveSplitCoreRenderer {
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
     project_dirs: directories::ProjectDirs,
     app_config: AppConfig,
-    app_config_loaded: bool,
+    app_config_processed: bool,
 }
 
 fn show_children(
@@ -223,7 +223,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn load_app_config(&mut self, frame: &mut eframe::Frame) {
+    fn load_app_config(&mut self) {
         messagebox_on_error(|| {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
@@ -241,17 +241,23 @@ impl LiveSplitCoreRenderer {
             // but instead I just see two different states that need to be merged.
             let cli_config = self.app_config.clone();
             self.app_config = saved_config;
-            if cli_config.recent_layout.is_none() {
+            if cli_config.recent_layout.is_some() {
                 self.app_config.recent_layout = cli_config.recent_layout;
             }
-            if cli_config.recent_splits.is_none() {
+            if cli_config.recent_splits.is_some() {
                 self.app_config.recent_splits = cli_config.recent_splits;
             }
-            if cli_config.recent_autosplitter.is_none() {
+            if cli_config.recent_autosplitter.is_some() {
                 self.app_config.recent_autosplitter = cli_config.recent_autosplitter;
             }
             // ignore this for now
             // self.app_config.use_autosplitter = cli_config.use_autosplitter;
+            Ok(())
+        });
+    }
+
+    fn process_app_config(&mut self, frame: &mut eframe::Frame) {
+        messagebox_on_error(|| {
             // Now that we've converged on a config, try loading what we can
             if let Some(layout) = &self.app_config.recent_layout {
                 let f = std::fs::File::open(layout)?;
@@ -541,9 +547,9 @@ impl eframe::App for LiveSplitCoreRenderer {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if !self.app_config_loaded {
-            self.load_app_config(frame);
-            self.app_config_loaded = true;
+        if !self.app_config_processed {
+            self.process_app_config(frame);
+            self.app_config_processed = true;
         }
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
         let settings_editor = egui::containers::Window::new("Settings Editor");
@@ -635,9 +641,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ui.separator();
                     if ui.button("Reset").clicked() {
                         self.timer.write().reset(true);
-                        self.thread_chan
-                            .send(ThreadEvent::TimerReset)
-                            .expect("thread chan to exist");
+                        if self.app_config.use_autosplitter == YesOrNo::Yes {
+                            self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
+                        }
                         ui.close_menu()
                     }
                 });
@@ -776,7 +782,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let preference_dir = project_dirs.preference_dir();
     std::fs::create_dir_all(preference_dir)?;
 
-    let app = LiveSplitCoreRenderer {
+    let mut app = LiveSplitCoreRenderer {
         texture: None,
         timer: timer.clone(),
         layout,
@@ -788,7 +794,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         thread_chan: sync_sender,
         project_dirs,
         app_config: cli_config,
-        app_config_loaded: false,
+        app_config_processed: false,
     };
 
     eframe::run_native(
@@ -796,6 +802,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         options,
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
+            app.load_app_config();
             // This thread is essentially just a refresh rate timer
             // it ensures that the gui thread is redrawn at the requested frame_rate,
             // possibly more often.
@@ -806,50 +813,53 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                 ));
             });
             // This thread deals with polling the SNES at a fixed rate.
-            let _snes_polling_thread = thread::spawn(move || loop {
-                print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                    let mut client = usb2snes::SyncClient::connect();
-                    client.set_name("annelid".to_owned())?;
-                    println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?;
-                    if devices.len() != 1 {
-                        if devices.is_empty() {
-                            Err("No devices present")?;
-                        } else {
-                            Err(format!("You need to select a device: {:#?}", devices))?;
+            if app.app_config.use_autosplitter == YesOrNo::Yes {
+                let _snes_polling_thread = thread::spawn(move || loop {
+                    print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+                        let mut client = usb2snes::SyncClient::connect();
+                        client.set_name("annelid".to_owned())?;
+                        println!("Server version is {:?}", client.app_version()?);
+                        let mut devices = client.list_device()?;
+                        if devices.len() != 1 {
+                            if devices.is_empty() {
+                                Err("No devices present")?;
+                            } else {
+                                Err(format!("You need to select a device: {:#?}", devices))?;
+                            }
                         }
-                    }
-                    let device = devices.pop().ok_or("Device list was empty")?;
-                    println!("Using device: {}", device);
-                    client.attach(&device)?;
-                    println!("Connected.");
-                    println!("{:#?}", client.info()?);
-                    let mut snes = SNESState::new();
-                    loop {
-                        let summary = snes.fetch_all(&mut client, &settings.read())?;
-                        if summary.start {
-                            timer.write().start();
+                        let device = devices.pop().ok_or("Device list was empty")?;
+                        println!("Using device: {}", device);
+                        client.attach(&device)?;
+                        println!("Connected.");
+                        println!("{:#?}", client.info()?);
+                        let mut snes = SNESState::new();
+                        loop {
+                            let summary = snes.fetch_all(&mut client, &settings.read())?;
+                            if summary.start {
+                                timer.write().start();
+                            }
+                            if summary.reset {
+                                // TODO: we could reset the timer here, but make it a config option
+                            }
+                            if summary.split {
+                                timer.write().split();
+                            }
+                            {
+                                *latency.write() =
+                                    (summary.latency_average, summary.latency_stddev);
+                            }
+                            // If the timer gets reset, we need to make a fresh snes state
+                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                snes = SNESState::new();
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
                         }
-                        if summary.reset {
-                            // TODO: we could reset the timer here, but make it a config option
-                        }
-                        if summary.split {
-                            timer.write().split();
-                        }
-                        {
-                            *latency.write() = (summary.latency_average, summary.latency_stddev);
-                        }
-                        // If the timer gets reset, we need to make a fresh snes state
-                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                            snes = SNESState::new();
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            (1000.0 / polling_rate) as u64,
-                        ));
-                    }
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
                 });
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-            });
+            }
 
             Box::new(app)
         }),
