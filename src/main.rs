@@ -47,7 +47,7 @@ where
     }
 }
 
-#[derive(Deserialize, Serialize, Parser, Debug)]
+#[derive(Deserialize, Serialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 struct AppConfig {
     #[clap(name = "load-splits", short = 's', long, value_parser)]
@@ -56,14 +56,56 @@ struct AppConfig {
     recent_layout: Option<String>,
     #[clap(name = "load-autosplitter", short = 'a', long, value_parser)]
     recent_autosplitter: Option<String>,
+    //#[clap(name = "use-autosplitter", long, action, default_value = "yes")]
+    #[clap(skip)]
+    use_autosplitter: YesOrNo,
+    #[clap(skip)]
+    hot_key_start: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_reset: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_undo: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_skip: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_pause: Option<HotKey>,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default)]
+enum YesOrNo {
+    #[default]
+    Yes,
+    No,
 }
 
 impl AppConfig {
     fn new() -> Self {
+        let modifiers = ::egui::Modifiers::default();
         AppConfig {
             recent_splits: None,
             recent_layout: None,
             recent_autosplitter: None,
+            hot_key_start: Some(HotKey {
+                key: egui::Key::Num1,
+                modifiers,
+            }),
+            hot_key_reset: Some(HotKey {
+                key: egui::Key::Num3,
+                modifiers,
+            }),
+            hot_key_undo: Some(HotKey {
+                key: egui::Key::Num8,
+                modifiers,
+            }),
+            hot_key_skip: Some(HotKey {
+                key: egui::Key::Num2,
+                modifiers,
+            }),
+            hot_key_pause: Some(HotKey {
+                key: egui::Key::Num5,
+                modifiers,
+            }),
+            use_autosplitter: YesOrNo::Yes,
         }
     }
 }
@@ -72,6 +114,12 @@ impl Default for AppConfig {
     fn default() -> Self {
         AppConfig::new()
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+struct HotKey {
+    key: ::egui::Key,
+    modifiers: ::egui::Modifiers,
 }
 
 struct LiveSplitCoreRenderer {
@@ -188,15 +236,22 @@ impl LiveSplitCoreRenderer {
                 })
                 .unwrap_or_default();
             // Let the CLI options take precedent if any provided
-            if self.app_config.recent_layout.is_none() {
-                self.app_config.recent_layout = saved_config.recent_layout;
+            // TODO: this logic is bad, I really need to know if the CLI
+            // stuff was present and whether the stuff was present in the config
+            // but instead I just see two different states that need to be merged.
+            let cli_config = self.app_config.clone();
+            self.app_config = saved_config;
+            if cli_config.recent_layout.is_none() {
+                self.app_config.recent_layout = cli_config.recent_layout;
             }
-            if self.app_config.recent_splits.is_none() {
-                self.app_config.recent_splits = saved_config.recent_splits;
+            if cli_config.recent_splits.is_none() {
+                self.app_config.recent_splits = cli_config.recent_splits;
             }
-            if self.app_config.recent_autosplitter.is_none() {
-                self.app_config.recent_autosplitter = saved_config.recent_autosplitter;
+            if cli_config.recent_autosplitter.is_none() {
+                self.app_config.recent_autosplitter = cli_config.recent_autosplitter;
             }
+            // ignore this for now
+            // self.app_config.use_autosplitter = cli_config.use_autosplitter;
             // Now that we've converged on a config, try loading what we can
             if let Some(layout) = &self.app_config.recent_layout {
                 let f = std::fs::File::open(layout)?;
@@ -626,6 +681,27 @@ impl eframe::App for LiveSplitCoreRenderer {
                 }
             }
         });
+        {
+            let mut input = { ctx.input_mut() };
+            if input.consume_key(egui::Modifiers::default(), egui::Key::Num1) {
+                self.timer.write().split_or_start();
+            }
+            if input.consume_key(egui::Modifiers::default(), egui::Key::Num3) {
+                self.timer.write().reset(true);
+                self.thread_chan
+                    .send(ThreadEvent::TimerReset)
+                    .expect("thread chan to exist");
+            }
+            if input.consume_key(egui::Modifiers::default(), egui::Key::Num8) {
+                self.timer.write().undo_split();
+            }
+            if input.consume_key(egui::Modifiers::default(), egui::Key::Num2) {
+                self.timer.write().skip_split();
+            }
+            if input.consume_key(egui::Modifiers::default(), egui::Key::Num5) {
+                self.timer.write().toggle_pause();
+            }
+        }
 
         if self.is_exiting {
             self.confirm_save();

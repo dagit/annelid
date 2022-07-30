@@ -14,7 +14,7 @@ websocket = "0.26.2"
 livesplit-core = { version = "*", features = ["software-rendering", "font-loading"] }
 epaint = "*"
 eframe = "*"
-egui = "*"
+egui = { version = "*", features = ["serde"] }
 #egui_extras = "*"
 lazy_static = "1.4.0"
 strum = "0.22"
