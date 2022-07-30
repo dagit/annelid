@@ -700,9 +700,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
                     self.timer.write().reset(true);
                     if self.app_config.use_autosplitter == YesOrNo::Yes {
-                        self.thread_chan
-                            .send(ThreadEvent::TimerReset)
-                            .expect("thread chan to exist");
+                        self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
                     }
                 }
             }
