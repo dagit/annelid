@@ -115,7 +115,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/feature/fltk-exploration'
     needs:
-      - build
+      - build-ubuntu
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
