@@ -101,7 +101,7 @@ jobs:
         env:
           VERSION: ${{ github.ref }}
           REPOSITORY_NAME: '${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}'
-      - run: sudo apt-get install libxinerama-dev pango-dev cairo-dev wget
+      - run: sudo apt-get install -y libxinerama-dev libpangocairo-dev libcairo2-dev wget
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo strip
