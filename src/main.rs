@@ -229,7 +229,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
+            println!("Loading from {:#?}", config_path);
             let saved_config: AppConfig = std::fs::File::open(config_path)
                 .and_then(|mut f| {
                     let mut buffer = String::new();
@@ -691,40 +691,35 @@ impl eframe::App for LiveSplitCoreRenderer {
         });
         {
             let mut input = { ctx.input_mut() };
-            if input.consume_key(
-                self.app_config.hot_key_start.modifiers,
-                self.app_config.hot_key_start.key,
-            ) {
-                self.timer.write().split_or_start();
-            }
-            if input.consume_key(
-                self.app_config.hot_key_reset.modifiers,
-                self.app_config.hot_key_reset.key,
-            ) {
-                self.timer.write().reset(true);
-                if self.app_config.use_autosplitter == YesOrNo::Yes {
-                    self.thread_chan
-                        .send(ThreadEvent::TimerReset)
-                        .expect("thread chan to exist");
+            if let Some(hot_key) = self.app_config.hot_key_start {
+                if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    self.timer.write().split_or_start();
                 }
             }
-            if input.consume_key(
-                self.app_config.hot_key_undo.modifiers,
-                self.app_config.hot_key_undo.key,
-            ) {
-                self.timer.write().undo_split();
+            if let Some(hot_key) = self.app_config.hot_key_reset {
+                if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    self.timer.write().reset(true);
+                    if self.app_config.use_autosplitter == YesOrNo::Yes {
+                        self.thread_chan
+                            .send(ThreadEvent::TimerReset)
+                            .expect("thread chan to exist");
+                    }
+                }
             }
-            if input.consume_key(
-                self.app_conifg.hot_key_skip.modifiers,
-                self.app_config.hot_key_skip.key,
-            ) {
-                self.timer.write().skip_split();
+            if let Some(hot_key) = self.app_config.hot_key_undo {
+                if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    self.timer.write().undo_split();
+                }
             }
-            if input.consume_key(
-                self.app_config.hot_key_pause.modifiers,
-                self.app_config.hot_key_pause.key,
-            ) {
-                self.timer.write().toggle_pause();
+            if let Some(hot_key) = self.app_config.hot_key_skip {
+                if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    self.timer.write().skip_split();
+                }
+            }
+            if let Some(hot_key) = self.app_config.hot_key_pause {
+                if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    self.timer.write().toggle_pause();
+                }
             }
         }
 
@@ -797,6 +792,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
     let project_dirs = directories::ProjectDirs::from("", "", "annelid")
         .ok_or("Unable to computer configuration directory")?;
+    println!("project_dirs = {:#?}", project_dirs);
 
     let preference_dir = project_dirs.preference_dir();
     std::fs::create_dir_all(preference_dir)?;
