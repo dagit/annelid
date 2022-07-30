@@ -56,9 +56,8 @@ struct AppConfig {
     recent_layout: Option<String>,
     #[clap(name = "load-autosplitter", short = 'a', long, value_parser)]
     recent_autosplitter: Option<String>,
-    //#[clap(name = "use-autosplitter", long, action, default_value = "yes")]
-    #[clap(skip)]
-    use_autosplitter: YesOrNo,
+    #[clap(name = "use-autosplitter", long, action)]
+    use_autosplitter: Option<YesOrNo>,
     #[clap(skip)]
     hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -105,7 +104,7 @@ impl AppConfig {
                 key: egui::Key::Num5,
                 modifiers,
             }),
-            use_autosplitter: YesOrNo::Yes,
+            use_autosplitter: Some(YesOrNo::Yes),
         }
     }
 }
@@ -252,8 +251,9 @@ impl LiveSplitCoreRenderer {
             if cli_config.recent_autosplitter.is_some() {
                 self.app_config.recent_autosplitter = cli_config.recent_autosplitter;
             }
-            // ignore this for now
-            // self.app_config.use_autosplitter = cli_config.use_autosplitter;
+            if cli_config.use_autosplitter.is_some() {
+                self.app_config.use_autosplitter = cli_config.use_autosplitter;
+            }
             Ok(())
         });
     }
@@ -643,7 +643,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ui.separator();
                     if ui.button("Reset").clicked() {
                         self.timer.write().reset(true);
-                        if self.app_config.use_autosplitter == YesOrNo::Yes {
+                        if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
                         }
                         ui.close_menu()
@@ -699,7 +699,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             if let Some(hot_key) = self.app_config.hot_key_reset {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
                     self.timer.write().reset(true);
-                    if self.app_config.use_autosplitter == YesOrNo::Yes {
+                    if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                         self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
                     }
                 }
@@ -826,7 +826,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                 ));
             });
             // This thread deals with polling the SNES at a fixed rate.
-            if app.app_config.use_autosplitter == YesOrNo::Yes {
+            if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                 let _snes_polling_thread = thread::spawn(move || loop {
                     print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
                         let mut client = usb2snes::SyncClient::connect();
