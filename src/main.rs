@@ -210,6 +210,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Write;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
+            println!("Saving to {:#?}", config_path);
             let f = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -228,6 +229,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
+            println!("Saving to {:#?}", config_path);
             let saved_config: AppConfig = std::fs::File::open(config_path)
                 .and_then(|mut f| {
                     let mut buffer = String::new();
@@ -689,22 +691,39 @@ impl eframe::App for LiveSplitCoreRenderer {
         });
         {
             let mut input = { ctx.input_mut() };
-            if input.consume_key(egui::Modifiers::default(), egui::Key::Num1) {
+            if input.consume_key(
+                self.app_config.hot_key_start.modifiers,
+                self.app_config.hot_key_start.key,
+            ) {
                 self.timer.write().split_or_start();
             }
-            if input.consume_key(egui::Modifiers::default(), egui::Key::Num3) {
+            if input.consume_key(
+                self.app_config.hot_key_reset.modifiers,
+                self.app_config.hot_key_reset.key,
+            ) {
                 self.timer.write().reset(true);
-                self.thread_chan
-                    .send(ThreadEvent::TimerReset)
-                    .expect("thread chan to exist");
+                if self.app_config.use_autosplitter == YesOrNo::Yes {
+                    self.thread_chan
+                        .send(ThreadEvent::TimerReset)
+                        .expect("thread chan to exist");
+                }
             }
-            if input.consume_key(egui::Modifiers::default(), egui::Key::Num8) {
+            if input.consume_key(
+                self.app_config.hot_key_undo.modifiers,
+                self.app_config.hot_key_undo.key,
+            ) {
                 self.timer.write().undo_split();
             }
-            if input.consume_key(egui::Modifiers::default(), egui::Key::Num2) {
+            if input.consume_key(
+                self.app_conifg.hot_key_skip.modifiers,
+                self.app_config.hot_key_skip.key,
+            ) {
                 self.timer.write().skip_split();
             }
-            if input.consume_key(egui::Modifiers::default(), egui::Key::Num5) {
+            if input.consume_key(
+                self.app_config.hot_key_pause.modifiers,
+                self.app_config.hot_key_pause.key,
+            ) {
                 self.timer.write().toggle_pause();
             }
         }
