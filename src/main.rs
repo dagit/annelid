@@ -4,6 +4,8 @@ extern crate lazy_static;
 pub mod autosplitters;
 pub mod routes;
 pub mod usb2snes;
+#[cfg(windows)]
+pub mod win32;
 
 use autosplitters::supermetroid::{SNESState, Settings};
 use clap::Parser;
@@ -776,6 +778,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let timer = Timer::new(run)
         .expect("Run with at least one segment provided")
         .into_shared();
+    #[allow(unused_variables)]
     let options = eframe::NativeOptions {
         ..eframe::NativeOptions::default()
     };
@@ -810,71 +813,75 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         app_config_processed: false,
     };
 
-    eframe::run_native(
-        "Annelid",
-        options,
-        Box::new(move |cc| {
-            let context = cc.egui_ctx.clone();
-            app.load_app_config();
-            // This thread is essentially just a refresh rate timer
-            // it ensures that the gui thread is redrawn at the requested frame_rate,
-            // possibly more often.
-            let _frame_rate_thread = thread::spawn(move || loop {
-                context.request_repaint();
-                std::thread::sleep(std::time::Duration::from_millis(
-                    (1000.0 / frame_rate) as u64,
-                ));
+    //eframe::run_native(
+    //    "Annelid",
+    //    options,
+    //    Box::new(move |cc| {
+    //        let context = cc.egui_ctx.clone();
+    app.load_app_config();
+    let mut window = win32::main(app.layout, app.timer, app.renderer)?;
+    // This thread is essentially just a refresh rate timer
+    // it ensures that the gui thread is redrawn at the requested frame_rate,
+    // possibly more often.
+    let _frame_rate_thread = thread::spawn(move || loop {
+        //context.request_repaint();
+        unsafe {
+            use windows::Win32::Graphics::Gdi::InvalidateRect;
+            InvalidateRect(window.handle, std::ptr::null(), false);
+        };
+        std::thread::sleep(std::time::Duration::from_millis(
+            (1000.0 / frame_rate) as u64,
+        ));
+    });
+    // This thread deals with polling the SNES at a fixed rate.
+    if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
+        let _snes_polling_thread = thread::spawn(move || loop {
+            print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+                let mut client = usb2snes::SyncClient::connect()?;
+                client.set_name("annelid".to_owned())?;
+                println!("Server version is {:?}", client.app_version()?);
+                let mut devices = client.list_device()?;
+                if devices.len() != 1 {
+                    if devices.is_empty() {
+                        Err("No devices present")?;
+                    } else {
+                        Err(format!("You need to select a device: {:#?}", devices))?;
+                    }
+                }
+                let device = devices.pop().ok_or("Device list was empty")?;
+                println!("Using device: {}", device);
+                client.attach(&device)?;
+                println!("Connected.");
+                println!("{:#?}", client.info()?);
+                let mut snes = SNESState::new();
+                loop {
+                    let summary = snes.fetch_all(&mut client, &settings.read())?;
+                    if summary.start {
+                        timer.write().start();
+                    }
+                    if summary.reset {
+                        // TODO: we could reset the timer here, but make it a config option
+                    }
+                    if summary.split {
+                        timer.write().split();
+                    }
+                    {
+                        *latency.write() = (summary.latency_average, summary.latency_stddev);
+                    }
+                    // If the timer gets reset, we need to make a fresh snes state
+                    if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        snes = SNESState::new();
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        (1000.0 / polling_rate) as u64,
+                    ));
+                }
             });
-            // This thread deals with polling the SNES at a fixed rate.
-            if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                let _snes_polling_thread = thread::spawn(move || loop {
-                    print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                        let mut client = usb2snes::SyncClient::connect()?;
-                        client.set_name("annelid".to_owned())?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?;
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
-                                Err("No devices present")?;
-                            } else {
-                                Err(format!("You need to select a device: {:#?}", devices))?;
-                            }
-                        }
-                        let device = devices.pop().ok_or("Device list was empty")?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
-                        let mut snes = SNESState::new();
-                        loop {
-                            let summary = snes.fetch_all(&mut client, &settings.read())?;
-                            if summary.start {
-                                timer.write().start();
-                            }
-                            if summary.reset {
-                                // TODO: we could reset the timer here, but make it a config option
-                            }
-                            if summary.split {
-                                timer.write().split();
-                            }
-                            {
-                                *latency.write() =
-                                    (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                snes = SNESState::new();
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
-                        }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                });
-            }
-
-            Box::new(app)
-        }),
-    );
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        });
+    }
+    //Box::new(app)
+    //}),
+    //);
+    Ok(window.run()?)
 }
