@@ -136,6 +136,9 @@ struct LiveSplitCoreRenderer {
     project_dirs: directories::ProjectDirs,
     app_config: AppConfig,
     app_config_processed: bool,
+    // TODO: add the latency display back
+    #[allow(dead_code)]
+    latency: Arc<RwLock<(f32, f32)>>,
 }
 
 fn show_children(
@@ -768,8 +771,6 @@ enum ThreadEvent {
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let cli_config = AppConfig::parse();
-    let polling_rate = 20.0;
-    let frame_rate = 30.0;
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));
     let mut run = Run::default();
@@ -800,7 +801,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
     let mut app = LiveSplitCoreRenderer {
         texture: None,
-        timer: timer.clone(),
+        timer,
         layout,
         renderer: livesplit_core::rendering::software::Renderer::new(),
         show_settings_editor: false,
@@ -811,77 +812,116 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         project_dirs,
         app_config: cli_config,
         app_config_processed: false,
+        latency: latency.clone(),
     };
 
-    //eframe::run_native(
-    //    "Annelid",
-    //    options,
-    //    Box::new(move |cc| {
-    //        let context = cc.egui_ctx.clone();
     app.load_app_config();
-    let mut window = win32::main(app.layout, app.timer, app.renderer)?;
+    #[cfg(windows)]
+    {
+        let mut window = win32::main(app.layout, app.timer.clone(), app.renderer)?;
+        repaint_timer(window.handle());
+        if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
+            snes_polling(latency, app.timer, settings, sync_receiver);
+        }
+        window.run()?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    eframe::run_native(
+        "Annelid",
+        options,
+        Box::new(move |cc| {
+            let context = cc.egui_ctx.clone();
+            repaint_timer(context);
+            if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
+                snes_polling(latency, app.timer.clone(), settings, sync_receiver);
+            }
+            Box::new(app)
+        }),
+    );
+}
+
+#[cfg(windows)]
+type RepaintHandle = Arc<RwLock<windows::Win32::Foundation::HWND>>;
+
+#[cfg(not(windows))]
+type RepaintHandle = egui::Context;
+
+fn repaint_timer(handle: RepaintHandle) {
+    let frame_rate = 30.0;
     // This thread is essentially just a refresh rate timer
     // it ensures that the gui thread is redrawn at the requested frame_rate,
     // possibly more often.
-    let _frame_rate_thread = thread::spawn(move || loop {
-        //context.request_repaint();
-        unsafe {
-            use windows::Win32::Graphics::Gdi::InvalidateRect;
-            InvalidateRect(window.handle, std::ptr::null(), false);
-        };
-        std::thread::sleep(std::time::Duration::from_millis(
-            (1000.0 / frame_rate) as u64,
-        ));
+    let _frame_rate_thread = thread::spawn({
+        move || loop {
+            #[cfg(not(windows))]
+            handle.request_repaint();
+            #[cfg(windows)]
+            unsafe {
+                use windows::Win32::Graphics::Gdi::InvalidateRect;
+                let h = { *handle.read() };
+                if h != windows::Win32::Foundation::HWND(0) {
+                    //println!("sending repaint");
+                    InvalidateRect(h, std::ptr::null(), false);
+                }
+            };
+            std::thread::sleep(std::time::Duration::from_millis(
+                (1000.0 / frame_rate) as u64,
+            ));
+        }
     });
-    // This thread deals with polling the SNES at a fixed rate.
-    if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-        let _snes_polling_thread = thread::spawn(move || loop {
-            print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                let mut client = usb2snes::SyncClient::connect()?;
-                client.set_name("annelid".to_owned())?;
-                println!("Server version is {:?}", client.app_version()?);
-                let mut devices = client.list_device()?;
-                if devices.len() != 1 {
-                    if devices.is_empty() {
-                        Err("No devices present")?;
-                    } else {
-                        Err(format!("You need to select a device: {:#?}", devices))?;
-                    }
+}
+
+// TODO: it would probably be cleaner to make this thread a method of LiveSplitCoreRenderer
+fn snes_polling(
+    latency: Arc<RwLock<(f32, f32)>>,
+    timer: SharedTimer,
+    settings: Arc<RwLock<Settings>>,
+    sync_receiver: std::sync::mpsc::Receiver<ThreadEvent>,
+) {
+    let polling_rate = 20.0;
+    let _snes_polling_thread = thread::spawn(move || loop {
+        print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+            let mut client = usb2snes::SyncClient::connect()?;
+            client.set_name("annelid".to_owned())?;
+            println!("Server version is {:?}", client.app_version()?);
+            let mut devices = client.list_device()?;
+            if devices.len() != 1 {
+                if devices.is_empty() {
+                    Err("No devices present")?;
+                } else {
+                    Err(format!("You need to select a device: {:#?}", devices))?;
                 }
-                let device = devices.pop().ok_or("Device list was empty")?;
-                println!("Using device: {}", device);
-                client.attach(&device)?;
-                println!("Connected.");
-                println!("{:#?}", client.info()?);
-                let mut snes = SNESState::new();
-                loop {
-                    let summary = snes.fetch_all(&mut client, &settings.read())?;
-                    if summary.start {
-                        timer.write().start();
-                    }
-                    if summary.reset {
-                        // TODO: we could reset the timer here, but make it a config option
-                    }
-                    if summary.split {
-                        timer.write().split();
-                    }
-                    {
-                        *latency.write() = (summary.latency_average, summary.latency_stddev);
-                    }
-                    // If the timer gets reset, we need to make a fresh snes state
-                    if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                        snes = SNESState::new();
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(
-                        (1000.0 / polling_rate) as u64,
-                    ));
+            }
+            let device = devices.pop().ok_or("Device list was empty")?;
+            println!("Using device: {}", device);
+            client.attach(&device)?;
+            println!("Connected.");
+            println!("{:#?}", client.info()?);
+            let mut snes = SNESState::new();
+            loop {
+                let summary = snes.fetch_all(&mut client, &settings.read())?;
+                if summary.start {
+                    timer.write().start();
                 }
-            });
-            std::thread::sleep(std::time::Duration::from_millis(1000));
+                if summary.reset {
+                    // TODO: we could reset the timer here, but make it a config option
+                }
+                if summary.split {
+                    timer.write().split();
+                }
+                {
+                    *latency.write() = (summary.latency_average, summary.latency_stddev);
+                }
+                // If the timer gets reset, we need to make a fresh snes state
+                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                    snes = SNESState::new();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(
+                    (1000.0 / polling_rate) as u64,
+                ));
+            }
         });
-    }
-    //Box::new(app)
-    //}),
-    //);
-    Ok(window.run()?)
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    });
 }

@@ -1,5 +1,7 @@
 // This is based almost entirely on the direct2d example in windows-rs
 use livesplit_core::{Layout, SharedTimer};
+use parking_lot::RwLock;
+use std::sync::Arc;
 use windows::{
     core::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*,
     Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
@@ -20,7 +22,7 @@ pub fn main(
 }
 
 pub struct Window {
-    pub handle: HWND,
+    handle: Arc<RwLock<HWND>>,
     factory: ID2D1Factory1,
     dxfactory: IDXGIFactory2,
     variable: std::cell::RefCell<u8>,
@@ -55,7 +57,7 @@ impl Window {
             layout,
             renderer,
             timer,
-            handle: HWND(0),
+            handle: Arc::new(RwLock::new(HWND(0))),
             factory,
             dxfactory,
             variable: std::cell::RefCell::new(0),
@@ -67,13 +69,17 @@ impl Window {
         })
     }
 
+    pub fn handle(&self) -> Arc<RwLock<HWND>> {
+        self.handle.clone()
+    }
+
     pub fn render(&mut self) -> Result<()> {
         if self.target.is_none() {
             let device = create_device()?;
             let target = create_render_target(&self.factory, &device)?;
             unsafe { target.SetDpi(self.dpi, self.dpi) };
 
-            let swapchain = create_swapchain(&device, self.handle)?;
+            let swapchain = create_swapchain(&device, *self.handle.read())?;
             create_swapchain_bitmap(&swapchain, &target)?;
 
             self.target = Some(target);
@@ -140,7 +146,7 @@ impl Window {
             if error.code() == DXGI_STATUS_OCCLUDED {
                 self.occlusion = unsafe {
                     self.dxfactory
-                        .RegisterOcclusionStatusWindow(self.handle, WM_USER)?
+                        .RegisterOcclusionStatusWindow(*self.handle.read(), WM_USER)?
                 };
                 self.visible = false;
             } else {
@@ -208,9 +214,9 @@ impl Window {
             match message {
                 WM_PAINT => {
                     let mut ps = PAINTSTRUCT::default();
-                    BeginPaint(self.handle, &mut ps);
+                    BeginPaint(*self.handle.read(), &mut ps);
                     self.render().unwrap();
-                    EndPaint(self.handle, &ps);
+                    EndPaint(*self.handle.read(), &ps);
                     LRESULT(0)
                 }
                 WM_SIZE => {
@@ -239,7 +245,7 @@ impl Window {
                     PostQuitMessage(0);
                     LRESULT(0)
                 }
-                _ => DefWindowProcA(self.handle, message, wparam, lparam),
+                _ => DefWindowProcA(*self.handle.read(), message, wparam, lparam),
             }
         }
     }
@@ -279,7 +285,7 @@ impl Window {
             );
 
             debug_assert!(handle.0 != 0);
-            debug_assert!(handle == self.handle);
+            debug_assert!(handle == *self.handle.read());
             let mut message = MSG::default();
 
             loop {
@@ -308,7 +314,7 @@ impl Window {
             if message == WM_NCCREATE {
                 let cs = lparam.0 as *const CREATESTRUCTA;
                 let this = (*cs).lpCreateParams as *mut Self;
-                (*this).handle = window;
+                *(*this).handle.write() = window;
 
                 SetWindowLong(window, GWLP_USERDATA, this as _);
             } else {
