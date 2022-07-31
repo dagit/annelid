@@ -19,6 +19,12 @@ and Linux. However, I've only tested it on Linux.
 
 You will need qusb2snes or SNI so that the autosplitter can read the SNES memory (console or emulator). Beyond that, it should build and run on Windows, macOS, and Linux.
 
+## Linux
+
+```sh
+sudo xbps-install gdk-pixbuf-devel gtk4-devel libcolord
+```
+
 # Getting Started
 
 The easiest way to get Annelid is to download a release build for your OS:

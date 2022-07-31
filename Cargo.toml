@@ -28,6 +28,13 @@ clap = { version = "3.2.15", features = ["clap_derive", "derive"] }
 toml = "0.5.9"
 serde_derive = "1.0.140"
 
+# really this means linux
+[target.'cfg(linux)'.dependencies]
+relm4 = "0.4.4"
+
+[target.'cfg(macos)'.dependencies]
+cacao = "0.3.0"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.39.0", features = [
     "Foundation_Numerics",
