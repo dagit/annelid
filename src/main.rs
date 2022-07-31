@@ -829,7 +829,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                 let _snes_polling_thread = thread::spawn(move || loop {
                     print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                        let mut client = usb2snes::SyncClient::connect();
+                        let mut client = usb2snes::SyncClient::connect()?;
                         client.set_name("annelid".to_owned())?;
                         println!("Server version is {:?}", client.app_version()?);
                         let mut devices = client.list_device()?;

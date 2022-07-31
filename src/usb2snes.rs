@@ -92,23 +92,17 @@ pub struct SyncClient {
     devel: bool,
 }
 impl SyncClient {
-    pub fn connect() -> SyncClient {
-        SyncClient {
-            client: ClientBuilder::new("ws://localhost:23074")
-                .unwrap()
-                .connect_insecure()
-                .unwrap(),
+    pub fn connect() -> Result<SyncClient, Box<dyn Error>> {
+        Ok(SyncClient {
+            client: ClientBuilder::new("ws://localhost:23074")?.connect_insecure()?,
             devel: false,
-        }
+        })
     }
-    pub fn connect_with_devel() -> SyncClient {
-        SyncClient {
-            client: ClientBuilder::new("ws://localhost:23074")
-                .unwrap()
-                .connect_insecure()
-                .unwrap(),
+    pub fn connect_with_devel() -> Result<SyncClient, Box<dyn Error>> {
+        Ok(SyncClient {
+            client: ClientBuilder::new("ws://localhost:23074")?.connect_insecure()?,
             devel: true,
-        }
+        })
     }
     fn send_command(&mut self, command: Command, args: Vec<String>) -> Result<(), Box<dyn Error>> {
         self.send_command_with_space(command, None, args)
