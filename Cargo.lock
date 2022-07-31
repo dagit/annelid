@@ -60,6 +60,7 @@ dependencies = [
  "lazy_static",
  "livesplit-core",
  "native-dialog",
+ "native-windows-gui",
  "parking_lot 0.12.1",
  "roxmltree",
  "serde",
@@ -1290,6 +1291,12 @@ dependencies = [
 
 [[package]]
 name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
+
+[[package]]
+name = "libm"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da83a57f3f5ba3680950aa3cbc806fc297bc0b289d42e8942ed528ace71b8145"
@@ -1311,7 +1318,7 @@ dependencies = [
  "image",
  "indexmap",
  "libc",
- "libm",
+ "libm 0.2.3",
  "livesplit-hotkey",
  "livesplit-title-abbreviations",
  "ordered-float",
@@ -1572,6 +1579,21 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "native-windows-gui"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1e049bccae62e28782c5eff82e0c8a4dace50b9783fe03b95447fef3172bb89"
+dependencies = [
+ "bitflags",
+ "lazy_static",
+ "plotters",
+ "plotters-backend",
+ "stretch",
+ "winapi 0.3.9",
+ "winapi-build",
 ]
 
 [[package]]
@@ -2052,6 +2074,24 @@ name = "pkg-config"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
+
+[[package]]
+name = "plotters"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9428003b84df1496fb9d6eeee9c5f8145cb41ca375eb0dad204328888832811f"
+dependencies = [
+ "num-traits",
+ "plotters-backend",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "plotters-backend"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "193228616381fecdc1224c62e96946dfbc73ff4384fba576e052ff8c1bea8142"
 
 [[package]]
 name = "png"
@@ -2618,6 +2658,16 @@ name = "str-buf"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e08d8363704e6c71fc928674353e6b7c23dcea9d82d7012c8faf2a3a025f8d0"
+
+[[package]]
+name = "stretch"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0dc6d20ce137f302edf90f9cd3d278866fd7fb139efca6f246161222ad6d87"
+dependencies = [
+ "lazy_static",
+ "libm 0.1.4",
+]
 
 [[package]]
 name = "strsim"
