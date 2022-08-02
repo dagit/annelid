@@ -133,6 +133,7 @@ struct HotKey {
 struct LiveSplitCoreRenderer {
     texture: Option<egui::TextureHandle>,
     layout: Layout,
+    renderer: livesplit_core::rendering::software::BorrowedRenderer,
     timer: SharedTimer,
     show_settings_editor: bool,
     settings: Arc<RwLock<Settings>>,
@@ -142,6 +143,7 @@ struct LiveSplitCoreRenderer {
     project_dirs: directories::ProjectDirs,
     app_config: AppConfig,
     app_config_processed: bool,
+    frame_buffer: std::vec::Vec<u8>,
 }
 
 fn show_children(
@@ -590,22 +592,22 @@ impl eframe::App for LiveSplitCoreRenderer {
 
                 let szu32 = [sz.x as u32, sz.y as u32];
                 let sz = [sz.x as usize, sz.y as usize];
-                // It might seem like allocating one renderer and reusing it
-                // each frame would be better, but if we allocate a new renderer
-                // each frame the compiler is able to optimize away copying the
-                // texture into egui's texture manager. Resulting in rendering code
-                // that can be 2-3 times faster than if we reuse the renderer.
-                let mut renderer = livesplit_core::rendering::software::Renderer::new();
-                renderer.render(&layout_state, szu32);
-                let raw_frame = renderer.image_data();
-                // Note: Don't use from_rgba_unmultiplied() here. It's super slow.
-                let pixels = raw_frame
-                    .chunks_exact(4)
-                    .map(|p| egui::Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3]))
-                    .collect();
-                let raw_frame = epaint::image::ColorImage { size: sz, pixels };
+                self.frame_buffer.resize(sz[0] * sz[1] * 4, 0);
+                self.renderer.render(
+                    &layout_state,
+                    self.frame_buffer.as_mut_slice(),
+                    szu32,
+                    szu32[0],
+                    false,
+                );
 
-                texture.set(raw_frame);
+                // Note: Don't use from_rgba_unmultiplied() here. It's super slow.
+                let pixels =
+                    bytemuck::cast_slice::<u8, egui::Color32>(&self.frame_buffer).to_owned();
+                assert!(pixels.len() == sz[0] * sz[1]);
+                let pixels = epaint::image::ColorImage { size: sz, pixels };
+
+                texture.set(pixels);
                 ui.image(texture.id(), sz_vec2);
             })
             .response
@@ -817,6 +819,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         texture: None,
         timer: timer.clone(),
         layout,
+        renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
         show_settings_editor: false,
         settings: settings.clone(),
         can_exit: false,
@@ -825,6 +828,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         project_dirs,
         app_config: cli_config,
         app_config_processed: false,
+        frame_buffer: vec![],
     };
 
     eframe::run_native(
