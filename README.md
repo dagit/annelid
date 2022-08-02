@@ -68,3 +68,27 @@ That means you need to turn on your SNES and make sure that qusb2snes is connect
   connection dies
   * [ ] Do something to avoid refiring splits in the case of reset or death mid
     run.
+
+# Cross compiling
+
+## For Windows
+```sh
+sudo xbps-install -Su cross-x86_64-w64-mingw32
+rustup target add x86_64-pc-windows-gnu
+cargo build --target x86_64-pc-windows-gnu
+wine ./target/x86_64-pc-windows-gnu/debug/annelid.exe
+```
+
+## For macOS
+
+This fails because it needs all the Apple frameworks and there is currently no
+way to test it from linux. So cross compiling to macOS effectively doesn't work
+yet.
+
+However, it may still be useful to list the target in case those things change.
+
+```sh
+rustup target add x86_64-apple-darwin
+cargo build --target x86_64-apple-darwin
+```
+
