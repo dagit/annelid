@@ -58,6 +58,10 @@ struct AppConfig {
     recent_autosplitter: Option<String>,
     #[clap(name = "use-autosplitter", long, action)]
     use_autosplitter: Option<YesOrNo>,
+    #[clap(name = "polling-rate", long, short = 'p', value_parser)]
+    polling_rate: Option<f32>,
+    #[clap(name = "frame-rate", long, short = 'f', value_parser)]
+    frame_rate: Option<f32>,
     #[clap(skip)]
     hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -76,6 +80,9 @@ enum YesOrNo {
     Yes,
     No,
 }
+
+const DEFAULT_FRAME_RATE: f32 = 30.0;
+const DEFAULT_POLLING_RATE: f32 = 20.0;
 
 impl AppConfig {
     fn new() -> Self {
@@ -105,6 +112,8 @@ impl AppConfig {
                 modifiers,
             }),
             use_autosplitter: Some(YesOrNo::Yes),
+            frame_rate: Some(DEFAULT_FRAME_RATE),
+            polling_rate: Some(DEFAULT_POLLING_RATE),
         }
     }
 }
@@ -253,6 +262,12 @@ impl LiveSplitCoreRenderer {
             }
             if cli_config.use_autosplitter.is_some() {
                 self.app_config.use_autosplitter = cli_config.use_autosplitter;
+            }
+            if cli_config.frame_rate.is_some() {
+                self.app_config.frame_rate = cli_config.frame_rate;
+            }
+            if cli_config.polling_rate.is_some() {
+                self.app_config.polling_rate = cli_config.polling_rate;
             }
             Ok(())
         });
@@ -766,8 +781,6 @@ enum ThreadEvent {
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let cli_config = AppConfig::parse();
-    let polling_rate = 20.0;
-    let frame_rate = 30.0;
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));
     let mut run = Run::default();
@@ -816,6 +829,8 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
             app.load_app_config();
+            let frame_rate = app.app_config.frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
+            let polling_rate = app.app_config.polling_rate.unwrap_or(DEFAULT_POLLING_RATE);
             // This thread is essentially just a refresh rate timer
             // it ensures that the gui thread is redrawn at the requested frame_rate,
             // possibly more often.
