@@ -27,7 +27,10 @@ roxmltree = "0"
 clap = { version = "3", features = ["clap_derive", "derive"] }
 toml = "0"
 serde_derive = "1"
-bytemuck = "*"
+glow = "*"
+bytemuck = { version = "*", features = ["derive"] }
+egui_glow = "*"
+memoffset = "*"
 
 
 # Remember to test with --release
