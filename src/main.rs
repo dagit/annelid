@@ -643,6 +643,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
                         debug_assert!(gl.get_error() == 0, "1");
                         let source = "
+#version 140
 uniform vec2 u_screen_size;
 attribute vec2 a_pos;
 attribute vec2 a_tc;
@@ -672,6 +673,7 @@ void main() {
                             .create_shader(glow::FRAGMENT_SHADER)
                             .expect("crate fragment");
                         let source = "
+#version 140
 uniform sampler2D u_sampler;
 
 varying vec2 v_tc;
