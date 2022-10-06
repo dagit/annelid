@@ -77,7 +77,7 @@ struct USB2SnesResult {
     Results: Vec<String>,
 }
 
-#[derive(PartialEq)]
+#[derive(Eq,PartialEq)]
 pub enum USB2SnesFileType {
     File = 0,
     Dir = 1,
