@@ -643,11 +643,12 @@ impl eframe::App for LiveSplitCoreRenderer {
                         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
                         debug_assert!(gl.get_error() == 0, "1");
                         let source = "
-#version 140
+#version 330
+
 uniform vec2 u_screen_size;
-attribute vec2 a_pos;
-attribute vec2 a_tc;
-varying vec2 v_tc;
+in      vec2 a_pos;
+in      vec2 a_tc;
+out     vec2 v_tc;
 
 void main() {
     gl_Position = vec4(
@@ -673,13 +674,16 @@ void main() {
                             .create_shader(glow::FRAGMENT_SHADER)
                             .expect("crate fragment");
                         let source = "
-#version 140
+#version 330
+
 uniform sampler2D u_sampler;
 
-varying vec2 v_tc;
+in      vec2      v_tc;
+
+out     vec4      fragmentColor;
 
 void main() {
-    gl_FragColor = texture2D(u_sampler, v_tc);
+    fragmentColor = texture(u_sampler, v_tc);
 }
 ";
                         debug_assert!(gl.get_error() == 0, "1");
