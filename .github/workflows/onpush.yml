@@ -120,10 +120,10 @@ jobs:
       - run: cargo strip -t release
       - run: cargo bundle --release
       - if: ${{ matrix.is-osx }}
-        - run: pushd target/release/bundle/osx
-        - run: zip -r Annelid.zip Annelid.app
-        - run: cp Annelid.zip ../../
-        - run: popd
+        run: pushd target/release/bundle/osx
+        run: zip -r Annelid.zip Annelid.app
+        run: cp Annelid.zip ../../
+        run: popd
       - uses: actions/upload-artifact@v3
         with:
           name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}
