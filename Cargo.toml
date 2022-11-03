@@ -2,6 +2,7 @@
 name = "annelid"
 version = "0.1.0"
 edition = "2021"
+description = "A speedrun timer"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -37,3 +38,12 @@ memoffset = "*"
 #[profile.dev]
 #opt-level = 2
 #debug = true
+
+[package.metadata.bundle]
+name = "Annelid"
+identifier = "annelid"
+copyright = "Copyright (c) Jason Dagit 2022. GPL 3."
+short_description = "A speedrun timer."
+long_description = """
+A speedrun timer with autosplitter capabilities for USB2SNES.
+"""
