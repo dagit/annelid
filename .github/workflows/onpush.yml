@@ -114,9 +114,9 @@ jobs:
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release
-      - run: cargo bundle --release
       - if: ${{ matrix.is-osx }}
         run: |
+          cargo bundle --release
           pushd target/release/bundle/osx
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../

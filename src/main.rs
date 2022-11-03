@@ -63,6 +63,8 @@ struct AppConfig {
     polling_rate: Option<f32>,
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     frame_rate: Option<f32>,
+    #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
+    reset_on_reset: Option<YesOrNo>,
     #[clap(skip)]
     hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -115,6 +117,7 @@ impl AppConfig {
             use_autosplitter: Some(YesOrNo::Yes),
             frame_rate: Some(DEFAULT_FRAME_RATE),
             polling_rate: Some(DEFAULT_POLLING_RATE),
+            reset_on_reset: Some(YesOrNo::No),
         }
     }
 }
@@ -288,6 +291,9 @@ impl LiveSplitCoreRenderer {
             }
             if cli_config.polling_rate.is_some() {
                 self.app_config.polling_rate = cli_config.polling_rate;
+            }
+            if cli_config.reset_on_reset.is_some() {
+                self.app_config.reset_on_reset = cli_config.reset_on_reset;
             }
             Ok(())
         });
@@ -1172,8 +1178,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                             if summary.start {
                                 timer.write().start();
                             }
-                            if summary.reset {
-                                // TODO: we could reset the timer here, but make it a config option
+                            if summary.reset && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
+                            {
+                                timer.write().reset(true);
                             }
                             if summary.split {
                                 timer.write().split();
