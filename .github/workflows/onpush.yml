@@ -89,17 +89,13 @@ jobs:
             is-osx: 1
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact-path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}
+            artifact-path: 'annelid'
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact-path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME}}.exe
+            artifact-path: 'annelid.exe'
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - id: get_repository_name
-        run: echo ::set-output name=REPOSITORY_NAME::$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//")
-        shell: bash
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -113,7 +109,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           VERSION: ${{ github.ref }}
-          REPOSITORY_NAME: '${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}'
+          REPOSITORY_NAME: 'annelid'
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
@@ -126,7 +122,7 @@ jobs:
         run: popd
       - uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ matrix.target }}
+          name: annelid-${{ matrix.target }}
           path: ./target/release/${{ matrix.artifact-path }}
   release:
     if: github.ref == 'refs/heads/master'
