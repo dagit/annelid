@@ -418,7 +418,7 @@ impl LiveSplitCoreRenderer {
             ("LiveSplit Splits", "lss"),
             |me, f| {
                 let writer = std::io::BufWriter::new(f);
-                livesplit_core::run::saver::livesplit::save_timer(&*me.timer.read(), writer)?;
+                livesplit_core::run::saver::livesplit::save_timer(&me.timer.read(), writer)?;
                 Ok(())
             },
         );
