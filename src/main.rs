@@ -1181,7 +1181,7 @@ void main() {
                 }
             }
         });
-        {
+        if self.app_config.global_hotkeys != Some(YesOrNo::Yes) {
             let mut input = { ctx.input_mut() };
             if let Some(hot_key) = self.app_config.hot_key_start {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
