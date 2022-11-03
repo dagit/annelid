@@ -86,7 +86,7 @@ jobs:
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact-path: 'Annelid.zip'
-	    is-osx: 1
+            is-osx: 1
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact-path: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}
