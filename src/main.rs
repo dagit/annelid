@@ -10,6 +10,7 @@ use clap::Parser;
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::{Layout, Run, Segment, SharedTimer, Timer};
+use livesplit_hotkey::Hook;
 use memoffset::offset_of;
 use parking_lot::RwLock;
 use serde_derive::{Deserialize, Serialize};
@@ -65,6 +66,8 @@ struct AppConfig {
     frame_rate: Option<f32>,
     #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
     reset_on_reset: Option<YesOrNo>,
+    #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
+    global_hotkeys: Option<YesOrNo>,
     #[clap(skip)]
     hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -118,6 +121,7 @@ impl AppConfig {
             frame_rate: Some(DEFAULT_FRAME_RATE),
             polling_rate: Some(DEFAULT_POLLING_RATE),
             reset_on_reset: Some(YesOrNo::No),
+            global_hotkeys: Some(YesOrNo::Yes),
         }
     }
 }
@@ -132,6 +136,88 @@ impl Default for AppConfig {
 struct HotKey {
     key: ::egui::Key,
     modifiers: ::egui::Modifiers,
+}
+
+impl HotKey {
+    fn to_livesplit_hotkey(self) -> livesplit_hotkey::Hotkey {
+        to_livesplit_keycode(&self.key).with_modifiers(to_livesplit_modifiers(&self.modifiers))
+    }
+}
+
+fn to_livesplit_keycode(key: &::egui::Key) -> livesplit_hotkey::KeyCode {
+    use livesplit_hotkey::KeyCode::*;
+
+    match key {
+        egui::Key::ArrowDown => ArrowDown,
+        egui::Key::ArrowLeft => ArrowLeft,
+        egui::Key::ArrowRight => ArrowRight,
+        egui::Key::ArrowUp => ArrowUp,
+        egui::Key::Escape => Escape,
+        egui::Key::Tab => Tab,
+        egui::Key::Backspace => Backspace,
+        egui::Key::Enter => Enter,
+        egui::Key::Space => Space,
+        egui::Key::Insert => Insert,
+        egui::Key::Delete => Delete,
+        egui::Key::Home => Home,
+        egui::Key::End => End,
+        egui::Key::PageUp => PageUp,
+        egui::Key::PageDown => PageDown,
+        egui::Key::Num0 => Numpad0,
+        egui::Key::Num1 => Numpad1,
+        egui::Key::Num2 => Numpad2,
+        egui::Key::Num3 => Numpad3,
+        egui::Key::Num4 => Numpad4,
+        egui::Key::Num5 => Numpad5,
+        egui::Key::Num6 => Numpad6,
+        egui::Key::Num7 => Numpad7,
+        egui::Key::Num8 => Numpad8,
+        egui::Key::Num9 => Numpad9,
+        egui::Key::A => KeyA,
+        egui::Key::B => KeyB,
+        egui::Key::C => KeyC,
+        egui::Key::D => KeyD,
+        egui::Key::E => KeyE,
+        egui::Key::F => KeyF,
+        egui::Key::G => KeyG,
+        egui::Key::H => KeyH,
+        egui::Key::I => KeyI,
+        egui::Key::J => KeyJ,
+        egui::Key::K => KeyK,
+        egui::Key::L => KeyL,
+        egui::Key::M => KeyM,
+        egui::Key::N => KeyN,
+        egui::Key::O => KeyO,
+        egui::Key::P => KeyP,
+        egui::Key::Q => KeyQ,
+        egui::Key::R => KeyR,
+        egui::Key::S => KeyS,
+        egui::Key::T => KeyT,
+        egui::Key::U => KeyU,
+        egui::Key::V => KeyV,
+        egui::Key::W => KeyW,
+        egui::Key::X => KeyX,
+        egui::Key::Y => KeyY,
+        egui::Key::Z => KeyZ,
+    }
+}
+
+fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Modifiers {
+    use livesplit_hotkey::Modifiers;
+    let mut mods = Modifiers::empty();
+    if modifiers.shift {
+        mods.insert(Modifiers::SHIFT)
+    };
+    if modifiers.ctrl {
+        mods.insert(Modifiers::CONTROL)
+    };
+    if modifiers.alt {
+        mods.insert(Modifiers::ALT)
+    };
+    if modifiers.mac_cmd || modifiers.command {
+        mods.insert(Modifiers::META)
+    };
+    mods
 }
 
 struct LiveSplitCoreRenderer {
@@ -149,6 +235,7 @@ struct LiveSplitCoreRenderer {
     app_config: AppConfig,
     app_config_processed: bool,
     opengl_resources: Option<OpenGLResources>,
+    global_hotkey_hook: Option<Hook>,
 }
 
 fn show_children(
@@ -194,7 +281,8 @@ impl LiveSplitCoreRenderer {
                 Some(d) => d.to_str().unwrap_or("").to_owned(),
             },
         };
-        if self.timer.read().run().has_been_modified() {
+        // TODO: fix this unwrap
+        if self.timer.read().unwrap().run().has_been_modified() {
             let save_requested = MessageDialog::new()
                 .set_type(MessageType::Error)
                 .set_title("Error")
@@ -295,6 +383,9 @@ impl LiveSplitCoreRenderer {
             if cli_config.reset_on_reset.is_some() {
                 self.app_config.reset_on_reset = cli_config.reset_on_reset;
             }
+            if cli_config.global_hotkeys.is_some() {
+                self.app_config.global_hotkeys = cli_config.global_hotkeys;
+            }
             Ok(())
         });
     }
@@ -330,9 +421,8 @@ impl LiveSplitCoreRenderer {
         let mut reader = std::io::BufReader::new(f);
         let mut layout_file = String::new();
         reader.read_to_string(&mut layout_file)?;
-        let layout_buf = std::io::BufReader::new(layout_file.as_bytes());
 
-        self.layout = livesplit_core::layout::parser::parse(layout_buf)?;
+        self.layout = livesplit_core::layout::parser::parse(&layout_file)?;
         let doc = roxmltree::Document::parse(&layout_file)?;
         doc.root().children().for_each(|d| {
             if d.tag_name().name() == "Layout" {
@@ -374,9 +464,12 @@ impl LiveSplitCoreRenderer {
         path: std::path::PathBuf,
     ) -> Result<(), Box<dyn Error>> {
         use livesplit_core::run::parser::composite;
-        *self.timer.write() = Timer::new(
+        use std::io::Read;
+        let file_contents: Result<Vec<_>, _> = f.bytes().collect();
+        // TODO: fix this unwrap
+        *self.timer.write().unwrap() = Timer::new(
             composite::parse(
-                std::io::BufReader::new(f),
+                &file_contents?,
                 path.parent().map(|p| p.to_path_buf()),
                 true,
             )?
@@ -391,7 +484,8 @@ impl LiveSplitCoreRenderer {
     }
 
     fn save_splits_dialog(&mut self, default_dir: &str) {
-        let mut fname = self.timer.read().run().extended_file_name(false);
+        // TODO: fix this unwrap
+        let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
         let splits = self.app_config.recent_splits.as_ref().unwrap_or_else(|| {
             if fname.is_empty() {
                 fname += "annelid.lss";
@@ -417,15 +511,21 @@ impl LiveSplitCoreRenderer {
             &splits.clone(),
             ("LiveSplit Splits", "lss"),
             |me, f| {
-                let writer = std::io::BufWriter::new(f);
-                livesplit_core::run::saver::livesplit::save_timer(&me.timer.read(), writer)?;
+                use livesplit_core::run::saver::livesplit::IoWrite;
+                let writer = IoWrite(&f);
+                // TODO: fix this unwrap
+                livesplit_core::run::saver::livesplit::save_timer(
+                    &me.timer.read().unwrap(),
+                    writer,
+                )?;
                 Ok(())
             },
         );
     }
 
     fn save_autosplitter_dialog(&mut self, default_dir: &str) {
-        let mut fname = self.timer.read().run().extended_file_name(false);
+        // TODO: fix this unwrap
+        let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
         let autosplitter = self
             .app_config
             .recent_autosplitter
@@ -581,6 +681,67 @@ impl LiveSplitCoreRenderer {
             Ok(())
         });
     }
+
+    fn enable_global_hotkeys(&mut self) -> Result<(), Box<dyn Error>> {
+        // It would be more elegant to use get_or_insert_with, however
+        // the `with` branch cannot have a `Result` type if we do that.
+        let hook: &Hook = match self.global_hotkey_hook.as_ref() {
+            None => {
+                self.global_hotkey_hook = Some(Hook::new()?);
+                self.global_hotkey_hook.as_ref().unwrap()
+            }
+            Some(h) => h,
+        };
+        print!("Registering global hotkeys...");
+        // TODO: this is kind of gross because of the logical duplication
+        // between egui input handling and global hotkey handling
+        // Work is needed to keep them in sync :(
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_start {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().split_or_start();
+            })?;
+        }
+        let timer = self.timer.clone();
+        // TODO: this is not ideal because if the app_config or thread_chan
+        // change after this function is called, these will point to the old
+        // values. Probably need to wrap config and thread_chan in Arc
+        let config = self.app_config.clone();
+        let thread_chan = self.thread_chan.clone();
+        if let Some(hot_key) = self.app_config.hot_key_reset {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().reset(true);
+                if config.use_autosplitter == Some(YesOrNo::Yes) {
+                    thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+                }
+            })?;
+        }
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_undo {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().undo_split();
+            })?;
+        }
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_skip {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().skip_split();
+            })?;
+        }
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_pause {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().toggle_pause();
+            })?;
+        }
+        println!("registered");
+        Ok(())
+    }
 }
 
 struct OpenGLResources {
@@ -619,7 +780,8 @@ impl eframe::App for LiveSplitCoreRenderer {
             let w = viewport.max.x - viewport.min.x;
             let h = viewport.max.y - viewport.min.y;
             // a local scope so the timer lock has a smaller scope
-            let timer = self.timer.read();
+            // TODO: fix this unwrap
+            let timer = self.timer.read().unwrap();
             let snapshot = timer.snapshot();
             match &mut self.layout_state {
                 None => {
@@ -937,35 +1099,42 @@ void main() {
                 });
                 ui.menu_button("Run Control", |ui| {
                     if ui.button("Start").clicked() {
-                        self.timer.write().start();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().start();
                         ui.close_menu()
                     }
                     if ui.button("Split").clicked() {
-                        self.timer.write().split();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().split();
                         ui.close_menu()
                     }
                     ui.separator();
                     if ui.button("Skip Split").clicked() {
-                        self.timer.write().skip_split();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().skip_split();
                         ui.close_menu()
                     }
                     if ui.button("Undo Split").clicked() {
-                        self.timer.write().undo_split();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().undo_split();
                         ui.close_menu()
                     }
                     ui.separator();
                     if ui.button("Pause").clicked() {
-                        self.timer.write().pause();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().pause();
                         ui.close_menu()
                     }
 
                     if ui.button("Resume").clicked() {
-                        self.timer.write().resume();
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().resume();
                         ui.close_menu()
                     }
                     ui.separator();
                     if ui.button("Reset").clicked() {
-                        self.timer.write().reset(true);
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().reset(true);
                         if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
                         }
@@ -1016,12 +1185,14 @@ void main() {
             let mut input = { ctx.input_mut() };
             if let Some(hot_key) = self.app_config.hot_key_start {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    self.timer.write().split_or_start();
+                    // TODO: fix this unwrap
+                    self.timer.write().unwrap().split_or_start();
                 }
             }
             if let Some(hot_key) = self.app_config.hot_key_reset {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    self.timer.write().reset(true);
+                    // TODO: fix this unwrap
+                    self.timer.write().unwrap().reset(true);
                     if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                         self.thread_chan
                             .try_send(ThreadEvent::TimerReset)
@@ -1031,17 +1202,20 @@ void main() {
             }
             if let Some(hot_key) = self.app_config.hot_key_undo {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    self.timer.write().undo_split();
+                    // TODO: fix this unwrap
+                    self.timer.write().unwrap().undo_split();
                 }
             }
             if let Some(hot_key) = self.app_config.hot_key_skip {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    self.timer.write().skip_split();
+                    // TODO: fix this unwrap
+                    self.timer.write().unwrap().skip_split();
                 }
             }
             if let Some(hot_key) = self.app_config.hot_key_pause {
                 if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    self.timer.write().toggle_pause();
+                    // TODO: fix this unwrap
+                    self.timer.write().unwrap().toggle_pause();
                 }
             }
         }
@@ -1133,6 +1307,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         app_config: cli_config,
         app_config_processed: false,
         opengl_resources: None,
+        global_hotkey_hook: None,
     };
 
     eframe::run_native(
@@ -1141,6 +1316,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
             app.load_app_config();
+            if app.app_config.global_hotkeys == Some(YesOrNo::Yes) {
+                messagebox_on_error(|| app.enable_global_hotkeys());
+            }
             let frame_rate = app.app_config.frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
             let polling_rate = app.app_config.polling_rate.unwrap_or(DEFAULT_POLLING_RATE);
             // This thread is essentially just a refresh rate timer
@@ -1176,14 +1354,17 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                         loop {
                             let summary = snes.fetch_all(&mut client, &settings.read())?;
                             if summary.start {
-                                timer.write().start();
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().start();
                             }
                             if summary.reset && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
                             {
-                                timer.write().reset(true);
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().reset(true);
                             }
                             if summary.split {
-                                timer.write().split();
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().split();
                             }
                             {
                                 *latency.write() =
