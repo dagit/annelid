@@ -146,7 +146,7 @@ jobs:
         with:
           lfs: true
       - id: get_repository_name
-        run: echo ::set-output name=REPOSITORY_NAME::$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//")
+        run: echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_OUTPUT
         shell: bash
       - uses: actions/download-artifact@v3
         with:
@@ -161,10 +161,10 @@ jobs:
           name: annelid-x86_64.win
           path: annelid-x86_64.win/
       - id: get_commit_id
-        run: echo ::set-output name=SHORT_COMMIT_ID::$(git rev-parse --short HEAD)
+        run: echo SHORT_COMMIT_ID::$(git rev-parse --short HEAD) >> $GITHUB_OUTPUT
         shell: bash
       - id: tag_date
-        run: echo ::set-output name=TAG_NAME::$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }}
+        run: echo TAG_NAME::$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }} >> $GITHUB_OUTPUT
         shell: bash
       - id: create_release
         uses: actions/create-release@v1
@@ -188,7 +188,7 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-x86_64-macos/Annelid.zip
+          asset_path: ./annelid-x86_64.macos/Annelid.zip
           asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-macOS.zip
           asset_content_type: application/octet-stream
       - uses: actions/upload-release-asset@v1
