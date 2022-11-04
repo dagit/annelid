@@ -1420,7 +1420,7 @@ fn repaint_timer(frame_rate: f32, handle: RepaintHandle) {
                 let h = { *handle.read() };
                 if h != windows::Win32::Foundation::HWND(0) {
                     //println!("sending repaint");
-                    InvalidateRect(h, std::ptr::null(), false);
+                    InvalidateRect(h, None, false);
                 }
             };
             std::thread::sleep(std::time::Duration::from_millis(

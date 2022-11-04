@@ -16,7 +16,7 @@ pub fn main(
     renderer: livesplit_core::rendering::software::Renderer,
 ) -> Result<Window> {
     unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED)?;
+        CoInitializeEx(None, COINIT_MULTITHREADED)?;
     }
     Window::new(layout, timer, renderer)
 }
@@ -92,12 +92,12 @@ impl Window {
         *self.variable.borrow_mut() = (var + 1) % 255;
         unsafe { target.BeginDraw() };
         unsafe {
-            target.Clear(&D2D1_COLOR_F {
+            target.Clear(Some(&D2D1_COLOR_F {
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
                 a: 1.0,
-            })
+            }))
         };
         let size_f = unsafe { target.GetSize() };
         let size_u = D2D_SIZE_U {
@@ -131,7 +131,7 @@ impl Window {
         let bitmap = unsafe {
             target.CreateBitmap2(
                 size_u,
-                raw_frame.as_ptr() as *const c_void,
+                Some(raw_frame.as_ptr() as *const c_void),
                 size_u.width * 4,
                 &properties,
             )?
@@ -140,7 +140,7 @@ impl Window {
         self.draw(target, &bitmap)?;
 
         unsafe {
-            target.EndDraw(std::ptr::null_mut(), std::ptr::null_mut())?;
+            target.EndDraw(None, None)?;
         }
 
         if let Err(error) = self.present(1, 0) {
@@ -174,10 +174,10 @@ impl Window {
         unsafe {
             target.DrawBitmap(
                 bitmap,
-                std::ptr::null(),
+                None,
                 1.0,
                 D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
-                std::ptr::null(),
+                None,
             );
         }
 
@@ -282,7 +282,7 @@ impl Window {
                 None,
                 None,
                 instance,
-                self as *mut _ as _,
+                Some(self as *mut _ as _),
             );
 
             debug_assert!(handle.0 != 0);
@@ -340,7 +340,7 @@ fn create_factory() -> Result<ID2D1Factory1> {
         options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
     }
 
-    unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &options) }
+    unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, Some(&options)) }
 }
 
 fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> {
@@ -358,11 +358,11 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
             drive_type,
             None,
             flags,
-            &[],
+            None,
             D3D11_SDK_VERSION,
-            &mut device,
-            std::ptr::null_mut(),
-            &mut None,
+            Some(&mut device),
+            None,
+            None,
         )
         .map(|()| device.unwrap())
     }
@@ -415,7 +415,7 @@ fn create_swapchain_bitmap(swapchain: &IDXGISwapChain1, target: &ID2D1DeviceCont
     };
 
     unsafe {
-        let bitmap = target.CreateBitmapFromDxgiSurface(&surface, &props)?;
+        let bitmap = target.CreateBitmapFromDxgiSurface(&surface, Some(&props))?;
         target.SetTarget(&bitmap);
     };
 
@@ -437,7 +437,7 @@ fn create_swapchain(device: &ID3D11Device, window: HWND) -> Result<IDXGISwapChai
         ..Default::default()
     };
 
-    unsafe { factory.CreateSwapChainForHwnd(device, window, &props, std::ptr::null(), None) }
+    unsafe { factory.CreateSwapChainForHwnd(device, window, &props, None, None) }
 }
 
 #[allow(non_snake_case)]
