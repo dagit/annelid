@@ -170,7 +170,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}
-          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-unknown-linux-gnu
+          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-unknown-linux-gnu
           asset_content_type: application/octet-stream
       - uses: actions/upload-release-asset@v1
         env:
@@ -178,7 +178,7 @@ jobs:
         with:
           upload_url: '${{ steps.create_release.outputs.upload_url }}'
           asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin/Annelid.zip
-          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-apple-darwin
+          asset_name: ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-apple-darwin.zip
           asset_content_type: application/octet-stream
       - uses: actions/upload-release-asset@v1
         env:
@@ -186,5 +186,5 @@ jobs:
         with:
           upload_url: '${{ steps.create_release.outputs.upload_url }}'
           asset_path: ./${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc/${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}.exe
-          asset_name:  ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-x86_64-pc-windows-msvc.exe
+          asset_name:  ${{ steps.get_repository_name.outputs.REPOSITORY_NAME }}-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-pc-windows-msvc.exe
           asset_content_type: application/octet-stream
