@@ -4,6 +4,8 @@ extern crate lazy_static;
 pub mod autosplitters;
 pub mod routes;
 pub mod usb2snes;
+#[cfg(windows)]
+pub mod win32;
 
 use autosplitters::supermetroid::{SNESState, Settings};
 use clap::Parser;
@@ -223,6 +225,9 @@ fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Mo
 struct LiveSplitCoreRenderer {
     frame_buffer: Vec<u8>,
     layout: Layout,
+    #[cfg(windows)]
+    renderer: livesplit_core::rendering::software::Renderer,
+    #[cfg(not(windows))]
     renderer: livesplit_core::rendering::software::BorrowedRenderer,
     layout_state: Option<livesplit_core::layout::LayoutState>,
     timer: SharedTimer,
@@ -232,7 +237,7 @@ struct LiveSplitCoreRenderer {
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
     project_dirs: directories::ProjectDirs,
-    app_config: AppConfig,
+    app_config: Arc<RwLock<AppConfig>>,
     app_config_processed: bool,
     opengl_resources: Option<OpenGLResources>,
     global_hotkey_hook: Option<Hook>,
@@ -336,7 +341,7 @@ impl LiveSplitCoreRenderer {
                 .truncate(true)
                 .open(config_path)?;
             let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
+            let toml = toml::to_string_pretty(&(*self.app_config.read()))?;
             writer.write_all(toml.as_bytes())?;
             writer.flush()?;
             Ok(())
@@ -361,30 +366,31 @@ impl LiveSplitCoreRenderer {
             // stuff was present and whether the stuff was present in the config
             // but instead I just see two different states that need to be merged.
             let cli_config = self.app_config.clone();
-            self.app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                self.app_config.recent_layout = cli_config.recent_layout;
+            self.app_config = Arc::new(parking_lot::lock_api::RwLock::new(saved_config));
+            if cli_config.read().recent_layout.is_some() {
+                self.app_config.write().recent_layout = cli_config.read().recent_layout.clone();
             }
-            if cli_config.recent_splits.is_some() {
-                self.app_config.recent_splits = cli_config.recent_splits;
+            if cli_config.read().recent_splits.is_some() {
+                self.app_config.write().recent_splits = cli_config.read().recent_splits.clone();
             }
-            if cli_config.recent_autosplitter.is_some() {
-                self.app_config.recent_autosplitter = cli_config.recent_autosplitter;
+            if cli_config.read().recent_autosplitter.is_some() {
+                self.app_config.write().recent_autosplitter =
+                    cli_config.read().recent_autosplitter.clone();
             }
-            if cli_config.use_autosplitter.is_some() {
-                self.app_config.use_autosplitter = cli_config.use_autosplitter;
+            if cli_config.read().use_autosplitter.is_some() {
+                self.app_config.write().use_autosplitter = cli_config.read().use_autosplitter;
             }
-            if cli_config.frame_rate.is_some() {
-                self.app_config.frame_rate = cli_config.frame_rate;
+            if cli_config.read().frame_rate.is_some() {
+                self.app_config.write().frame_rate = cli_config.read().frame_rate;
             }
-            if cli_config.polling_rate.is_some() {
-                self.app_config.polling_rate = cli_config.polling_rate;
+            if cli_config.read().polling_rate.is_some() {
+                self.app_config.write().polling_rate = cli_config.read().polling_rate;
             }
-            if cli_config.reset_on_reset.is_some() {
-                self.app_config.reset_on_reset = cli_config.reset_on_reset;
+            if cli_config.read().reset_on_reset.is_some() {
+                self.app_config.write().reset_on_reset = cli_config.read().reset_on_reset;
             }
-            if cli_config.global_hotkeys.is_some() {
-                self.app_config.global_hotkeys = cli_config.global_hotkeys;
+            if cli_config.read().global_hotkeys.is_some() {
+                self.app_config.write().global_hotkeys = cli_config.read().global_hotkeys;
             }
             Ok(())
         });
@@ -393,18 +399,21 @@ impl LiveSplitCoreRenderer {
     fn process_app_config(&mut self, frame: &mut eframe::Frame) {
         messagebox_on_error(|| {
             // Now that we've converged on a config, try loading what we can
-            if let Some(layout) = &self.app_config.recent_layout {
+            let app_config = self.app_config.clone();
+            if let Some(layout) = &app_config.read().recent_layout {
                 let f = std::fs::File::open(layout)?;
                 self.load_layout(f, frame)?;
             }
-            if let Some(splits) = &self.app_config.recent_splits {
+            let app_config = self.app_config.clone();
+            if let Some(splits) = &app_config.read().recent_splits {
                 let f = std::fs::File::open(splits)?;
                 let path = std::path::Path::new(splits)
                     .parent()
                     .ok_or("failed to find parent directory")?;
                 self.load_splits(f, path.to_path_buf())?;
             }
-            if let Some(autosplitter) = &self.app_config.recent_autosplitter {
+            let app_config = self.app_config.clone();
+            if let Some(autosplitter) = &app_config.read().recent_autosplitter {
                 let f = std::fs::File::open(autosplitter)?;
                 self.load_autosplitter(f)?;
             }
@@ -486,7 +495,9 @@ impl LiveSplitCoreRenderer {
     fn save_splits_dialog(&mut self, default_dir: &str) {
         // TODO: fix this unwrap
         let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
-        let splits = self.app_config.recent_splits.as_ref().unwrap_or_else(|| {
+        let app_config = self.app_config.clone();
+        let app_config_read = app_config.read();
+        let splits = app_config_read.recent_splits.as_ref().unwrap_or_else(|| {
             if fname.is_empty() {
                 fname += "annelid.lss";
             } else {
@@ -497,6 +508,7 @@ impl LiveSplitCoreRenderer {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
+            .read()
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -526,8 +538,9 @@ impl LiveSplitCoreRenderer {
     fn save_autosplitter_dialog(&mut self, default_dir: &str) {
         // TODO: fix this unwrap
         let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
-        let autosplitter = self
-            .app_config
+        let app_config = self.app_config.clone();
+        let app_config_read = app_config.read();
+        let autosplitter = app_config_read
             .recent_autosplitter
             .as_ref()
             .unwrap_or_else(|| {
@@ -541,6 +554,7 @@ impl LiveSplitCoreRenderer {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
+            .read()
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -594,6 +608,7 @@ impl LiveSplitCoreRenderer {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
+            .read()
             .recent_layout
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -605,7 +620,8 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
             me.load_layout(f, frame)?;
-            me.app_config.recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
+            me.app_config.write().recent_layout =
+                Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
     }
@@ -614,6 +630,7 @@ impl LiveSplitCoreRenderer {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
+            .read()
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -625,7 +642,8 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Splits", "lss"), |me, f, path| {
             me.load_splits(f, path.clone())?;
-            me.app_config.recent_splits = Some(path.into_os_string().into_string().expect("utf8"));
+            me.app_config.write().recent_splits =
+                Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
     }
@@ -634,6 +652,7 @@ impl LiveSplitCoreRenderer {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
+            .read()
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -648,7 +667,7 @@ impl LiveSplitCoreRenderer {
             ("Autosplitter Configuration", "asc"),
             |me, f, path| {
                 me.load_autosplitter(f)?;
-                me.app_config.recent_autosplitter =
+                me.app_config.write().recent_autosplitter =
                     Some(path.into_os_string().into_string().expect("utf8"));
                 Ok(())
             },
@@ -697,7 +716,7 @@ impl LiveSplitCoreRenderer {
         // between egui input handling and global hotkey handling
         // Work is needed to keep them in sync :(
         let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.hot_key_start {
+        if let Some(hot_key) = self.app_config.read().hot_key_start {
             hook.register(hot_key.to_livesplit_hotkey(), move || {
                 // TODO: fix this unwrap
                 timer.write().unwrap().split_or_start();
@@ -709,31 +728,31 @@ impl LiveSplitCoreRenderer {
         // values. Probably need to wrap config and thread_chan in Arc
         let config = self.app_config.clone();
         let thread_chan = self.thread_chan.clone();
-        if let Some(hot_key) = self.app_config.hot_key_reset {
+        if let Some(hot_key) = self.app_config.read().hot_key_reset {
             hook.register(hot_key.to_livesplit_hotkey(), move || {
                 // TODO: fix this unwrap
                 timer.write().unwrap().reset(true);
-                if config.use_autosplitter == Some(YesOrNo::Yes) {
+                if config.read().use_autosplitter == Some(YesOrNo::Yes) {
                     thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
                 }
             })?;
         }
         let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.hot_key_undo {
+        if let Some(hot_key) = self.app_config.read().hot_key_undo {
             hook.register(hot_key.to_livesplit_hotkey(), move || {
                 // TODO: fix this unwrap
                 timer.write().unwrap().undo_split();
             })?;
         }
         let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.hot_key_skip {
+        if let Some(hot_key) = self.app_config.read().hot_key_skip {
             hook.register(hot_key.to_livesplit_hotkey(), move || {
                 // TODO: fix this unwrap
                 timer.write().unwrap().skip_split();
             })?;
         }
         let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.hot_key_pause {
+        if let Some(hot_key) = self.app_config.read().hot_key_pause {
             hook.register(hot_key.to_livesplit_hotkey(), move || {
                 // TODO: fix this unwrap
                 timer.write().unwrap().toggle_pause();
@@ -761,6 +780,7 @@ struct Vertex {
     uv: epaint::Pos2,
 }
 
+#[cfg(not(windows))]
 impl eframe::App for LiveSplitCoreRenderer {
     fn on_exit_event(&mut self) -> bool {
         self.is_exiting = true;
@@ -1140,7 +1160,7 @@ void main() {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true);
-                        if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
+                        if self.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
                         }
                         ui.close_menu()
@@ -1186,41 +1206,44 @@ void main() {
                 }
             }
         });
-        if self.app_config.global_hotkeys != Some(YesOrNo::Yes) {
-            let mut input = { ctx.input_mut() };
-            if let Some(hot_key) = self.app_config.hot_key_start {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().split_or_start();
-                }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_reset {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().reset(true);
-                    if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                        self.thread_chan
-                            .try_send(ThreadEvent::TimerReset)
-                            .unwrap_or(());
+        {
+            let app_config = self.app_config.read();
+            if app_config.global_hotkeys != Some(YesOrNo::Yes) {
+                let mut input = { ctx.input_mut() };
+                if let Some(hot_key) = app_config.hot_key_start {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().split_or_start();
                     }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_undo {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().undo_split();
+                if let Some(hot_key) = app_config.hot_key_reset {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().reset(true);
+                        if app_config.use_autosplitter == Some(YesOrNo::Yes) {
+                            self.thread_chan
+                                .try_send(ThreadEvent::TimerReset)
+                                .unwrap_or(());
+                        }
+                    }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_skip {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().skip_split();
+                if let Some(hot_key) = app_config.hot_key_undo {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().undo_split();
+                    }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_pause {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().toggle_pause();
+                if let Some(hot_key) = app_config.hot_key_skip {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().skip_split();
+                    }
+                }
+                if let Some(hot_key) = app_config.hot_key_pause {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().toggle_pause();
+                    }
                 }
             }
         }
@@ -1299,9 +1322,12 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
     let mut app = LiveSplitCoreRenderer {
         frame_buffer: vec![],
-        timer: timer.clone(),
+        timer,
         layout,
-        renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
+	#[cfg(windows)]
+        renderer: livesplit_core::rendering::software::Renderer::new(),
+	#[cfg(not(windows))]
+	renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
         layout_state: None,
         show_settings_editor: false,
         settings: settings.clone(),
@@ -1309,99 +1335,164 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         is_exiting: false,
         thread_chan: sync_sender,
         project_dirs,
-        app_config: cli_config,
+        app_config: Arc::new(parking_lot::lock_api::RwLock::new(cli_config)),
         app_config_processed: false,
         opengl_resources: None,
         global_hotkey_hook: None,
     };
 
+    app.load_app_config();
+    if app.app_config.read().global_hotkeys == Some(YesOrNo::Yes) {
+        messagebox_on_error(|| app.enable_global_hotkeys());
+    }
+    let frame_rate = app
+        .app_config
+        .read()
+        .frame_rate
+        .unwrap_or(DEFAULT_FRAME_RATE);
+    let polling_rate = app
+        .app_config
+        .read()
+        .polling_rate
+        .unwrap_or(DEFAULT_POLLING_RATE);
+
+    #[cfg(windows)]
+    {
+        let mut window = win32::main(app.layout, app.timer.clone(), app.renderer)?;
+        repaint_timer(frame_rate, window.handle());
+        if app.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
+            snes_polling(
+                app.app_config,
+                polling_rate,
+                latency,
+                app.timer,
+                settings,
+                sync_receiver,
+            );
+        }
+        window.run()?;
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
     eframe::run_native(
         "Annelid",
         options,
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
-            app.load_app_config();
-            if app.app_config.global_hotkeys == Some(YesOrNo::Yes) {
-                messagebox_on_error(|| app.enable_global_hotkeys());
-            }
-            let frame_rate = app.app_config.frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
-            let polling_rate = app.app_config.polling_rate.unwrap_or(DEFAULT_POLLING_RATE);
-            // This thread is essentially just a refresh rate timer
-            // it ensures that the gui thread is redrawn at the requested frame_rate,
-            // possibly more often.
-            let _frame_rate_thread = ThreadBuilder::default()
-                .name("Frame Rate Thread".to_owned())
-                .priority(ThreadPriority::Min)
-                .spawn(move |_| loop {
-                    context.request_repaint();
-                    std::thread::sleep(std::time::Duration::from_millis(
-                        (1000.0 / frame_rate) as u64,
-                    ));
-                })
-                // TODO: fix this unwrap
-                .unwrap();
+            repaint_timer(frame_rate, context);
             // This thread deals with polling the SNES at a fixed rate.
-            if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                let _snes_polling_thread = ThreadBuilder::default()
-                    .name("SNES Polling Thread".to_owned())
-                    // We could change this thread priority, but we probably
-                    // should leave it at the default to make sure we get timely
-                    // polling of SNES state
-                    .spawn(move |_| loop {
-                        print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                            let mut client = usb2snes::SyncClient::connect()?;
-                            client.set_name("annelid".to_owned())?;
-                            println!("Server version is {:?}", client.app_version()?);
-                            let mut devices = client.list_device()?;
-                            if devices.len() != 1 {
-                                if devices.is_empty() {
-                                    Err("No devices present")?;
-                                } else {
-                                    Err(format!("You need to select a device: {:#?}", devices))?;
-                                }
-                            }
-                            let device = devices.pop().ok_or("Device list was empty")?;
-                            println!("Using device: {}", device);
-                            client.attach(&device)?;
-                            println!("Connected.");
-                            println!("{:#?}", client.info()?);
-                            let mut snes = SNESState::new();
-                            loop {
-                                let summary = snes.fetch_all(&mut client, &settings.read())?;
-                                if summary.start {
-                                    // TODO: fix this unwrap
-                                    timer.write().unwrap().start();
-                                }
-                                if summary.reset
-                                    && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
-                                {
-                                    // TODO: fix this unwrap
-                                    timer.write().unwrap().reset(true);
-                                }
-                                if summary.split {
-                                    // TODO: fix this unwrap
-                                    timer.write().unwrap().split();
-                                }
-                                {
-                                    *latency.write() =
-                                        (summary.latency_average, summary.latency_stddev);
-                                }
-                                // If the timer gets reset, we need to make a fresh snes state
-                                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                    snes = SNESState::new();
-                                }
-                                std::thread::sleep(std::time::Duration::from_millis(
-                                    (1000.0 / polling_rate) as u64,
-                                ));
-                            }
-                        });
-                        std::thread::sleep(std::time::Duration::from_millis(1000));
-                    })
-                    //TODO: fix this unwrap
-                    .unwrap();
+            if app.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
+                snes_polling(
+                    app.app_config.clone(),
+                    polling_rate,
+                    latency,
+                    app.timer.clone(),
+                    settings,
+                    sync_receiver,
+                );
             }
 
             Box::new(app)
         }),
     );
+}
+
+#[cfg(windows)]
+type RepaintHandle = Arc<RwLock<windows::Win32::Foundation::HWND>>;
+
+#[cfg(not(windows))]
+type RepaintHandle = egui::Context;
+
+fn repaint_timer(frame_rate: f32, handle: RepaintHandle) {
+    // This thread is essentially just a refresh rate timer
+    // it ensures that the gui thread is redrawn at the requested frame_rate,
+    // possibly more often.
+    let _frame_rate_thread = ThreadBuilder::default()
+        .name("Frame Rate Thread".to_owned())
+        .priority(ThreadPriority::Min)
+        .spawn(move |_| loop {
+            #[cfg(not(windows))]
+            handle.request_repaint();
+            #[cfg(windows)]
+            unsafe {
+                use windows::Win32::Graphics::Gdi::InvalidateRect;
+                let h = { *handle.read() };
+                if h != windows::Win32::Foundation::HWND(0) {
+                    //println!("sending repaint");
+                    InvalidateRect(h, std::ptr::null(), false);
+                }
+            };
+            std::thread::sleep(std::time::Duration::from_millis(
+                (1000.0 / frame_rate) as u64,
+            ));
+        })
+        // TODO: fix this unwrap
+        .unwrap();
+}
+
+// TODO: it would probably be cleaner to make this thread a method of LiveSplitCoreRenderer
+fn snes_polling(
+    app_config: Arc<RwLock<AppConfig>>,
+    polling_rate: f32,
+    latency: Arc<RwLock<(f32, f32)>>,
+    timer: SharedTimer,
+    settings: Arc<RwLock<Settings>>,
+    sync_receiver: std::sync::mpsc::Receiver<ThreadEvent>,
+) {
+    let _snes_polling_thread = ThreadBuilder::default()
+        .name("SNES Polling Thread".to_owned())
+        // We could change this thread priority, but we probably
+        // should leave it at the default to make sure we get timely
+        // polling of SNES state
+        .spawn(move |_| loop {
+            print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+                let mut client = usb2snes::SyncClient::connect()?;
+                client.set_name("annelid".to_owned())?;
+                println!("Server version is {:?}", client.app_version()?);
+                let mut devices = client.list_device()?;
+                if devices.len() != 1 {
+                    if devices.is_empty() {
+                        Err("No devices present")?;
+                    } else {
+                        Err(format!("You need to select a device: {:#?}", devices))?;
+                    }
+                }
+                let device = devices.pop().ok_or("Device list was empty")?;
+                println!("Using device: {}", device);
+                client.attach(&device)?;
+                println!("Connected.");
+                println!("{:#?}", client.info()?);
+                let mut snes = SNESState::new();
+                loop {
+                    let summary = snes.fetch_all(&mut client, &settings.read())?;
+                    if summary.start {
+                        // TODO: fix this unwrap
+                        timer.write().unwrap().start();
+                    }
+                    if summary.reset && app_config.read().reset_on_reset == Some(YesOrNo::Yes) {
+                        // TODO: fix this unwrap
+                        timer.write().unwrap().reset(true);
+                        snes = SNESState::new();
+                    }
+                    if summary.split {
+                        // TODO: fix this unwrap
+                        timer.write().unwrap().split();
+                    }
+                    {
+                        *latency.write() = (summary.latency_average, summary.latency_stddev);
+                    }
+                    // If the timer gets reset, we need to make a fresh snes state
+                    if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        snes = SNESState::new();
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        (1000.0 / polling_rate) as u64,
+                    ));
+                }
+            });
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        })
+        //TODO: fix this unwrap
+        .unwrap();
 }

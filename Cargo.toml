@@ -38,6 +38,35 @@ bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "0.10.0"
 
+# really this means linux
+[target.'cfg(linux)'.dependencies]
+relm4 = "0"
+
+[target.'cfg(macos)'.dependencies]
+cacao = "0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.39.0", features = [
+    "Foundation_Numerics",
+    #"Win32_UI_HiDpi",
+    "Win32_System_Com",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Performance",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Animation",
+    "Win32_UI_WindowsAndMessaging",
+  ]}
+native-windows-gui = "1.0.12"
+winapi = { version = "0.3", features = [
+  "winuser", "wingdi", "winbase", "libloaderapi", "processthreadsapi",
+  "errhandlingapi", "winerror", "commctrl", "sysinfoapi", "shobjidl", "combaseapi",
+  "commdlg", "d2d1", "objbase", "dwrite", "winnls", "shellapi", "wincodec", "stringapiset"] }
 
 # Remember to test with --release
 #[profile.dev]
