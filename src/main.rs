@@ -773,7 +773,9 @@ impl eframe::App for LiveSplitCoreRenderer {
             self.process_app_config(frame);
             self.app_config_processed = true;
             // Since this block should only run once, we abuse it to also
-            // set a thread priority only once
+            // set a thread priority only once. We want rendering to take a
+            // relative backseat to anything else the user has going on
+            // like an emulator.
             set_current_thread_priority(ThreadPriority::Min).unwrap_or(())
         }
         {
@@ -1267,11 +1269,6 @@ enum ThreadEvent {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    use thread_priority::ThreadExt;
-    let default_priority = std::thread::current()
-        .get_priority()
-        .expect("Get default thread priority");
-    set_current_thread_priority(ThreadPriority::Min).unwrap_or(());
     let cli_config = AppConfig::parse();
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));
@@ -1347,7 +1344,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
                 let _snes_polling_thread = ThreadBuilder::default()
                     .name("SNES Polling Thread".to_owned())
-                    .priority(default_priority)
+                    // We could change this thread priority, but we probably
+                    // should leave it at the default to make sure we get timely
+                    // polling of SNES state
                     .spawn(move |_| loop {
                         print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
                             let mut client = usb2snes::SyncClient::connect()?;
