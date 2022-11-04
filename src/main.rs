@@ -16,7 +16,7 @@ use parking_lot::RwLock;
 use serde_derive::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::Arc;
-use std::thread;
+use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 fn messagebox_on_error<F>(f: F)
 where
@@ -772,6 +772,9 @@ impl eframe::App for LiveSplitCoreRenderer {
         if !self.app_config_processed {
             self.process_app_config(frame);
             self.app_config_processed = true;
+            // Since this block should only run once, we abuse it to also
+            // set a thread priority only once
+            set_current_thread_priority(ThreadPriority::Min).unwrap_or(())
         }
         {
             // TODO: please move this to its own method and refactor it....
@@ -1264,6 +1267,11 @@ enum ThreadEvent {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
+    use thread_priority::ThreadExt;
+    let default_priority = std::thread::current()
+        .get_priority()
+        .expect("Get default thread priority");
+    set_current_thread_priority(ThreadPriority::Min).unwrap_or(());
     let cli_config = AppConfig::parse();
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));
@@ -1324,63 +1332,74 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             // This thread is essentially just a refresh rate timer
             // it ensures that the gui thread is redrawn at the requested frame_rate,
             // possibly more often.
-            let _frame_rate_thread = thread::spawn(move || loop {
-                context.request_repaint();
-                std::thread::sleep(std::time::Duration::from_millis(
-                    (1000.0 / frame_rate) as u64,
-                ));
-            });
+            let _frame_rate_thread = ThreadBuilder::default()
+                .name("Frame Rate Thread".to_owned())
+                .priority(ThreadPriority::Min)
+                .spawn(move |_| loop {
+                    context.request_repaint();
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        (1000.0 / frame_rate) as u64,
+                    ));
+                })
+                // TODO: fix this unwrap
+                .unwrap();
             // This thread deals with polling the SNES at a fixed rate.
             if app.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                let _snes_polling_thread = thread::spawn(move || loop {
-                    print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
-                        let mut client = usb2snes::SyncClient::connect()?;
-                        client.set_name("annelid".to_owned())?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?;
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
-                                Err("No devices present")?;
-                            } else {
-                                Err(format!("You need to select a device: {:#?}", devices))?;
+                let _snes_polling_thread = ThreadBuilder::default()
+                    .name("SNES Polling Thread".to_owned())
+                    .priority(default_priority)
+                    .spawn(move |_| loop {
+                        print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+                            let mut client = usb2snes::SyncClient::connect()?;
+                            client.set_name("annelid".to_owned())?;
+                            println!("Server version is {:?}", client.app_version()?);
+                            let mut devices = client.list_device()?;
+                            if devices.len() != 1 {
+                                if devices.is_empty() {
+                                    Err("No devices present")?;
+                                } else {
+                                    Err(format!("You need to select a device: {:#?}", devices))?;
+                                }
                             }
-                        }
-                        let device = devices.pop().ok_or("Device list was empty")?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
-                        let mut snes = SNESState::new();
-                        loop {
-                            let summary = snes.fetch_all(&mut client, &settings.read())?;
-                            if summary.start {
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().start();
+                            let device = devices.pop().ok_or("Device list was empty")?;
+                            println!("Using device: {}", device);
+                            client.attach(&device)?;
+                            println!("Connected.");
+                            println!("{:#?}", client.info()?);
+                            let mut snes = SNESState::new();
+                            loop {
+                                let summary = snes.fetch_all(&mut client, &settings.read())?;
+                                if summary.start {
+                                    // TODO: fix this unwrap
+                                    timer.write().unwrap().start();
+                                }
+                                if summary.reset
+                                    && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
+                                {
+                                    // TODO: fix this unwrap
+                                    timer.write().unwrap().reset(true);
+                                }
+                                if summary.split {
+                                    // TODO: fix this unwrap
+                                    timer.write().unwrap().split();
+                                }
+                                {
+                                    *latency.write() =
+                                        (summary.latency_average, summary.latency_stddev);
+                                }
+                                // If the timer gets reset, we need to make a fresh snes state
+                                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                    snes = SNESState::new();
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(
+                                    (1000.0 / polling_rate) as u64,
+                                ));
                             }
-                            if summary.reset && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
-                            {
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().reset(true);
-                            }
-                            if summary.split {
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().split();
-                            }
-                            {
-                                *latency.write() =
-                                    (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                snes = SNESState::new();
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
-                        }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                });
+                        });
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                    })
+                    //TODO: fix this unwrap
+                    .unwrap();
             }
 
             Box::new(app)

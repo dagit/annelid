@@ -66,6 +66,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
+ "thread-priority",
  "time 0.3.16",
  "toml",
  "websocket",
@@ -2648,6 +2649,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thread-priority"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978519ae4c6891352f964b88da4ab5a3a9b74a40247cda5baee145dae6cd3b71"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "log 0.4.17",
+ "winapi 0.3.9",
 ]
 
 [[package]]

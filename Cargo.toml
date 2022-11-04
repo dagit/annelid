@@ -36,6 +36,7 @@ serde_derive = "1"
 glow = "*"
 bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
+thread-priority = "0.10.0"
 
 
 # Remember to test with --release
