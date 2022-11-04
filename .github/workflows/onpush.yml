@@ -161,10 +161,10 @@ jobs:
           name: annelid-x86_64.win
           path: annelid-x86_64.win/
       - id: get_commit_id
-        run: echo SHORT_COMMIT_ID::$(git rev-parse --short HEAD) >> $GITHUB_OUTPUT
+        run: echo SHORT_COMMIT_ID=$(git rev-parse --short HEAD) >> $GITHUB_OUTPUT
         shell: bash
       - id: tag_date
-        run: echo TAG_NAME::$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }} >> $GITHUB_OUTPUT
+        run: echo TAG_NAME=$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }} >> $GITHUB_OUTPUT
         shell: bash
       - id: create_release
         uses: actions/create-release@v1
