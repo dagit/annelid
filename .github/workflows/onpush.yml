@@ -22,6 +22,8 @@ jobs:
           toolchain: stable
           override: true
 
+      - run: sudo apt-get install -y libgtk-4-dev gtk-4-examples geany
+
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
@@ -40,6 +42,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+
+      - run: sudo apt-get install -y libgtk-4-dev gtk-4-examples geany
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1
@@ -60,6 +64,8 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
+
+      - run: sudo apt-get install -y libgtk-4-dev gtk-4-examples geany
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
@@ -106,7 +112,7 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
-
+      
       - name: Run cargo
         uses: actions-rs/cargo@v1
         env:
@@ -114,6 +120,7 @@ jobs:
           REPOSITORY_NAME: 'annelid'
       - if: ${{ matrix.is-linux }}
         run: |
+          sudo apt-get install -y libgtk-4-dev gtk-4-examples geany
           sudo apt-get install -y wget
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
