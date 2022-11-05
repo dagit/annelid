@@ -1,5 +1,7 @@
 // This is based almost entirely on the direct2d example in windows-rs
-use livesplit_core::{Layout, SharedTimer};
+use crate::appconfig::YesOrNo;
+use crate::livesplit::{LiveSplitCoreRenderer, ThreadEvent};
+use crate::utils::{repaint_timer, snes_polling};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use windows::{
@@ -10,15 +12,11 @@ use windows::{
     Win32::UI::WindowsAndMessaging::*,
 };
 
-pub fn main(
-    layout: Layout,
-    timer: SharedTimer,
-    renderer: livesplit_core::rendering::software::Renderer,
-) -> Result<Window> {
+pub fn main(app: LiveSplitCoreRenderer) -> Result<Window> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)?;
     }
-    Window::new(layout, timer, renderer)
+    Window::new(app)
 }
 
 pub struct Window {
@@ -31,17 +29,11 @@ pub struct Window {
     dpi: f32,
     visible: bool,
     occlusion: u32,
-    layout: Layout,
-    timer: SharedTimer,
-    renderer: livesplit_core::rendering::software::Renderer,
+    app: LiveSplitCoreRenderer,
 }
 
 impl Window {
-    fn new(
-        layout: Layout,
-        timer: SharedTimer,
-        renderer: livesplit_core::rendering::software::Renderer,
-    ) -> Result<Self> {
+    fn new(app: LiveSplitCoreRenderer) -> Result<Self> {
         let factory = create_factory()?;
         let dxfactory: IDXGIFactory2 = unsafe { CreateDXGIFactory1()? };
 
@@ -54,9 +46,7 @@ impl Window {
 
         println!("ok window");
         Ok(Window {
-            layout,
-            renderer,
-            timer,
+            app,
             handle: Arc::new(RwLock::new(HWND(0))),
             factory,
             dxfactory,
@@ -120,14 +110,15 @@ impl Window {
         //    vec![*self.variable.borrow(); size_u.width as usize * size_u.height as usize * 4];
         // a local scope so the timer lock has a smaller scope
         let layout_state = {
-	    // TODO: do something better than unwrap
-            let timer = self.timer.read().unwrap();
+            // TODO: do something better than unwrap
+            let timer = self.app.timer.read().unwrap();
             let snapshot = timer.snapshot();
-            self.layout.state(&snapshot)
+            self.app.layout.state(&snapshot)
         };
-        self.renderer
+        self.app
+            .renderer
             .render(&layout_state, [size_u.width, size_u.height]);
-        let raw_frame = self.renderer.image_data();
+        let raw_frame = self.app.renderer.image_data();
         let bitmap = unsafe {
             target.CreateBitmap2(
                 size_u,
@@ -251,7 +242,24 @@ impl Window {
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(
+        &mut self,
+        frame_rate: f32,
+        polling_rate: f32,
+        latency: Arc<RwLock<(f32, f32)>>,
+        sync_receiver: std::sync::mpsc::Receiver<ThreadEvent>,
+    ) -> Result<()> {
+        repaint_timer(frame_rate, self.handle.clone());
+        if self.app.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
+            snes_polling(
+                self.app.app_config.clone(),
+                polling_rate,
+                latency,
+                self.app.timer.clone(),
+                self.app.settings.clone(),
+                sync_receiver,
+            );
+        }
         unsafe {
             let instance = GetModuleHandleA(None)?;
             debug_assert!(instance.0 != 0);
@@ -288,8 +296,6 @@ impl Window {
             debug_assert!(handle.0 != 0);
             debug_assert!(handle == *self.handle.read());
             let mut message = MSG::default();
-	    // TODO: just for testing
-	    self.timer.write().unwrap().start();
 
             loop {
                 if self.visible {
@@ -299,6 +305,7 @@ impl Window {
                 GetMessageA(&mut message, None, 0, 0);
 
                 if message.message == WM_QUIT {
+                    // TODO: call LiveSplitRenderer::confirm_save
                     return Ok(());
                 }
 
