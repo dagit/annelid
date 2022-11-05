@@ -38,11 +38,13 @@ bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "0.10.0"
 
-# really this means linux
-[target.'cfg(linux)'.dependencies]
-relm4 = "0"
+[target.'cfg(target_os="linux")'.dependencies]
+gtk = { package = "gtk4", version = "*" }
+glium = "*"
+libloading = "*"
+epoxy = "*"
 
-[target.'cfg(macos)'.dependencies]
+[target.'cfg(target_os="macos")'.dependencies]
 cacao = "0"
 
 [target.'cfg(windows)'.dependencies]

@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release mode
 #[macro_use]
 extern crate lazy_static;
+extern crate gtk;
 pub mod appconfig;
 pub mod autosplitters;
 pub mod livesplit;
 pub mod routes;
 pub mod usb2snes;
 pub mod utils;
+pub mod linux;
 #[cfg(windows)]
 pub mod win32;
 
@@ -24,6 +26,12 @@ use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 use utils::*;
 
+#[cfg(target_os="linux")]
+fn main () {
+    crate::linux::main();
+}
+
+#[cfg(not(target_os="linux"))]
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let cli_config = AppConfig::parse();
     let settings = Settings::new();
