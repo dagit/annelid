@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release mode
 #[macro_use]
 extern crate lazy_static;
+#[cfg(target_os = "linux")]
 extern crate gtk;
 pub mod appconfig;
 pub mod autosplitters;
+#[cfg(target_os = "linux")]
 pub mod linux;
 pub mod livesplit;
 pub mod routes;
