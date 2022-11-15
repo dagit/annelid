@@ -1,3 +1,4 @@
+use crate::livesplit::LiveSplitCoreRenderer;
 use glium::{
     implement_vertex, index::PrimitiveType, program, uniform, Frame, IndexBuffer, Surface,
     VertexBuffer,
@@ -7,130 +8,225 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 #[derive(Copy, Clone)]
 struct Vertex {
-    position: [f32; 2],
-    color: [f32; 3],
+    a_pos: [f32; 2],
+    a_tc: [f32; 2],
 }
 
-implement_vertex!(Vertex, position, color);
+implement_vertex!(Vertex, a_pos, a_tc);
 
-struct Renderer {
+pub struct Renderer {
     context: Rc<glium::backend::Context>,
-    vertex_buffer: VertexBuffer<Vertex>,
     index_buffer: IndexBuffer<u16>,
     program: glium::Program,
+    frame_buffer: RefCell<Vec<u8>>,
 }
 
 impl Renderer {
     fn new(context: Rc<glium::backend::Context>) -> Self {
-        // The following code is based on glium's triangle example:
-        // https://github.com/glium/glium/blob/2ff5a35f6b097889c154b42ad0233c6cdc6942f4/examples/triangle.rs
-        let vertex_buffer = VertexBuffer::new(
+        println!("Version: {}", context.get_opengl_version_string());
+        println!("Vender: {}", context.get_opengl_vendor_string());
+        println!("Renderer: {}", context.get_opengl_renderer_string());
+
+        let index_buffer = IndexBuffer::new(
             &context,
-            &[
-                Vertex {
-                    position: [-0.5, -0.5],
-                    color: [0., 1., 0.],
-                },
-                Vertex {
-                    position: [0., 0.5],
-                    color: [0., 0., 1.],
-                },
-                Vertex {
-                    position: [0.5, -0.5],
-                    color: [1., 0., 0.],
-                },
-            ],
+            PrimitiveType::TrianglesList,
+            &[0u16, 1, 3, 1, 2, 3],
         )
-        .unwrap();
-        let index_buffer =
-            IndexBuffer::new(&context, PrimitiveType::TrianglesList, &[0u16, 1, 2]).unwrap();
+        .expect("Create index buffer");
         let program = program!(&context,
-            // This example includes a shader that requires GLSL 140 or above.
-            //
-            // Emmanuele Bassi explains:
-            //
-            // The version of the shaders depend on the version of GL; currently, GTK4 uses:
-            //
-            // - 100 on GLES
-            // - 110 on GL2 legacy
-            // - 130 on GL3 legacy
-            // - 150 on GL3.2+
-            //
-            // In practice, the version of GLSL for the shaders inside your application depends on
-            // the GL context you're either creating or using—i.e. if you support multiple versions
-            // of GL then you should load different shaders.
-            //
-            // If you only care about recent GL, as you should, then going for GLSL 1.50 is
-            // perfectly fine; anything else will error out, and you can catch that error and fall
-            // back to something else.
             140 => {
+
                 vertex: "
                     #version 140
-                    uniform mat4 matrix;
-                    in vec2 position;
-                    in vec3 color;
-                    out vec3 vColor;
+                    
+                    uniform   vec2 u_screen_size;
+                    attribute vec2 a_pos;
+                    attribute vec2 a_tc;
+                    varying   vec2 v_tc;
+                    
                     void main() {
-                        gl_Position = vec4(position, 0.0, 1.0) * matrix;
-                        vColor = color;
+                        gl_Position = vec4(
+                                          2.0 * a_pos.x / u_screen_size.x - 1.0,
+                                          1.0 - 2.0 * a_pos.y / u_screen_size.y,
+                                          0.0,
+                                          1.0);
+                        v_tc = a_tc;
                     }
                 ",
-
                 fragment: "
                     #version 140
-                    in vec3 vColor;
-                    out vec4 f_color;
+                    
+                    uniform sampler2D u_sampler;
+                    
+                    varying vec2      v_tc;
+                    
                     void main() {
-                        f_color = vec4(vColor, 1.0);
+                        gl_FragColor = texture2D(u_sampler, v_tc);
+                    }
+                "
+            },
+            330 => {
+
+                vertex: "
+                    #version 330
+                    
+                    uniform vec2 u_screen_size;
+                    in      vec2 a_pos;
+                    in      vec2 a_tc;
+                    out     vec2 v_tc;
+                    
+                    void main() {
+                        gl_Position = vec4(
+                                          2.0 * a_pos.x / u_screen_size.x - 1.0,
+                                          1.0 - 2.0 * a_pos.y / u_screen_size.y,
+                                          0.0,
+                                          1.0);
+                        v_tc = a_tc;
+                    }
+                ",
+                fragment: "
+                    #version 330
+                    
+                    uniform sampler2D u_sampler;
+                    
+                    in      vec2      v_tc;
+                    
+                    out     vec4      fragmentColor;
+                    
+                    void main() {
+                        fragmentColor = texture(u_sampler, v_tc);
                     }
                 "
             },
         )
-        .unwrap();
+        .expect("Create gl program");
 
         Renderer {
             context,
-            vertex_buffer,
             index_buffer,
             program,
+            frame_buffer: RefCell::new(vec![0; 0]),
         }
     }
 
-    fn draw(&self) {
+    fn draw(&self, core_renderer: &mut LiveSplitCoreRenderer) {
+        use glium::texture::ToClientFormat;
+        use std::borrow::Cow;
+
         let mut frame = Frame::new(
             self.context.clone(),
             self.context.get_framebuffer_dimensions(),
         );
 
-        let uniforms = uniform! {
-            matrix: [
-                [1., 0., 0., 0.],
-                [0., 1., 0., 0.],
-                [0., 0., 1., 0.],
-                [0., 0., 0., 1f32]
-            ]
+        let timer = core_renderer.timer.read().expect("to take lock");
+        let snapshot = timer.snapshot();
+        match &mut core_renderer.layout_state {
+            None => {
+                core_renderer.layout_state = Some(core_renderer.layout.state(&snapshot));
+            }
+            Some(layout_state) => {
+                core_renderer.layout.update_state(layout_state, &snapshot);
+            }
         };
 
-        frame.clear_color(0., 0., 0., 0.);
-        frame
-            .draw(
-                &self.vertex_buffer,
-                &self.index_buffer,
-                &self.program,
-                &uniforms,
-                &Default::default(),
+        if let Some(layout_state) = &core_renderer.layout_state {
+            let (w, h) = self.context.get_framebuffer_dimensions();
+            let szu32 = [w as u32, h as u32];
+            let mut frame_buffer = self.frame_buffer.borrow_mut();
+            frame_buffer.resize(w as usize * h as usize * 4, 0);
+            core_renderer.renderer.render(
+                layout_state,
+                frame_buffer.as_mut_slice(),
+                szu32,
+                w as u32,
+                false,
+            );
+            let frame_buffer = Cow::Borrowed(frame_buffer.as_slice());
+            let image = glium::texture::RawImage2d {
+                data: frame_buffer,
+                width: w,
+                height: h,
+                format: u8::rgba_format(),
+            };
+            let texture = glium::texture::Texture2d::with_mipmaps(
+                &self.context,
+                image,
+                glium::texture::MipmapsOption::NoMipmap,
             )
-            .unwrap();
-        frame.finish().unwrap();
+            .expect("create texture");
+            let sampler = texture
+                .sampled()
+                .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+                .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest);
+
+            let vertex_buffer = VertexBuffer::new(
+                &self.context,
+                &[
+                    Vertex {
+                        // top right
+                        a_pos: [w as f32, 0.],
+                        a_tc: [1., 0.],
+                    },
+                    Vertex {
+                        // bottom right
+                        a_pos: [w as f32, h as f32],
+                        a_tc: [1., 1.],
+                    },
+                    Vertex {
+                        // bottom left
+                        a_pos: [0., h as f32],
+                        a_tc: [0., 1.],
+                    },
+                    Vertex {
+                        // top left
+                        a_pos: [0., 0.],
+                        a_tc: [0., 0.],
+                    },
+                ],
+            )
+            .expect("Create vertex buffer");
+
+            let uniforms = uniform! {
+                u_screen_size: [w as f32, h as f32],
+                u_sampler: sampler,
+            };
+
+            frame.clear_color(0., 0., 0., 1.);
+            frame
+                .draw(
+                    &vertex_buffer,
+                    &self.index_buffer,
+                    &self.program,
+                    &uniforms,
+                    &Default::default(),
+                )
+                .expect("frame draw");
+            frame.finish().expect("frame finish drawing");
+        }
     }
 }
 
-#[derive(Default)]
 pub struct GliumGLArea {
-    renderer: RefCell<Option<Renderer>>,
+    pub renderer: RefCell<Option<Renderer>>,
+    // TODO: is there a way to give just mod access?
+    pub core_renderer: RefCell<Option<Rc<RefCell<LiveSplitCoreRenderer>>>>,
+    pub frame_rate: RefCell<f32>,
+    pub previous_draw_instant: RefCell<Instant>,
+}
+
+impl Default for GliumGLArea {
+    fn default() -> Self {
+        GliumGLArea {
+            renderer: Default::default(),
+            core_renderer: Default::default(),
+            frame_rate: RefCell::new(crate::appconfig::DEFAULT_FRAME_RATE),
+            previous_draw_instant: RefCell::new(Instant::now()),
+        }
+    }
 }
 
 #[glib::object_subclass]
@@ -159,12 +255,14 @@ impl WidgetImpl for GliumGLArea {
         // `unrealize()`.
         let context =
             unsafe { glium::backend::Context::new(widget.clone(), true, Default::default()) }
-                .unwrap();
+                .expect("Create gl context");
         *self.renderer.borrow_mut() = Some(Renderer::new(context));
+        widget.use_refresh_timer();
     }
 
     fn unrealize(&self) {
         *self.renderer.borrow_mut() = None;
+        *self.core_renderer.borrow_mut() = None;
 
         self.parent_unrealize();
     }
@@ -172,7 +270,14 @@ impl WidgetImpl for GliumGLArea {
 
 impl GLAreaImpl for GliumGLArea {
     fn render(&self, _context: &gtk::gdk::GLContext) -> bool {
-        self.renderer.borrow().as_ref().unwrap().draw();
+        let core_renderer = &*self.core_renderer.borrow_mut();
+        if let Some(core_renderer) = core_renderer {
+            self.renderer
+                .borrow()
+                .as_ref()
+                .expect("borrow renderer")
+                .draw(&mut (*core_renderer).borrow_mut());
+        }
 
         true
     }

@@ -4,11 +4,11 @@ extern crate lazy_static;
 extern crate gtk;
 pub mod appconfig;
 pub mod autosplitters;
+pub mod linux;
 pub mod livesplit;
 pub mod routes;
 pub mod usb2snes;
 pub mod utils;
-pub mod linux;
 #[cfg(windows)]
 pub mod win32;
 
@@ -26,12 +26,6 @@ use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 use utils::*;
 
-#[cfg(target_os="linux")]
-fn main () {
-    crate::linux::main();
-}
-
-#[cfg(not(target_os="linux"))]
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let cli_config = AppConfig::parse();
     let settings = Settings::new();
@@ -43,7 +37,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .expect("Run with at least one segment provided")
         .into_shared();
     #[cfg(not(windows))]
-    let options = eframe::NativeOptions {
+    let _options = eframe::NativeOptions {
         ..eframe::NativeOptions::default()
     };
     let latency = Arc::new(RwLock::new((0.0, 0.0)));
@@ -75,9 +69,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         layout_state: None,
         #[cfg(not(windows))]
         show_settings_editor: false,
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         settings,
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
         settings: settings.clone(),
         can_exit: false,
         #[cfg(not(windows))]
@@ -114,10 +108,16 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         Ok(())
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux::main(app, frame_rate, polling_rate, latency, sync_receiver)?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
     eframe::run_native(
         "Annelid",
-        options,
+        _options,
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
             repaint_timer(frame_rate, context);

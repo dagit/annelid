@@ -237,10 +237,10 @@ impl Window {
                     PostQuitMessage(0);
                     LRESULT(0)
                 }
-		WM_RBUTTONDOWN => {
-		    println!("Right clicked!");
-		    LRESULT(0)
-		}
+                WM_RBUTTONDOWN => {
+                    println!("Right clicked!");
+                    LRESULT(0)
+                }
                 _ => DefWindowProcA(*self.handle.read(), message, wparam, lparam),
             }
         }
@@ -276,7 +276,7 @@ impl Window {
 
                 style: CS_HREDRAW | CS_VREDRAW,
                 lpfnWndProc: Some(Self::wndproc),
-		lpszMenuName: s!("Context Menu"),
+                lpszMenuName: s!("Context Menu"),
                 ..Default::default()
             };
 

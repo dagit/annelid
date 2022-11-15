@@ -5,6 +5,14 @@ use gtk::{
     prelude::{GLAreaExt, WidgetExt},
 };
 
+use glib::clone;
+
+use gtk::subclass::prelude::ObjectSubclassIsExt;
+
+use crate::livesplit::LiveSplitCoreRenderer;
+use std::cell::RefCell;
+use std::rc::Rc;
+
 glib::wrapper! {
     pub struct GliumGLArea(ObjectSubclass<imp::GliumGLArea>)
         @extends gtk::GLArea, gtk::Widget;
@@ -19,6 +27,32 @@ impl Default for GliumGLArea {
 impl GliumGLArea {
     pub fn new() -> Self {
         glib::Object::new(&[])
+    }
+
+    pub fn set_core_renderer(&self, core_renderer: Rc<RefCell<LiveSplitCoreRenderer>>) {
+        *self.imp().core_renderer.borrow_mut() = Some(core_renderer);
+    }
+
+    pub fn set_frame_rate(&mut self, frame_rate: f32) {
+        *self.imp().frame_rate.borrow_mut() = frame_rate;
+    }
+
+    pub fn use_refresh_timer(&self) {
+        use std::time::{Duration, Instant};
+        let frame_length = 1000.0 / *self.imp().frame_rate.borrow() as f64;
+        let frame_clock = self.frame_clock().expect("frame clock");
+        let previous_draw_instant = Rc::new(RefCell::new(Instant::now()));
+        #[cfg(debug)]
+        println!("frame_length: {}ms", frame_length);
+        frame_clock.connect_update(clone!(@weak self as this, @strong previous_draw_instant => move |_clock| {
+            if previous_draw_instant.borrow().elapsed() > Duration::from_millis(frame_length.round() as _) {
+                #[cfg(debug)]
+                println!("{:#?}", previous_draw_instant.borrow().elapsed());
+                this.queue_draw();
+                *previous_draw_instant.borrow_mut() = Instant::now();
+            }
+        }));
+        frame_clock.begin_updating();
     }
 }
 
