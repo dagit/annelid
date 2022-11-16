@@ -130,7 +130,7 @@ jobs:
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
       - if: ${{ matrix.is-windows }}
-        - uses: ilammy/msvc-dev-cmd@v1.4.1
+        uses: ilammy/msvc-dev-cmd@v1.4.1
       - if: ${{ matrix.is-windows }}
         run: |
           rustup default stable-msvc
