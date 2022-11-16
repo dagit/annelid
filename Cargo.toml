@@ -45,7 +45,10 @@ libloading = "*"
 epoxy = "*"
 
 [target.'cfg(target_os="macos")'.dependencies]
-cacao = "0"
+gtk = { package = "gtk4", version = "*" }
+glium = "*"
+libloading = "*"
+epoxy = "*"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0", features = [

@@ -15,7 +15,7 @@ use std::error::Error;
 use std::rc::Rc;
 use std::sync::Arc;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn main(
     core_renderer: LiveSplitCoreRenderer,
     frame_rate: f32,

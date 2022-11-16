@@ -1,11 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release mode
 #[macro_use]
 extern crate lazy_static;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 extern crate gtk;
 pub mod appconfig;
 pub mod autosplitters;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod linux;
 pub mod livesplit;
 pub mod routes;
@@ -71,10 +71,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         layout_state: None,
         #[cfg(not(windows))]
         show_settings_editor: false,
-        #[cfg(any(windows, target_os = "linux"))]
         settings,
-        #[cfg(target_os = "macos")]
-        settings: settings.clone(),
         can_exit: false,
         #[cfg(not(windows))]
         is_exiting: false,
@@ -110,32 +107,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         crate::linux::main(app, frame_rate, polling_rate, latency, sync_receiver)?;
         Ok(())
     }
-
-    #[cfg(target_os = "macos")]
-    eframe::run_native(
-        "Annelid",
-        _options,
-        Box::new(move |cc| {
-            let context = cc.egui_ctx.clone();
-            repaint_timer(frame_rate, context);
-            // This thread deals with polling the SNES at a fixed rate.
-            if app.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
-                snes_polling(
-                    app.app_config.clone(),
-                    polling_rate,
-                    latency,
-                    app.timer.clone(),
-                    settings,
-                    sync_receiver,
-                );
-            }
-
-            Box::new(app)
-        }),
-    );
 }
