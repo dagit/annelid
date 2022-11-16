@@ -1,18 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release mode
 #[macro_use]
 extern crate lazy_static;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 extern crate gtk;
 pub mod appconfig;
 pub mod autosplitters;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod linux;
+pub mod gtk_ui;
 pub mod livesplit;
 pub mod routes;
 pub mod usb2snes;
 pub mod utils;
-#[cfg(windows)]
-pub mod win32;
 
 use appconfig::{AppConfig, YesOrNo};
 use autosplitters::supermetroid::Settings;
@@ -38,10 +34,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let timer = Timer::new(run)
         .expect("Run with at least one segment provided")
         .into_shared();
-    #[cfg(not(windows))]
-    let _options = eframe::NativeOptions {
-        ..eframe::NativeOptions::default()
-    };
+
     let latency = Arc::new(RwLock::new((0.0, 0.0)));
 
     let layout_settings = Layout::default_layout().settings();
@@ -59,28 +52,19 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(preference_dir)?;
 
     let mut app = LiveSplitCoreRenderer {
-        #[cfg(not(windows))]
         frame_buffer: vec![],
         timer,
         layout,
-        #[cfg(windows)]
-        renderer: livesplit_core::rendering::software::Renderer::new(),
-        #[cfg(not(windows))]
         renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
-        #[cfg(not(windows))]
         layout_state: None,
-        #[cfg(not(windows))]
         show_settings_editor: false,
         settings,
         can_exit: false,
-        #[cfg(not(windows))]
         is_exiting: false,
         thread_chan: sync_sender,
         project_dirs,
         app_config: Arc::new(parking_lot::lock_api::RwLock::new(cli_config)),
-        #[cfg(not(windows))]
         app_config_processed: false,
-        #[cfg(not(windows))]
         opengl_resources: None,
         global_hotkey_hook: None,
     };
@@ -100,16 +84,5 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .polling_rate
         .unwrap_or(appconfig::DEFAULT_POLLING_RATE);
 
-    #[cfg(windows)]
-    {
-        let mut window = win32::main(app)?;
-        window.run(frame_rate, polling_rate, latency, sync_receiver)?;
-        Ok(())
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        crate::linux::main(app, frame_rate, polling_rate, latency, sync_receiver)?;
-        Ok(())
-    }
+    gtk_ui::main(app, frame_rate, polling_rate, latency, sync_receiver)
 }
