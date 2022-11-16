@@ -138,6 +138,10 @@ jobs:
           cd gtk
           meson setup builddir --prefix=C:/gnome -Dbuild-tests=false -Dmedia-gstreamer=disabled
           meson install -C builddir
+      - if: ${{ matrix.is-osx }}
+        run: |
+          brew update
+          brew install gtk4
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
