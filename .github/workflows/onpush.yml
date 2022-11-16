@@ -131,6 +131,7 @@ jobs:
           chmod a+x appimagetool
       - if: ${{ matrix.is-windows }}
         run: |
+          rustup default stable-msvc
           choco install pkgconfiglite
           pip install meson ninja
           cd /
