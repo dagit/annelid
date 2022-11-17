@@ -177,8 +177,7 @@ jobs:
           $env:PATH += ';C:\gnome\bin'
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
           cargo bundle --release
-          ls target/release/bundle
-          ls target/release/bundle/*
+          ls target/release/bundle/msi
       - if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
