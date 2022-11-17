@@ -2,7 +2,6 @@ use crate::appconfig::{AppConfig, YesOrNo};
 use crate::autosplitters::supermetroid::{SNESState, Settings};
 use crate::livesplit::*;
 use crate::usb2snes;
-#[cfg(not(windows))]
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::SharedTimer;
@@ -42,7 +41,6 @@ where
     }
 }
 
-#[cfg(not(windows))]
 pub fn show_children(
     settings: &mut Settings,
     ui: &mut egui::Ui,
@@ -104,10 +102,6 @@ pub fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
     timer.accuracy = Accuracy::Tenths;
 }
 
-#[cfg(windows)]
-pub type RepaintHandle = Arc<RwLock<windows::Win32::Foundation::HWND>>;
-
-#[cfg(not(windows))]
 pub type RepaintHandle = egui::Context;
 
 // TODO: move this to a method in livesplit
@@ -119,17 +113,7 @@ pub fn repaint_timer(frame_rate: f32, handle: RepaintHandle) {
         .name("Frame Rate Thread".to_owned())
         .priority(ThreadPriority::Min)
         .spawn(move |_| loop {
-            #[cfg(not(windows))]
             handle.request_repaint();
-            #[cfg(windows)]
-            unsafe {
-                use windows::Win32::Graphics::Gdi::InvalidateRect;
-                let h = { *handle.read() };
-                if h != windows::Win32::Foundation::HWND(0) {
-                    //println!("sending repaint");
-                    InvalidateRect(h, None, false);
-                }
-            };
             std::thread::sleep(std::time::Duration::from_millis(
                 (1000.0 / frame_rate) as u64,
             ));
