@@ -143,12 +143,19 @@ jobs:
           cd gtk
           meson setup builddir --prefix=C:/gnome -Dbuild-tests=false -Dmedia-gstreamer=disabled
           meson install -C builddir
+          echo $env:PKG_CONFIG_PATH
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
+          echo $env:PKG_CONFIG_PATH
       - if: ${{ matrix.is-osx }}
         run: |
           brew update
           brew install gtk4
-      - run: cargo build --release
+      - run: |
+          echo $env:PKG_CONFIG_PATH
+          echo $env:PATH
+          echo $PKG_CONFIG_PATH
+          echo $PATH
+          cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release
