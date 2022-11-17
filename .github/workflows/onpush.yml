@@ -150,7 +150,8 @@ jobs:
         run: |
           brew update
           brew install gtk4
-      - run: |
+      - if: ${{ matrix.is-windows }}
+        run: |
           $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
           $env:PATH += ';C:\gnome\bin'
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
@@ -159,6 +160,8 @@ jobs:
           echo $PKG_CONFIG_PATH
           echo $PATH
           cargo build --release
+      - if: ${{ matrix.is-osx || matrix.is-linux }}
+        run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release
