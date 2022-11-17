@@ -135,15 +135,15 @@ jobs:
         run: |
           rustup default stable-msvc
           choco install --allow-empty-checksums pkgconfiglite
-          $env:PATH += 'C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
-          $env:PATH += 'C:\gnome\bin'
+          $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
+          $env:PATH += ';C:\gnome\bin'
           pip install meson ninja
           cd /
           git clone https://gitlab.gnome.org/GNOME/gtk.git --depth 1
           cd gtk
           meson setup builddir --prefix=C:/gnome -Dbuild-tests=false -Dmedia-gstreamer=disabled
           meson install -C builddir
-          $env:PKG_CONFIG_PATH += 'C:\gnome\lib\pkgconfig'
+          $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
       - if: ${{ matrix.is-osx }}
         run: |
           brew update
