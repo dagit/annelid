@@ -172,12 +172,13 @@ jobs:
           cp Annelid.zip ../../
           popd
       - if: ${{ matrix.is-windows }}
+          #cargo bundle --release
+          #ls target/release/bundle/msi
         run: |
           $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
           $env:PATH += ';C:\gnome\bin'
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
-          cargo bundle --release
-          ls target/release/bundle/msi
+          ls C:/gnome/lib/
       - if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
