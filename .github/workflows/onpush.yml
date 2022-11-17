@@ -173,6 +173,9 @@ jobs:
           popd
       - if: ${{ matrix.is-windows }}
         run: |
+          $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
+          $env:PATH += ';C:\gnome\bin'
+          $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
           cargo bundle --release
           ls target/release/bundle
           ls target/release/bundle/*
