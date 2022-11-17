@@ -4,47 +4,32 @@ use crate::utils::*;
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
-#[cfg(not(windows))]
 use memoffset::offset_of;
 use parking_lot::RwLock;
 use std::error::Error;
 use std::sync::Arc;
 // TODO: use these on windows too
-#[cfg(not(windows))]
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 pub struct LiveSplitCoreRenderer {
-    #[cfg(not(windows))]
     pub frame_buffer: Vec<u8>,
     pub layout: Layout,
-    #[cfg(windows)]
-    pub renderer: livesplit_core::rendering::software::Renderer,
-    #[cfg(not(windows))]
     pub renderer: livesplit_core::rendering::software::BorrowedRenderer,
-    #[cfg(not(windows))]
     pub layout_state: Option<livesplit_core::layout::LayoutState>,
     pub timer: SharedTimer,
-    #[cfg(not(windows))]
     pub show_settings_editor: bool,
     pub settings: Arc<RwLock<Settings>>,
     pub can_exit: bool,
-    #[cfg(not(windows))]
     pub is_exiting: bool,
     pub thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
     pub project_dirs: directories::ProjectDirs,
     pub app_config: Arc<RwLock<AppConfig>>,
-    #[cfg(not(windows))]
     pub app_config_processed: bool,
-    #[cfg(not(windows))]
     pub opengl_resources: Option<OpenGLResources>,
     pub global_hotkey_hook: Option<Hook>,
 }
 
 impl LiveSplitCoreRenderer {
-    // TODO: this needs to be refactored so that the opengl stuff
-    // is platform specific, because really it should be available
-    // on cfg windows as well.
-    #[cfg(not(windows))]
     pub fn confirm_save(&mut self, gl: &std::rc::Rc<glow::Context>) {
         use native_dialog::{MessageDialog, MessageType};
         let empty_path = "".to_owned();
@@ -96,42 +81,6 @@ impl LiveSplitCoreRenderer {
                 self.opengl_resources = None;
             }
         }
-    }
-    #[cfg(windows)]
-    pub fn confirm_save(&mut self) {
-        use native_dialog::{MessageDialog, MessageType};
-        let empty_path = "".to_owned();
-        let document_dir = match directories::UserDirs::new() {
-            None => empty_path,
-            Some(d) => match d.document_dir() {
-                None => empty_path,
-                Some(d) => d.to_str().unwrap_or("").to_owned(),
-            },
-        };
-        // TODO: fix this unwrap
-        if self.timer.read().unwrap().run().has_been_modified() {
-            let save_requested = MessageDialog::new()
-                .set_type(MessageType::Error)
-                .set_title("Error")
-                .set_text("Splits have been modified. Save splits?")
-                .show_confirm()
-                .unwrap();
-            if save_requested {
-                self.save_splits_dialog(&document_dir);
-            }
-        }
-        if self.settings.read().has_been_modified() {
-            let save_requested = MessageDialog::new()
-                .set_type(MessageType::Error)
-                .set_title("Error")
-                .set_text("Autosplit config may have been modified. Save autosplitter config?")
-                .show_confirm()
-                .unwrap();
-            if save_requested {
-                self.save_autosplitter_dialog(&document_dir);
-            }
-        }
-        self.can_exit = true;
     }
 
     pub fn save_app_config(&self) {
@@ -573,7 +522,6 @@ pub enum ThreadEvent {
     TimerReset,
 }
 
-#[cfg(not(windows))]
 pub struct OpenGLResources {
     program: glow::Program,
     u_screen_size: glow::UniformLocation,
@@ -591,7 +539,6 @@ struct Vertex {
     uv: epaint::Pos2,
 }
 
-#[cfg(not(windows))]
 impl eframe::App for LiveSplitCoreRenderer {
     fn on_exit_event(&mut self) -> bool {
         self.is_exiting = true;
