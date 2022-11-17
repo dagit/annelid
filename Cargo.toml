@@ -56,6 +56,7 @@ short_description = "A speedrun timer."
 long_description = """
 A speedrun timer with autosplitter capabilities for USB2SNES.
 """
+resources = []
 
 [package.metadata.appimage]
 auto_link = true
