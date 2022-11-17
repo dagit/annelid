@@ -159,7 +159,7 @@ jobs:
         run: ldd target/release/annelid
       - if: ${{ matrix.is-osx }}
         run: otool -L target/release/annelid
-      - if: ${{ matrix.is-widnows }}
+      - if: ${{ matrix.is-windows }}
         run: ldd target/release/annelid.exe
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
