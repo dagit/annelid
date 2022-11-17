@@ -151,6 +151,9 @@ jobs:
           brew update
           brew install gtk4
       - run: |
+          $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
+          $env:PATH += ';C:\gnome\bin'
+          $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
           echo $env:PKG_CONFIG_PATH
           echo $env:PATH
           echo $PKG_CONFIG_PATH
