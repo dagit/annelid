@@ -155,6 +155,10 @@ jobs:
           cargo build --release
       - if: ${{ matrix.is-osx || matrix.is-linux }}
         run: cargo build --release
+      - if: ${{ matrix.is-osx || matrix.is-linux }}
+        run: ldd target/release/annelid
+      - if: ${{ matrix.is-widnows }}
+        run: ldd target/release/annelid.exe
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release
@@ -165,6 +169,11 @@ jobs:
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../
           popd
+      - if: ${{ matrix.is-windows }}
+        run: |
+          cargo bundle --release
+          ls target/release/bundle
+          ls target/release/bundle/*
       - if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
@@ -173,7 +182,8 @@ jobs:
           name: ${{ matrix.target }}
           path: ${{ matrix.artifact-path }}
   release:
-    if: github.ref == 'refs/heads/development' || github.ref == 'refs/heads/master'
+    # if: github.ref == 'refs/heads/development' || github.ref == 'refs/heads/master'
+    if: true
     needs:
       - build
     runs-on: ubuntu-22.04
@@ -209,8 +219,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
           release_name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
-          # draft: ${{ github.ref != 'refs/heads/master' }}
-          draft: true
+          draft: ${{ github.ref != 'refs/heads/master' }}
           prerelease: true
       - uses: actions/upload-release-asset@v1
         env:
