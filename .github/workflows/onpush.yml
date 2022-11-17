@@ -168,6 +168,7 @@ jobs:
       - run: cargo strip -t release
       - if: ${{ matrix.is-osx }}
         run: |
+          install_name_tool -add_rpath "@executable_path/../Frameworks" target/release/annelid
           cargo bundle --release
           pushd target/release/bundle/osx
           zip -r Annelid.zip Annelid.app

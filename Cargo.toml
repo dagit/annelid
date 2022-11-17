@@ -57,6 +57,21 @@ long_description = """
 A speedrun timer with autosplitter capabilities for USB2SNES.
 """
 resources = []
+osx_frameworks = [
+  "/usr/local/opt/libepoxy/lib/libepoxy.0.dylib",
+  "/usr/local/opt/glib/lib/libgobject-2.0.0.dylib",
+  "/usr/local/opt/gtk4/lib/libgtk-4.1.dylib",
+  "/usr/local/opt/pango/lib/libpangocairo-1.0.0.dylib",
+  "/usr/local/opt/pango/lib/libpango-1.0.0.dylib",
+  "/usr/local/opt/harfbuzz/lib/libharfbuzz.0.dylib",
+  "/usr/local/opt/gdk-pixbuf/lib/libgdk_pixbuf-2.0.0.dylib",
+  "/usr/local/opt/cairo/lib/libcairo-gobject.2.dylib",
+  "/usr/local/opt/cairo/lib/libcairo.2.dylib",
+  "/usr/local/opt/graphene/lib/libgraphene-1.0.0.dylib",
+  "/usr/local/opt/glib/lib/libgio-2.0.0.dylib",
+  "/usr/local/opt/glib/lib/libglib-2.0.0.dylib",
+  "/usr/local/opt/gettext/lib/libintl.8.dylib"
+  ]
 
 [package.metadata.appimage]
 auto_link = true
