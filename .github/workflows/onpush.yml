@@ -155,8 +155,10 @@ jobs:
           cargo build --release
       - if: ${{ matrix.is-osx || matrix.is-linux }}
         run: cargo build --release
-      - if: ${{ matrix.is-osx || matrix.is-linux }}
+      - if: ${{ matrix.is-linux }}
         run: ldd target/release/annelid
+      - if: ${{ matrix.is-osx }}
+        run: otool -L target/release/annelid
       - if: ${{ matrix.is-widnows }}
         run: ldd target/release/annelid.exe
       - run: cargo install --force cargo-strip
