@@ -135,6 +135,7 @@ jobs:
         run: |
           rustup default stable-msvc
           choco install --allow-empty-checksums pkgconfiglite
+          $env:PATH += 'C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
           $env:PATH += 'C:\gnome\bin'
           pip install meson ninja
           cd /
