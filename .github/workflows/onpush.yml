@@ -123,6 +123,8 @@ jobs:
           REPOSITORY_NAME: 'annelid'
       - if: ${{ matrix.is-linux }}
         run: |
+          sudo add-apt-repository universe
+          sudo apt install -y libfuse2
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev gtk-4-examples geany
           sudo apt-get install -y wget
