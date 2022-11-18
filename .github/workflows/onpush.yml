@@ -168,9 +168,10 @@ jobs:
       - run: cargo strip -t release
       - if: ${{ matrix.is-osx }}
         run: |
-          install_name_tool -add_rpath "@executable_path/../Frameworks" target/release/annelid
+          install_name_tool -add_rpath "@executable_path/../Resources/Frameworks" target/release/annelid
           cargo bundle --release
           pushd target/release/bundle/osx
+          mkdir -p ./Annelid.app/Contents/Resources/Frameworks
           cp /usr/local/opt/libepoxy/lib/libepoxy.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
           cp /usr/local/opt/glib/lib/libgobject-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
           cp /usr/local/opt/gtk4/lib/libgtk-4.1.dylib ./Annelid.app/Contents/Resources/Frameworks/
