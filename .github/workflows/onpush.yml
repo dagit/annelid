@@ -182,6 +182,13 @@ jobs:
           $env:PATH += ';C:\gnome\bin'
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
           Get-ChildItem -Path C:\gnome -Include *.dll -File -Recurse -ErrorAction SilentlyContinue
+          mkdir Annelid
+          cp c:/gnome/bin/gobject-2.0-0.dll Annelid/
+          cp c:/gnome/bin/gtk-4-1.dll Annelid/
+          cp c:/gnome/bin/gio-2.0-0.dll Annelid/
+          cp c:/gnome/bin/glib-2.0-0.dll Annelid/
+          cp ./target/release/annelid.exe Annelid/
+          zip -r Annelid.zip Annelid
       - if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
