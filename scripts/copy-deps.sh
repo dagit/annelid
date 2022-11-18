@@ -15,7 +15,7 @@ function copy_dep {
   for d in $deps
   do
     local target="$2/$(dirname $d)"
-    if ! [[ -f $target ]]
+    if ! [[ -f "$2/$d" ]]
     then
       copy_dep "$d" "$2" "$2/$d"
     fi
