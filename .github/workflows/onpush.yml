@@ -181,7 +181,7 @@ jobs:
           $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
           $env:PATH += ';C:\gnome\bin'
           $env:PKG_CONFIG_PATH += ';C:\gnome\lib\pkgconfig'
-          ls C:/gnome/lib/
+          Get-ChildItem -Path C:\gnome -Include *.dll -File -Recurse -ErrorAction SilentlyContinue
       - if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
