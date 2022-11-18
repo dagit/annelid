@@ -169,9 +169,7 @@ jobs:
       - if: ${{ matrix.is-osx }}
         run: |
           cargo bundle --release
-          ls -lh
-          pwd
-          bash ./scripts/copy_deps.sh
+          bash ./scripts/copy-deps.sh
           pushd target/release/bundle/osx
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../
