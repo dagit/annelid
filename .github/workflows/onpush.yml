@@ -102,7 +102,7 @@ jobs:
             is-linux: 1
           - os: windows-latest
             target: annelid-x86_64.win
-            artifact-path: ./target/release/annelid.exe
+            artifact-path: Annelid.zip
             is-windows: 1
     steps:
       - name: Checkout sources
@@ -257,6 +257,6 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-x86_64.win/annelid.exe
-          asset_name: annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
+          asset_path: ./annelid-x86_64.win/Annelid.zip
+          asset_name: annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.zip
           asset_content_type: application/octet-stream
