@@ -1,5 +1,6 @@
 #!/bin/bash
-HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd && echo x)"
+HERE="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"
+echo HERE=$HERE
 
 set -ex
 
