@@ -171,19 +171,19 @@ jobs:
           install_name_tool -add_rpath "@executable_path/../Frameworks" target/release/annelid
           cargo bundle --release
           pushd target/release/bundle/osx
-          cp /usr/local/opt/libepoxy/lib/libepoxy.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/glib/lib/libgobject-2.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/gtk4/lib/libgtk-4.1.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/pango/lib/libpangocairo-1.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/pango/lib/libpango-1.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/harfbuzz/lib/libharfbuzz.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/gdk-pixbuf/lib/libgdk_pixbuf-2.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/cairo/lib/libcairo-gobject.2.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/cairo/lib/libcairo.2.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/graphene/lib/libgraphene-1.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/glib/lib/libgio-2.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/glib/lib/libglib-2.0.0.dylib ./Annelid.app/Contents/Frameworks/
-          cp /usr/local/opt/gettext/lib/libintl.8.dyli ./Annelid.app/Contents/Frameworks/
+          cp /usr/local/opt/libepoxy/lib/libepoxy.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/glib/lib/libgobject-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/gtk4/lib/libgtk-4.1.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/pango/lib/libpangocairo-1.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/pango/lib/libpango-1.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/harfbuzz/lib/libharfbuzz.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/gdk-pixbuf/lib/libgdk_pixbuf-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/cairo/lib/libcairo-gobject.2.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/cairo/lib/libcairo.2.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/graphene/lib/libgraphene-1.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/glib/lib/libgio-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/glib/lib/libglib-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/gettext/lib/libintl.8.dyli ./Annelid.app/Contents/Resources/Frameworks/
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../
           popd
