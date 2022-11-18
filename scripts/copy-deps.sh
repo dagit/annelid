@@ -1,7 +1,7 @@
 #!/bin/bash
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd && echo x)"
 
-set -e
+set -ex
 
 function copy_dep {
   local d="$1"
