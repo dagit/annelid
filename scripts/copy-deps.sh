@@ -22,8 +22,8 @@ function copy_dep {
 
 }
 
-binary=$HERE/../targets/release/bundle/Annelid.app/Contents/MacOS/annelid
-dest=$HERE/../targets/release/bundle/Annelid.app/Contents/Resources/libs
+binary=$HERE/../targets/release/bundle/osx/Annelid.app/Contents/MacOS/annelid
+dest=$HERE/../targets/release/bundle/osx/Annelid.app/Contents/Resources/libs
 deps=$(otool -L $binary | grep "/*.*dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library' | xargs)
 
 for d in $deps
