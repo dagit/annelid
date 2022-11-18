@@ -184,7 +184,7 @@ jobs:
           cp /usr/local/opt/graphene/lib/libgraphene-1.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
           cp /usr/local/opt/glib/lib/libgio-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
           cp /usr/local/opt/glib/lib/libglib-2.0.0.dylib ./Annelid.app/Contents/Resources/Frameworks/
-          cp /usr/local/opt/gettext/lib/libintl.8.dyli ./Annelid.app/Contents/Resources/Frameworks/
+          cp /usr/local/opt/gettext/lib/libintl.8.dylib ./Annelid.app/Contents/Resources/Frameworks/
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../
           popd
