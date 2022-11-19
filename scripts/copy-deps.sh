@@ -2,7 +2,7 @@
 HERE="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"
 echo HERE=$HERE
 
-set -e
+set -ex
 
 # This isn't actually meant to be run on linux, the linux commands are for
 # testing and developing the script on linux. So they just echo the commands.
