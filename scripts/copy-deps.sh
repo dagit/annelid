@@ -5,17 +5,17 @@ echo HERE=$HERE
 set -ex
 
 function copy_dep {
-  local d="$1"
-  local target="$2/$(dirname $d)"
+  local source="$1"
+  local target="$2/$(dirname $source)"
   mkdir -p "$target"
-  cp "$d" "$target"
-  install_name_tool -change "$d" "@executable_path/../Resources/libs/$d" "$3"
+  cp "$source" "$target"
+  install_name_tool -change "$source" "@executable_path/../Resources/libs/$source" "$3"
 
-  deps=$(otool -L "$d" | grep "/*.*dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library')
+  deps=$(otool -L "$source" | grep "/*.*dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library')
   for d in $deps
   do
     local target="$2/$(dirname $d)"
-    if ! [[ -f "$2/$d" ]]
+    if ! [[ -f "$2/$source" ]]
     then
       copy_dep "$d" "$2" "$2/$d"
     fi
