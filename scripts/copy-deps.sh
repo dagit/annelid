@@ -14,8 +14,7 @@ function copy_dep {
   deps=$(otool -L "$source" | grep "/*.*dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library')
   for d in $deps
   do
-    local target="$2/$(dirname $d)"
-    if ! [[ -f "$2/$source" ]]
+    if ! [[ -f "$2/$d" ]]
     then
       copy_dep "$d" "$2" "$2/$d"
     fi
