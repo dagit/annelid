@@ -162,7 +162,7 @@ jobs:
       - if: ${{ matrix.is-osx }}
         run: otool -L target/release/annelid
       - if: ${{ matrix.is-windows }}
-        run: ldd target/release/annelid.exe
+        run: bash ./scripts/copy-deps.sh
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release

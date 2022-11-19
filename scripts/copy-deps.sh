@@ -13,6 +13,7 @@ function install_name {
     echo install_name_tool $*
   elif [ $(uname) == "Darwin" ]
   then
+    echo install_name_tool $*
     install_name_tool $*
   fi
 }
@@ -23,6 +24,7 @@ function get_deps {
     ldd "$1" | grep "=>" | awk '{ print $3 }' | xargs
   elif [ $(uname) == "Darwin" ]
   then
+    echo otool -L "$1"
     otool -L "$1" | grep "/*.*/dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library' | xargs
   fi
 }
@@ -33,6 +35,7 @@ function copy_file {
     echo cp $*
   elif [ $(uname) == "Darwin" ]
   then
+    echo cp $*
     cp $*
   fi
 }
