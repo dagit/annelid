@@ -177,6 +177,7 @@ jobs:
       - if: ${{ matrix.is-windows }}
           #cargo bundle --release
           #ls target/release/bundle/msi
+        # TODO: script this
         run: |
           $env:PATH += ';C:\ProgramData\chocolatey\lib\pkgconfiglite\tools'
           $env:PATH += ';C:\gnome\bin'
@@ -187,6 +188,25 @@ jobs:
           cp c:/gnome/bin/gtk-4-1.dll Annelid/
           cp c:/gnome/bin/gio-2.0-0.dll Annelid/
           cp c:/gnome/bin/glib-2.0-0.dll Annelid/
+          cp c:/gnome/bin/intl-8.dll Annelid/
+          cp c:/gnome/bin/z.dll Annelid/
+          cp c:/gnome/bin/pcre2-8.dll Annelid/
+          cp c:/gnome/bin/ffi-7.dll Annelid/
+          cp c:/gnome/bin/gmodule-2.0-0.dll Annelid/
+          cp c:/gnome/bin/pangocairo-1.0-0.dll Annelid/
+          cp c:/gnome/bin/fribidi-0.dll Annelid/
+          cp c:/gnome/bin/harfbuzz.dll Annelid/
+          cp c:/gnome/bin/cairo-2.dll Annelid/
+          cp c:/gnome/bin/png16-16.dll Annelid/
+          cp c:/gnome/bin/pango-1.0-0.dll Annelid/
+          cp c:/gnome/bin/cairo-gobject-2.dll Annelid/
+          cp c:/gnome/bin/gdk_pixbuf-2.0-0.dll Annelid/
+          cp c:/gnome/bin/epoxy-0.dll Annelid/
+          cp c:/gnome/bin/graphene-1.0-0.dll Annelid/
+          cp c:/gnome/bin/pangowin32-1.0-0.dll Annelid/
+          cp c:/gnome/bin/tiff4.dll Annelid/
+          cp c:/gnome/bin/jpeg-8.2.2.dll Annelid/
+          cp c:/gnome/bin/cairo-script-interpreter-2.dll Annelid/
           cp ./target/release/annelid.exe Annelid/
           7z a -r Annelid.zip Annelid
       - if: ${{ matrix.is-linux }}
