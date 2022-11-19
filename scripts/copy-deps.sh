@@ -25,7 +25,7 @@ function get_deps {
   elif [ $(uname) == "Darwin" ]
   then
     #echo otool -L "$1"
-    otool -L "$1" | grep "/*.*/dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library' | xargs
+    otool -L "$1" | grep "/*.*dylib" -o | grep -v '/usr/lib' | grep -v '/System/Library' | xargs
   fi
 }
 
