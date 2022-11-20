@@ -73,8 +73,7 @@ do
 done
 
 # Try to clean up the final paths
-shopt -s dotglob globstar
-for f in $dest/**/*
+for f in $(find $dest -name '*.dylib' | xargs)
 do
   echo Analyzing $f
   deps=$(get_deps "$f")
