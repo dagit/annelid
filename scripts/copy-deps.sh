@@ -48,8 +48,8 @@ function copy_dep {
   if [ ! -f "$2/$source" ]
   then
     copy_file "$source" "$target"
-    install_name -change "$source" "@executable_path/../Resources/libs/$source" "$3"
   fi
+  install_name -change "$source" "@executable_path/../Resources/libs/$source" "$3"
 
   deps=$(get_deps "$source")
   for d in $deps
