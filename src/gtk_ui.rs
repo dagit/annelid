@@ -25,7 +25,18 @@ pub fn main(
     // Load GL pointers from epoxy (GL context management library used by GTK).
     {
         #[cfg(target_os = "macos")]
-        let library = unsafe { libloading::os::unix::Library::new("libepoxy.0.dylib") }.unwrap();
+        let library = unsafe { libloading::os::unix::Library::new("libepoxy.0.dylib") }
+            .or_else(|_| unsafe {
+                match std::env::current_exe() {
+                    Ok(mut path) => {
+                        path.push("../Resources/libs/usr/local/opt/libepoxy/lib/libepoxy.0.dylib");
+                        libloading::os::unix::Library::new(path.as_path())
+                    }
+                    // TODO: is there a better way to fail here other than panic?
+                    Err(_) => panic!(),
+                }
+            })
+            .unwrap();
         #[cfg(all(unix, not(target_os = "macos")))]
         let library = unsafe { libloading::os::unix::Library::new("libepoxy.so.0") }.unwrap();
         #[cfg(windows)]
