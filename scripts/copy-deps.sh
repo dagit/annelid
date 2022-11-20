@@ -45,8 +45,11 @@ function copy_dep {
   local source="$1"
   local target="$2/$(dirname $source)"
   mkdir -p "$target"
-  copy_file "$source" "$target"
-  install_name -change "$source" "@executable_path/../Resources/libs/$source" "$3"
+  if [ ! -f "$2/$source" ]
+  then
+    copy_file "$source" "$target"
+    install_name -change "$source" "@executable_path/../Resources/libs/$source" "$3"
+  fi
 
   deps=$(get_deps "$source")
   for d in $deps
