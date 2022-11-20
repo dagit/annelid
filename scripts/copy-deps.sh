@@ -1,4 +1,5 @@
 #!/bin/bash
+shopt -s dotglob globstar
 HERE="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"
 echo HERE=$HERE
 
@@ -72,3 +73,15 @@ do
   copy_dep "$d" "$dest" "$binary"
 done
 
+# Try to clean up the final paths
+for f in $dest/**/*.dylib
+do
+  deps=$(get_deps "$f")
+  for d in $deps
+  do
+    if echo $d | grep -v '@executable_path'
+    then
+      install_name -change "$d" "@executable_path/../Resources/libs/$d" "$f"
+    fi
+  done
+done
