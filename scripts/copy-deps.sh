@@ -57,6 +57,8 @@ function copy_dep {
     if [ ! -f "$2/$d" ]
     then
       copy_dep "$d" "$2" "$2/$d"
+    else
+      install_name -change "$d" "@executable_path/../Resources/libs/$d" "$2/$d"
     fi
   done
 }
