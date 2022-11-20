@@ -1,5 +1,4 @@
 #!/bin/bash
-shopt -s dotglob globstar
 HERE="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"
 echo HERE=$HERE
 
@@ -74,16 +73,20 @@ do
 done
 
 # Try to clean up the final paths
-for f in $dest/**/*.dylib
+shopt -s dotglob globstar
+for f in $dest/**/*
 do
   echo Analyzing $f
   deps=$(get_deps "$f")
-  for d in $deps
-  do
-    if echo $d | grep -v '@executable_path'
-    then
-      echo Rewriting "$d" to "@executable_path/../Resources/libs/$d"
-      install_name -change "$d" "@executable_path/../Resources/libs/$d" "$f"
-    fi
-  done
+  if echo $f | grep '/*.*dylib'
+  then
+    for d in $deps
+    do
+      if echo $d | grep -v '@executable_path'
+      then
+        echo Rewriting "$d" to "@executable_path/../Resources/libs/$d"
+        install_name -change "$d" "@executable_path/../Resources/libs/$d" "$f"
+      fi
+    done
+  fi
 done
