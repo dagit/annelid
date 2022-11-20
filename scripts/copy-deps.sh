@@ -36,7 +36,7 @@ function copy_file {
   elif [ $(uname) == "Darwin" ]
   then
     #echo cp $*
-    ls -lh "$1"
+    ls -lh "$1" "$2"
     cp $*
   fi
 }
