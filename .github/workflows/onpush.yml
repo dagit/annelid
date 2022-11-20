@@ -209,6 +209,7 @@ jobs:
           Get-ChildItem -Path C:\gnome -Include *.dll -File -Recurse -ErrorAction SilentlyContinue
           mkdir Annelid
           cp c:/gnome/bin/*.dll Annelid/
+          cp ./target/release/annelid.exe Annelid/
           7z a -r Annelid.zip Annelid
       - if: ${{ matrix.is-linux }}
         run: |
