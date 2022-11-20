@@ -2,7 +2,7 @@
 HERE="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"
 echo HERE=$HERE
 
-set -ex
+set -e
 
 # This isn't actually meant to be run on linux, the linux commands are for
 # testing and developing the script on linux. So they just echo the commands.
@@ -36,6 +36,7 @@ function copy_file {
   elif [ $(uname) == "Darwin" ]
   then
     #echo cp $*
+    ls -lh "$1"
     cp $*
   fi
 }
@@ -50,7 +51,7 @@ function copy_dep {
   deps=$(get_deps "$source")
   for d in $deps
   do
-    if ! [[ -f "$2/$d" ]]
+    if ! [ -f "$2/$d" ]
     then
       copy_dep "$d" "$2" "$2/$d"
     fi
