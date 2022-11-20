@@ -29,7 +29,10 @@ pub fn main(
             .or_else(|_| unsafe {
                 match std::env::current_exe() {
                     Ok(mut path) => {
-                        path.push("../Resources/libs/usr/local/opt/libepoxy/lib/libepoxy.0.dylib");
+                        // Get rid of the executable name and go up one directory
+                        path.pop();
+                        path.pop();
+                        path.push("Resources/libs/usr/local/opt/libepoxy/lib/libepoxy.0.dylib");
                         libloading::os::unix::Library::new(path.as_path())
                     }
                     // TODO: is there a better way to fail here other than panic?
