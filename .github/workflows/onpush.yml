@@ -92,7 +92,7 @@ jobs:
 
       - if: ${{ matrix.is-linux }}
         run: |
-          sudo apt-get install -y wget
+          sudo apt-get install -y wget libfuse-dev
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
