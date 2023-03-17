@@ -1380,9 +1380,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                                 }
                                 if summary.split {
                                     timer
-                                    .write()
-                                    .unwrap()
-                                    .set_game_time(snes.gametime_to_seconds());
+                                        .write()
+                                        .unwrap()
+                                        .set_game_time(snes.gametime_to_seconds());
                                     // TODO: fix this unwrap
                                     timer.write().unwrap().split();
                                 }

@@ -2,11 +2,11 @@
 
 use livesplit_core::TimeSpan;
 use serde::{Deserialize, Serialize};
-use time::Duration;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::ops::Index;
 use std::time::Instant;
+use time::Duration;
 
 lazy_static! {
     static ref roomIDEnum: HashMap<&'static str, u32> = {
@@ -2005,7 +2005,6 @@ impl MemoryWatcher {
     }
 }
 
-
 #[derive(Debug, Copy, Clone)]
 pub struct SNESSummary {
     pub latency_average: f32,
@@ -2234,9 +2233,9 @@ impl SNESState {
     ) -> Result<SNESSummary, Box<dyn Error>> {
         let start_time = Instant::now();
         let snes_data = client.get_addresses(&[
-            (0xF5008B, 2), // Controller 1 Input
-            (0xF5079B, 3), // ROOM ID + ROOM # for region + Region Number
-            (0xF50998, 1), // GAME STATE
+            (0xF5008B, 2),  // Controller 1 Input
+            (0xF5079B, 3),  // ROOM ID + ROOM # for region + Region Number
+            (0xF50998, 1),  // GAME STATE
             (0xF509A4, 61), // ITEMS
             (0xF50A28, 1),
             (0xF50F8C, 66),
@@ -2330,4 +2329,3 @@ impl Index<&str> for SNESState {
         self.vars.get(var).unwrap()
     }
 }
-
