@@ -1,10 +1,12 @@
 #![allow(non_upper_case_globals)]
 
+use livesplit_core::TimeSpan;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::ops::Index;
 use std::time::Instant;
+use time::Duration;
 
 lazy_static! {
     static ref roomIDEnum: HashMap<&'static str, u32> = {
@@ -1986,9 +1988,7 @@ impl MemoryWatcher {
             width,
         }
     }
-}
 
-impl MemoryWatcher {
     fn update_value(&mut self, memory: &[u8]) {
         match self.width {
             Width::Byte => {
@@ -2005,6 +2005,15 @@ impl MemoryWatcher {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct SNESSummary {
+    pub latency_average: f32,
+    pub latency_stddev: f32,
+    pub start: bool,
+    pub reset: bool,
+    pub split: bool,
+}
+
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct SNESState {
@@ -2019,15 +2028,6 @@ pub struct SNESState {
     // fields. So the first time we update, we
     // need to do it twice.
     do_extra_update: bool,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct SNESSummary {
-    pub latency_average: f32,
-    pub latency_stddev: f32,
-    pub start: bool,
-    pub reset: bool,
-    pub split: bool,
 }
 
 impl SNESState {
@@ -2233,10 +2233,10 @@ impl SNESState {
     ) -> Result<SNESSummary, Box<dyn Error>> {
         let start_time = Instant::now();
         let snes_data = client.get_addresses(&[
-            (0xF5008B, 2),
-            (0xF5079B, 3),
-            (0xF50998, 1),
-            (0xF509A4, 61),
+            (0xF5008B, 2),  // Controller 1 Input
+            (0xF5079B, 3),  // ROOM ID + ROOM # for region + Region Number
+            (0xF50998, 1),  // GAME STATE
+            (0xF509A4, 61), // ITEMS
             (0xF50A28, 1),
             (0xF50F8C, 66),
             (0xF5D821, 14),
@@ -2302,6 +2302,17 @@ impl SNESState {
 
     pub fn reset(&self) -> bool {
         self["roomID"].old != 0 && self["roomID"].current == 0
+    }
+
+    pub fn gametime_to_seconds(&self) -> TimeSpan {
+        let hours = Duration::hours(self.vars.get("igtHours").unwrap().current.into());
+
+        let minutes = Duration::minutes(self.vars.get("igtMinutes").unwrap().current.into());
+
+        let seconds = Duration::seconds(self.vars.get("igtSeconds").unwrap().current.into());
+
+        let gametime = hours + minutes + seconds;
+        TimeSpan::from_seconds(gametime.as_seconds_f64())
     }
 }
 
