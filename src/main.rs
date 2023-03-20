@@ -377,7 +377,7 @@ impl LiveSplitCoreRenderer {
                     f.read_to_string(&mut buffer)?;
                     match toml::from_str(&buffer) {
                         Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e))
+                        Err(e) => Err(from_de_error(e)),
                     }
                 })
                 .unwrap_or_default();
@@ -492,13 +492,8 @@ impl LiveSplitCoreRenderer {
         use std::io::Read;
         let file_contents: Result<Vec<_>, _> = f.bytes().collect();
         // TODO: fix this unwrap
-        *self.timer.write().unwrap() = Timer::new(
-            composite::parse(
-                &file_contents?,
-                path.parent(),
-            )?
-            .run,
-        )?;
+        *self.timer.write().unwrap() =
+            Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
         Ok(())
     }
 
