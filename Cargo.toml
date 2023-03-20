@@ -33,7 +33,7 @@ roxmltree = "0"
 clap = { version = "3", features = ["clap_derive", "derive"] }
 toml = "0"
 serde_derive = "1"
-glow = "*"
+glow = "0.11"
 bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "0.10.0"
@@ -47,7 +47,7 @@ thread-priority = "0.10.0"
 [package.metadata.bundle]
 name = "Annelid"
 identifier = "annelid"
-copyright = "Copyright (c) Jason Dagit 2022. GPL 3."
+copyright = "Copyright (c) Jason Dagit 2023. GPL 3."
 short_description = "A speedrun timer."
 long_description = """
 A speedrun timer with autosplitter capabilities for USB2SNES.

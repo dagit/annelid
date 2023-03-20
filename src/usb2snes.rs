@@ -71,6 +71,7 @@ struct USB2SnesQuery {
     Flags: Vec<String>,
     Operands: Vec<String>,
 }
+
 #[derive(Deserialize)]
 #[allow(non_snake_case)]
 struct USB2SnesResult {
@@ -82,6 +83,7 @@ pub enum USB2SnesFileType {
     File = 0,
     Dir = 1,
 }
+
 pub struct USB2SnesFileInfo {
     pub name: String,
     pub file_type: USB2SnesFileType,
@@ -91,6 +93,7 @@ pub struct SyncClient {
     client: websocket::sync::Client<TcpStream>,
     devel: bool,
 }
+
 impl SyncClient {
     pub fn connect() -> Result<SyncClient, Box<dyn Error>> {
         Ok(SyncClient {
@@ -98,15 +101,18 @@ impl SyncClient {
             devel: false,
         })
     }
+
     pub fn connect_with_devel() -> Result<SyncClient, Box<dyn Error>> {
         Ok(SyncClient {
             client: ClientBuilder::new("ws://localhost:23074")?.connect_insecure()?,
             devel: true,
         })
     }
+
     fn send_command(&mut self, command: Command, args: Vec<String>) -> Result<(), Box<dyn Error>> {
         self.send_command_with_space(command, None, args)
     }
+
     fn send_command_with_space(
         &mut self,
         command: Command,
@@ -146,19 +152,23 @@ impl SyncClient {
         }
         Ok(serde_json::from_str(&textreply)?)
     }
+
     pub fn set_name(&mut self, name: String) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Name, vec![name])
     }
+
     pub fn app_version(&mut self) -> Result<String, Box<dyn Error>> {
         self.send_command(Command::AppVersion, vec![])?;
         let usbreply = self.get_reply()?;
         Ok(usbreply.Results[0].to_string())
     }
+
     pub fn list_device(&mut self) -> Result<Vec<String>, Box<dyn Error>> {
         self.send_command(Command::DeviceList, vec![])?;
         let usbreply = self.get_reply()?;
         Ok(usbreply.Results)
     }
+
     pub fn attach(&mut self, device: &String) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Attach, vec![device.to_string()])
     }
@@ -174,12 +184,15 @@ impl SyncClient {
             flags: (info[3..].to_vec()),
         })
     }
+
     pub fn reset(&mut self) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Reset, vec![])
     }
+
     pub fn menu(&mut self) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Menu, vec![])
     }
+
     pub fn boot(&mut self, toboot: String) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Boot, vec![toboot])
     }
@@ -204,6 +217,7 @@ impl SyncClient {
         }
         Ok(toret)
     }
+
     pub fn send_file(&mut self, path: &String, data: Vec<u8>) -> Result<(), Box<dyn Error>> {
         self.send_command(
             Command::PutFile,
@@ -222,6 +236,7 @@ impl SyncClient {
         }
         Ok(())
     }
+
     pub fn get_file(&mut self, path: String) -> Result<Vec<u8>, Box<dyn Error>> {
         self.send_command(Command::GetFile, vec![path])?;
         let string_hex = self.get_reply()?.Results[0].to_string();
@@ -242,9 +257,11 @@ impl SyncClient {
         }
         Ok(data)
     }
+
     pub fn remove_path(&mut self, path: String) -> Result<(), Box<dyn Error>> {
         self.send_command(Command::Remove, vec![path])
     }
+
     pub fn get_address(&mut self, address: u32, size: usize) -> Result<Vec<u8>, Box<dyn Error>> {
         self.send_command_with_space(
             Command::GetAddress,
@@ -267,6 +284,7 @@ impl SyncClient {
         }
         Ok(data)
     }
+
     pub fn get_addresses(
         &mut self,
         pairs: &[(u32, usize)],

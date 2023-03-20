@@ -202,6 +202,24 @@ fn to_livesplit_keycode(key: &::egui::Key) -> livesplit_hotkey::KeyCode {
     }
 }
 
+fn to_livesplit_keycode_alternative(key: &::egui::Key) -> Option<livesplit_hotkey::KeyCode> {
+    use livesplit_hotkey::KeyCode::*;
+
+    match key {
+        egui::Key::Num0 => Some(Digit0),
+        egui::Key::Num1 => Some(Digit1),
+        egui::Key::Num2 => Some(Digit2),
+        egui::Key::Num3 => Some(Digit3),
+        egui::Key::Num4 => Some(Digit4),
+        egui::Key::Num5 => Some(Digit5),
+        egui::Key::Num6 => Some(Digit6),
+        egui::Key::Num7 => Some(Digit7),
+        egui::Key::Num8 => Some(Digit8),
+        egui::Key::Num9 => Some(Digit9),
+        _ => None,
+    }
+}
+
 fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Modifiers {
     use livesplit_hotkey::Modifiers;
     let mut mods = Modifiers::empty();
@@ -236,6 +254,10 @@ struct LiveSplitCoreRenderer {
     app_config_processed: bool,
     opengl_resources: Option<OpenGLResources>,
     global_hotkey_hook: Option<Hook>,
+}
+
+fn from_de_error(e: toml::de::Error) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
 }
 
 fn show_children(
@@ -353,7 +375,10 @@ impl LiveSplitCoreRenderer {
                 .and_then(|mut f| {
                     let mut buffer = String::new();
                     f.read_to_string(&mut buffer)?;
-                    Ok(toml::from_str(&buffer)?)
+                    match toml::from_str(&buffer) {
+                        Ok(app_config) => Ok(app_config),
+                        Err(e) => Err(from_de_error(e)),
+                    }
                 })
                 .unwrap_or_default();
             // Let the CLI options take precedent if any provided
@@ -467,14 +492,8 @@ impl LiveSplitCoreRenderer {
         use std::io::Read;
         let file_contents: Result<Vec<_>, _> = f.bytes().collect();
         // TODO: fix this unwrap
-        *self.timer.write().unwrap() = Timer::new(
-            composite::parse(
-                &file_contents?,
-                path.parent().map(|p| p.to_path_buf()),
-                true,
-            )?
-            .run,
-        )?;
+        *self.timer.write().unwrap() =
+            Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
         Ok(())
     }
 
@@ -702,6 +721,17 @@ impl LiveSplitCoreRenderer {
                 // TODO: fix this unwrap
                 timer.write().unwrap().split_or_start();
             })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().split_or_start();
+                })?;
+            }
         }
         let timer = self.timer.clone();
         // TODO: this is not ideal because if the app_config or thread_chan
@@ -717,6 +747,21 @@ impl LiveSplitCoreRenderer {
                     thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
                 }
             })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                let thread_chan = self.thread_chan.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().reset(true);
+                    if config.use_autosplitter == Some(YesOrNo::Yes) {
+                        thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+                    }
+                })?;
+            }
         }
         let timer = self.timer.clone();
         if let Some(hot_key) = self.app_config.hot_key_undo {
@@ -724,6 +769,17 @@ impl LiveSplitCoreRenderer {
                 // TODO: fix this unwrap
                 timer.write().unwrap().undo_split();
             })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().undo_split();
+                })?;
+            }
         }
         let timer = self.timer.clone();
         if let Some(hot_key) = self.app_config.hot_key_skip {
@@ -731,6 +787,17 @@ impl LiveSplitCoreRenderer {
                 // TODO: fix this unwrap
                 timer.write().unwrap().skip_split();
             })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().skip_split();
+                })?;
+            }
         }
         let timer = self.timer.clone();
         if let Some(hot_key) = self.app_config.hot_key_pause {
@@ -738,6 +805,17 @@ impl LiveSplitCoreRenderer {
                 // TODO: fix this unwrap
                 timer.write().unwrap().toggle_pause();
             })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().toggle_pause();
+                })?;
+            }
         }
         println!("registered");
         Ok(())
@@ -768,7 +846,6 @@ impl eframe::App for LiveSplitCoreRenderer {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        use glow::HasContext;
         if !self.app_config_processed {
             self.process_app_config(frame);
             self.app_config_processed = true;
@@ -812,6 +889,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 //let timer = std::time::Instant::now();
                 let gl = frame.gl();
                 unsafe {
+                    use eframe::glow::HasContext;
                     let ctx = self.opengl_resources.get_or_insert_with(|| {
                         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
                         debug_assert!(gl.get_error() == 0, "1");
@@ -1379,6 +1457,10 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                                     timer.write().unwrap().reset(true);
                                 }
                                 if summary.split {
+                                    timer
+                                        .write()
+                                        .unwrap()
+                                        .set_game_time(snes.gametime_to_seconds());
                                     // TODO: fix this unwrap
                                     timer.write().unwrap().split();
                                 }
