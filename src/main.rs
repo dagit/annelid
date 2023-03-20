@@ -256,6 +256,10 @@ struct LiveSplitCoreRenderer {
     global_hotkey_hook: Option<Hook>,
 }
 
+fn from_de_error(e: toml::de::Error) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
+}
+
 fn show_children(
     settings: &mut Settings,
     ui: &mut egui::Ui,
@@ -371,7 +375,10 @@ impl LiveSplitCoreRenderer {
                 .and_then(|mut f| {
                     let mut buffer = String::new();
                     f.read_to_string(&mut buffer)?;
-                    Ok(toml::from_str(&buffer)?)
+                    match toml::from_str(&buffer) {
+                        Ok(app_config) => Ok(app_config),
+                        Err(e) => Err(from_de_error(e))
+                    }
                 })
                 .unwrap_or_default();
             // Let the CLI options take precedent if any provided
@@ -488,8 +495,7 @@ impl LiveSplitCoreRenderer {
         *self.timer.write().unwrap() = Timer::new(
             composite::parse(
                 &file_contents?,
-                path.parent().map(|p| p.to_path_buf()),
-                true,
+                path.parent(),
             )?
             .run,
         )?;
@@ -845,7 +851,6 @@ impl eframe::App for LiveSplitCoreRenderer {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        use glow::HasContext;
         if !self.app_config_processed {
             self.process_app_config(frame);
             self.app_config_processed = true;
@@ -889,6 +894,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 //let timer = std::time::Instant::now();
                 let gl = frame.gl();
                 unsafe {
+                    use eframe::glow::HasContext;
                     let ctx = self.opengl_resources.get_or_insert_with(|| {
                         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
                         debug_assert!(gl.get_error() == 0, "1");

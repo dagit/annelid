@@ -16,10 +16,10 @@ websocket = "0"
 livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
 
-epaint = "0.18"
-eframe = "0.18"
-egui = { version = "0.18", features = ["serde"] }
-egui_glow = "0.18"
+epaint = "0.18.0"
+eframe = "0.18.0"
+egui = { version = "0.18.0", features = ["serde"] }
+egui_glow = "0.18.0"
 #egui_extras = "*"
 
 lazy_static = "1"
@@ -33,7 +33,7 @@ roxmltree = "0"
 clap = { version = "3", features = ["clap_derive", "derive"] }
 toml = "0"
 serde_derive = "1"
-glow = "*"
+glow = "0.11"
 bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "0.10.0"
