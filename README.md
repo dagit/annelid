@@ -28,6 +28,31 @@ Once you have Annelid running, you can right-click to import a layout and splits
 from LiveSplit. Then use the Autosplitter editor to create an autosplitter logic
 that matches your splits.
 
+## Linux
+
+Your user account will need to be in the `input` group. This is so we can
+support global hotkeys. You can check if your account is already in the `input`
+group by typing:
+```sh
+id <your username>
+```
+
+For example, my username is `dagit`:
+```sh
+$ id dagit
+uid=1000(dagit) gid=1000(dagit) groups=1000(dagit),4(wheel),8(floppy),10(lp),11(dialout),12(audio),13(video),16(cdrom),17(optical),24(kvm),25(input),101(xbuilder),984(vboxusers)
+```
+
+Notice `25(input)`, that means my account is part of the `input` group. To add
+your user to the group if it's not already there, use this command:
+
+```sh
+sudo usermod -a -G input <your username>
+```
+
+Once you've added your user account to the input group you may need to reboot or
+log out of your graphical session.
+
 # Building
 
 You'll need to install Rust. I recommend using [rustup](http://rustup.rs). Once you have the rust toolchain installed, clone this repository, and then type:
