@@ -94,30 +94,32 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - if: ${{ matrix.is-linux }}
+      - name: Linux dependencies
+        if: ${{ matrix.is-linux }}
         run: |
           sudo apt-get install -y wget libfuse-dev
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
-      - if: ${{ matrix.target }} == 'aarch64-apple-darwin'
+      - name: Apple arm tool chain
+        if: ${{ matrix.target }} == 'aarch64-apple-darwin'
         run: |
           export TARGET=${{ matrix.target }}
           rustup target add ${{ matrix.target }}
-          sudo xcode-select -s "/Applications/Xcode_12.3.app"
-          sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
       - run: cargo strip -t release
-      - if: ${{ matrix.is-osx }}
+      - name: macOS bundling
+        if: ${{ matrix.is-osx }}
         run: |
           cargo bundle --release
           pushd target/release/bundle/osx
           zip -r Annelid.zip Annelid.app
           cp Annelid.zip ../../
           popd
-      - if: ${{ matrix.is-linux }}
+      - name: Linux bundling
+        if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
       - uses: actions/upload-artifact@v3
