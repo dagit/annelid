@@ -89,13 +89,6 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - if: ${{ matrix.target }} == 'aarch64-apple-darwin'
-        env:
-          TARGET: ${{ matrix.target }}
-      - if: ${{ matrix.target }} == 'aarch64-apple-darwin'
-        run: |
-          sudo xcode-select -s "/Applications/Xcode_12.3.app"
-          sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -107,6 +100,12 @@ jobs:
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
+      - if: ${{ matrix.target }} == 'aarch64-apple-darwin'
+        run: |
+          export TARGET=${{ matrix.target }}
+          rustup target add ${{ matrix.target }}
+          sudo xcode-select -s "/Applications/Xcode_12.3.app"
+          sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
       - run: cargo build --release
       - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
