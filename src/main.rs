@@ -199,6 +199,28 @@ fn to_livesplit_keycode(key: &::egui::Key) -> livesplit_hotkey::KeyCode {
         egui::Key::X => KeyX,
         egui::Key::Y => KeyY,
         egui::Key::Z => KeyZ,
+        egui::Key::F1 => F1,
+        egui::Key::F2 => F2,
+        egui::Key::F3 => F3,
+        egui::Key::F4 => F4,
+        egui::Key::F5 => F5,
+        egui::Key::F6 => F6,
+        egui::Key::F7 => F7,
+        egui::Key::F8 => F8,
+        egui::Key::F9 => F9,
+        egui::Key::F10 => F10,
+        egui::Key::F11 => F11,
+        egui::Key::F12 => F12,
+        egui::Key::F13 => F13,
+        egui::Key::F14 => F14,
+        egui::Key::F15 => F15,
+        egui::Key::F16 => F16,
+        egui::Key::F17 => F17,
+        egui::Key::F18 => F18,
+        egui::Key::F19 => F19,
+        egui::Key::F20 => F20,
+        egui::Key::Minus => Minus,
+        egui::Key::PlusEquals => Equal,
     }
 }
 
@@ -293,7 +315,7 @@ fn show_children(
 }
 
 impl LiveSplitCoreRenderer {
-    fn confirm_save(&mut self, gl: &std::rc::Rc<glow::Context>) {
+    fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
         use native_dialog::{MessageDialog, MessageType};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -840,7 +862,7 @@ struct Vertex {
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
-    fn on_exit_event(&mut self) -> bool {
+    fn on_close_event(&mut self) -> bool {
         self.is_exiting = true;
         self.can_exit
     }
@@ -857,7 +879,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         }
         {
             // TODO: please move this to its own method and refactor it....
-            let viewport = ctx.input().screen_rect;
+            let viewport = ctx.input(|i| i.screen_rect);
             let sz = viewport.size();
             let w = viewport.max.x - viewport.min.x;
             let h = viewport.max.y - viewport.min.y;
@@ -887,7 +909,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 );
 
                 //let timer = std::time::Instant::now();
-                let gl = frame.gl();
+                let gl = frame.gl().expect("Rendering context");
                 unsafe {
                     use eframe::glow::HasContext;
                     let ctx = self.opengl_resources.get_or_insert_with(|| {
@@ -1074,7 +1096,7 @@ void main() {
                     gl.tex_image_2d(
                         glow::TEXTURE_2D,
                         0,
-                        glow::SRGB8_ALPHA8 as _,
+                        glow::RGBA8 as _,
                         w as _,
                         h as _,
                         0,
@@ -1153,8 +1175,8 @@ void main() {
         egui::Area::new("livesplit")
             .enabled(!self.show_settings_editor)
             .show(ctx, |ui| {
-                ui.set_width(ctx.input().screen_rect.width());
-                ui.set_height(ctx.input().screen_rect.height());
+                ui.set_width(ctx.input(|i| i.screen_rect.width()));
+                ui.set_height(ctx.input(|i| i.screen_rect.height()));
             })
             .response
             .context_menu(|ui| {
@@ -1240,7 +1262,7 @@ void main() {
                 });
                 ui.separator();
                 if ui.button("Quit").clicked() {
-                    frame.quit();
+                    frame.close();
                 }
             });
         settings_editor
@@ -1255,58 +1277,61 @@ void main() {
                 let mut roots = settings.roots();
                 show_children(&mut settings, ui, ctx, &mut roots);
             });
-        ctx.input().events.iter().for_each(|e| {
-            if let egui::Event::Scroll(v) = e {
-                if v.y > 0.0 {
-                    self.layout.scroll_up();
-                } else {
-                    self.layout.scroll_down();
-                }
-            }
-        });
-        if self.app_config.global_hotkeys != Some(YesOrNo::Yes) {
-            let mut input = { ctx.input_mut() };
-            if let Some(hot_key) = self.app_config.hot_key_start {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().split_or_start();
-                }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_reset {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().reset(true);
-                    if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                        self.thread_chan
-                            .try_send(ThreadEvent::TimerReset)
-                            .unwrap_or(());
+        ctx.input(|i| {
+            i.events.iter().for_each(|e| {
+                if let egui::Event::Scroll(v) = e {
+                    if v.y > 0.0 {
+                        self.layout.scroll_up();
+                    } else {
+                        self.layout.scroll_down();
                     }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_undo {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().undo_split();
+            })
+        });
+        if self.app_config.global_hotkeys != Some(YesOrNo::Yes) {
+            ctx.input_mut(|input| {
+                if let Some(hot_key) = self.app_config.hot_key_start {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().split_or_start();
+                    }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_skip {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().skip_split();
+                if let Some(hot_key) = self.app_config.hot_key_reset {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().reset(true);
+                        if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
+                            self.thread_chan
+                                .try_send(ThreadEvent::TimerReset)
+                                .unwrap_or(());
+                        }
+                    }
                 }
-            }
-            if let Some(hot_key) = self.app_config.hot_key_pause {
-                if input.consume_key(hot_key.modifiers, hot_key.key) {
-                    // TODO: fix this unwrap
-                    self.timer.write().unwrap().toggle_pause();
+                if let Some(hot_key) = self.app_config.hot_key_undo {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().undo_split();
+                    }
                 }
-            }
+                if let Some(hot_key) = self.app_config.hot_key_skip {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().skip_split();
+                    }
+                }
+                if let Some(hot_key) = self.app_config.hot_key_pause {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().toggle_pause();
+                    }
+                }
+            });
         }
 
         if self.is_exiting {
-            self.confirm_save(frame.gl());
+            self.confirm_save(frame.gl().expect("No GL context"));
             self.save_app_config();
-            frame.quit();
+            frame.close();
         }
     }
 }
@@ -1485,5 +1510,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
             Box::new(app)
         }),
-    );
+    )?;
+    Ok(())
 }
