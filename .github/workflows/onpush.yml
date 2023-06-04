@@ -69,8 +69,8 @@ jobs:
             target: annelid-x86_64.macos
             artifact-path: ./target/release/Annelid.zip
             is-osx: 1
-          - os: macos-10.15
-            target: annelid-x86_64.macos-10.15
+          - os: macos-11
+            target: annelid-x86_64.macos-11
             artifact-path: ./target/release/Annelid.zip
             is-osx: 1
           - os: ubuntu-latest
@@ -136,8 +136,8 @@ jobs:
           path: annelid-x86_64.macos/
       - uses: actions/download-artifact@v3
         with:
-          name: annelid-x86_64.macos-10.15
-          path: annelid-x86_64.macos-10.15/
+          name: annelid-x86_64.macos-11
+          path: annelid-x86_64.macos-11/
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.win
@@ -178,8 +178,8 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-x86_64.macos-10.15/Annelid.zip
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-macOS-10.15.zip
+          asset_path: ./annelid-x86_64.macos-11/Annelid.zip
+          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-macOS-11.zip
           asset_content_type: application/octet-stream
       - uses: actions/upload-release-asset@v1
         env:
