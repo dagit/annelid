@@ -102,7 +102,7 @@ jobs:
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
       - name: Apple arm tool chain
-        if: ${{ matrix.target }} == 'aarch64-apple-darwin'
+        if: ${{ matrix.target == 'aarch64-apple-darwin' }}
         run: |
           export TARGET=${{ matrix.target }}
           rustup target add ${{ matrix.target }}
