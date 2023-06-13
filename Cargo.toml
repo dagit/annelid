@@ -11,7 +11,7 @@ description = "A speedrun timer"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 #scan_fmt = "0.2.6"
-websocket = "0"
+tungstenite = "0"
 
 livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
@@ -27,7 +27,7 @@ strum = "0"
 strum_macros = "0"
 time = "0"
 parking_lot = "*"
-native-dialog = "0"
+rfd = "0"
 directories = "4"
 roxmltree = "0"
 clap = { version = "3", features = ["clap_derive", "derive"] }

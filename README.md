@@ -61,6 +61,12 @@ You'll need to install Rust. I recommend using [rustup](http://rustup.rs). Once 
 cargo build --release
 ```
 
+Note: On Linux you may also need to install gtk3-devel, something like
+
+```sh
+sudo apt-get install libgtk-3-dev
+```
+
 If the build is successful, you can run it with:
 
 ```sh
