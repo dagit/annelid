@@ -77,6 +77,10 @@ struct AppConfig {
     hot_key_skip: Option<HotKey>,
     #[clap(skip)]
     hot_key_pause: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_comparison_next: Option<HotKey>,
+    #[clap(skip)]
+    hot_key_comparison_prev: Option<HotKey>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -114,6 +118,14 @@ impl AppConfig {
             }),
             hot_key_pause: Some(HotKey {
                 key: egui::Key::Num5,
+                modifiers,
+            }),
+            hot_key_comparison_next: Some(HotKey {
+                key: egui::Key::Num6,
+                modifiers,
+            }),
+            hot_key_comparison_prev: Some(HotKey {
+                key: egui::Key::Num4,
                 modifiers,
             }),
             use_autosplitter: Some(YesOrNo::Yes),
@@ -327,8 +339,8 @@ impl LiveSplitCoreRenderer {
         // TODO: fix this unwrap
         if self.timer.read().unwrap().run().has_been_modified() {
             let save_requested = MessageDialog::new()
-                .set_level(MessageLevel::Error)
-                .set_title("Error")
+                .set_level(MessageLevel::Warning)
+                .set_title("Save Splits")
                 .set_description("Splits have been modified. Save splits?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
@@ -338,8 +350,8 @@ impl LiveSplitCoreRenderer {
         }
         if self.settings.read().has_been_modified() {
             let save_requested = MessageDialog::new()
-                .set_level(MessageLevel::Error)
-                .set_title("Error")
+                .set_level(MessageLevel::Warning)
+                .set_title("Save Autosplitter Config")
                 .set_description(
                     "Autosplit config may have been modified. Save autosplitter config?",
                 )
@@ -840,6 +852,42 @@ impl LiveSplitCoreRenderer {
                 })?;
             }
         }
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_comparison_next {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().switch_to_next_comparison();
+            })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().switch_to_next_comparison();
+                })?;
+            }
+        }
+        let timer = self.timer.clone();
+        if let Some(hot_key) = self.app_config.hot_key_comparison_prev {
+            hook.register(hot_key.to_livesplit_hotkey(), move || {
+                // TODO: fix this unwrap
+                timer.write().unwrap().switch_to_previous_comparison();
+            })?;
+            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alternative = livesplit_hotkey::Hotkey {
+                    key_code: alt_key,
+                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                };
+                let timer = self.timer.clone();
+                hook.register(alternative, move || {
+                    // TODO: fix this unwrap
+                    timer.write().unwrap().switch_to_previous_comparison();
+                })?;
+            }
+        }
         println!("registered");
         Ok(())
     }
@@ -1324,6 +1372,18 @@ void main() {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().toggle_pause();
+                    }
+                }
+                if let Some(hot_key) = self.app_config.hot_key_comparison_next {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().switch_to_next_comparison();
+                    }
+                }
+                if let Some(hot_key) = self.app_config.hot_key_comparison_prev {
+                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        // TODO: fix this unwrap
+                        self.timer.write().unwrap().switch_to_previous_comparison();
                     }
                 }
             });
