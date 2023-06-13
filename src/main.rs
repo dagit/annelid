@@ -315,7 +315,7 @@ fn show_children(
 
 impl LiveSplitCoreRenderer {
     fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
-        use rfd::{MessageDialog, MessageLevel, MessageButtons};
+        use rfd::{MessageButtons, MessageDialog, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -340,7 +340,9 @@ impl LiveSplitCoreRenderer {
             let save_requested = MessageDialog::new()
                 .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_description("Autosplit config may have been modified. Save autosplitter config?")
+                .set_description(
+                    "Autosplit config may have been modified. Save autosplitter config?",
+                )
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested {
@@ -708,7 +710,7 @@ impl LiveSplitCoreRenderer {
         use rfd::FileDialog;
         messagebox_on_error(|| {
             let path = FileDialog::new()
-                .set_directory(&default_dir)
+                .set_directory(default_dir)
                 .add_filter(file_type.0, &[file_type.1])
                 .add_filter("Any file", &["*"])
                 .pick_file();
