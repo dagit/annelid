@@ -22,17 +22,16 @@ fn messagebox_on_error<F>(f: F)
 where
     F: FnOnce() -> std::result::Result<(), Box<dyn Error>>,
 {
-    use native_dialog::{MessageDialog, MessageType};
+    use rfd::{MessageDialog, MessageLevel};
     match f() {
         Ok(()) => {}
         Err(e) => {
             println!("{}", e);
             MessageDialog::new()
-                .set_type(MessageType::Error)
+                .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_text(&format!("{}", e))
-                .show_alert()
-                .unwrap();
+                .set_description(&format!("{}", e))
+                .show();
         }
     }
 }
@@ -316,7 +315,7 @@ fn show_children(
 
 impl LiveSplitCoreRenderer {
     fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
-        use native_dialog::{MessageDialog, MessageType};
+        use rfd::{MessageDialog, MessageLevel, MessageButtons};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -328,22 +327,22 @@ impl LiveSplitCoreRenderer {
         // TODO: fix this unwrap
         if self.timer.read().unwrap().run().has_been_modified() {
             let save_requested = MessageDialog::new()
-                .set_type(MessageType::Error)
+                .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_text("Splits have been modified. Save splits?")
-                .show_confirm()
-                .unwrap();
+                .set_description("Splits have been modified. Save splits?")
+                .set_buttons(MessageButtons::YesNo)
+                .show();
             if save_requested {
                 self.save_splits_dialog(&document_dir);
             }
         }
         if self.settings.read().has_been_modified() {
             let save_requested = MessageDialog::new()
-                .set_type(MessageType::Error)
+                .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_text("Autosplit config may have been modified. Save autosplitter config?")
-                .show_confirm()
-                .unwrap();
+                .set_description("Autosplit config may have been modified. Save autosplitter config?")
+                .set_buttons(MessageButtons::YesNo)
+                .show();
             if save_requested {
                 self.save_autosplitter_dialog(&document_dir);
             }
@@ -609,14 +608,14 @@ impl LiveSplitCoreRenderer {
         file_type: (&str, &str),
         save_action: impl FnOnce(&mut Self, std::fs::File) -> Result<(), Box<dyn Error>>,
     ) {
-        use native_dialog::FileDialog;
+        use rfd::FileDialog;
         messagebox_on_error(|| {
             let path = FileDialog::new()
-                .set_location(default_dir)
-                .set_filename(default_fname)
+                .set_directory(default_dir)
+                .set_file_name(default_fname)
                 .add_filter(file_type.0, &[file_type.1])
                 .add_filter("Any file", &["*"])
-                .show_save_single_file()?;
+                .save_file();
             let path = match path {
                 Some(path) => path,
                 None => return Ok(()),
@@ -706,13 +705,13 @@ impl LiveSplitCoreRenderer {
             std::path::PathBuf,
         ) -> Result<(), Box<dyn Error>>,
     ) {
-        use native_dialog::FileDialog;
+        use rfd::FileDialog;
         messagebox_on_error(|| {
             let path = FileDialog::new()
-                .set_location(&default_dir)
+                .set_directory(&default_dir)
                 .add_filter(file_type.0, &[file_type.1])
                 .add_filter("Any file", &["*"])
-                .show_open_single_file()?;
+                .pick_file();
             let path = match path {
                 Some(path) => path,
                 None => return Ok(()),

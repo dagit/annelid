@@ -27,7 +27,7 @@ strum = "0"
 strum_macros = "0"
 time = "0"
 parking_lot = "*"
-native-dialog = "0"
+rfd = "0"
 directories = "4"
 roxmltree = "0"
 clap = { version = "3", features = ["clap_derive", "derive"] }
