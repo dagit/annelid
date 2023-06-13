@@ -22,9 +22,11 @@
 
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::net::TcpStream;
 use strum_macros::Display;
-use websocket::sync::stream::TcpStream;
-use websocket::{ClientBuilder, Message};
+use tungstenite::protocol::WebSocket;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::Message;
 
 #[derive(Display, Debug)]
 #[allow(dead_code)]
@@ -90,21 +92,21 @@ pub struct USB2SnesFileInfo {
 }
 
 pub struct SyncClient {
-    client: websocket::sync::Client<TcpStream>,
+    client: WebSocket<MaybeTlsStream<TcpStream>>,
     devel: bool,
 }
 
 impl SyncClient {
     pub fn connect() -> Result<SyncClient, Box<dyn Error>> {
         Ok(SyncClient {
-            client: ClientBuilder::new("ws://localhost:23074")?.connect_insecure()?,
+            client: tungstenite::client::connect("ws://localhost:23074")?.0,
             devel: false,
         })
     }
 
     pub fn connect_with_devel() -> Result<SyncClient, Box<dyn Error>> {
         Ok(SyncClient {
-            client: ClientBuilder::new("ws://localhost:23074")?.connect_insecure()?,
+            client: tungstenite::client::connect("ws://localhost:23074")?.0,
             devel: true,
         })
     }
@@ -134,14 +136,14 @@ impl SyncClient {
             println!("{}", json);
         }
         let message = Message::text(json);
-        Ok(self.client.send_message(&message)?)
+        Ok(self.client.write_message(message)?)
     }
 
     fn get_reply(&mut self) -> Result<USB2SnesResult, Box<dyn Error>> {
-        let reply = self.client.recv_message()?;
+        let reply = self.client.read_message()?;
         let mut textreply: String = String::from("");
         match reply {
-            websocket::OwnedMessage::Text(value) => {
+            Message::Text(value) => {
                 textreply = value;
             }
             _ => Err("Error getting a reply")?,
@@ -227,7 +229,7 @@ impl SyncClient {
         let mut stop = 1024;
         while start < data.len() {
             self.client
-                .send_message(&Message::binary(&data[start..stop]))?;
+                .write_message(Message::binary(&data[start..stop]))?;
             start += 1024;
             stop += 1024;
             if stop > data.len() {
@@ -244,9 +246,9 @@ impl SyncClient {
         let mut data: Vec<u8> = vec![];
         data.reserve(size);
         loop {
-            let reply = self.client.recv_message()?;
+            let reply = self.client.read_message()?;
             match reply {
-                websocket::OwnedMessage::Binary(msgdata) => {
+                Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
                 _ => Err("Error getting a reply")?,
@@ -271,9 +273,9 @@ impl SyncClient {
         let mut data: Vec<u8> = vec![];
         data.reserve(size);
         loop {
-            let reply = self.client.recv_message()?;
+            let reply = self.client.read_message()?;
             match reply {
-                websocket::OwnedMessage::Binary(msgdata) => {
+                Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
                 _ => Err("Error getting a reply")?,
@@ -301,9 +303,9 @@ impl SyncClient {
         let mut ret: Vec<Vec<u8>> = vec![];
         data.reserve(total_size);
         loop {
-            let reply = self.client.recv_message()?;
+            let reply = self.client.read_message()?;
             match reply {
-                websocket::OwnedMessage::Binary(msgdata) => {
+                Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
                 _ => Err("Error getting a reply")?,
