@@ -30,7 +30,7 @@ parking_lot = "*"
 rfd = "0"
 directories = "4"
 roxmltree = "0"
-clap = { version = "3", features = ["clap_derive", "derive"] }
+clap = { version = "3", features = ["derive"] }
 toml = "0"
 serde_derive = "1"
 glow = "0.12"
