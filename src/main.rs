@@ -1310,6 +1310,14 @@ void main() {
                     }
                 });
                 ui.separator();
+                ui.add(
+                    egui::widgets::Label::new(format!(
+                        "Comparison: {}",
+                        self.timer.read().unwrap().current_comparison()
+                    ))
+                    .wrap(false),
+                );
+                ui.separator();
                 if ui.button("Quit").clicked() {
                     frame.close();
                 }
