@@ -1290,7 +1290,9 @@ void main() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true);
                         if self.app_config.use_autosplitter == Some(YesOrNo::Yes) {
-                            self.thread_chan.send(ThreadEvent::TimerReset).unwrap_or(());
+                            self.thread_chan
+                                .try_send(ThreadEvent::TimerReset)
+                                .unwrap_or(());
                         }
                         ui.close_menu()
                     }
