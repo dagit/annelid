@@ -64,7 +64,9 @@ struct AppConfig {
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     frame_rate: Option<f32>,
     #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
-    reset_on_reset: Option<YesOrNo>,
+    reset_timer_on_game_reset: Option<YesOrNo>,
+    #[clap(name = "reset-game-on-timer-reset", long, short = 's', value_parser)]
+    reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     global_hotkeys: Option<YesOrNo>,
     #[clap(skip)]
@@ -131,7 +133,8 @@ impl AppConfig {
             use_autosplitter: Some(YesOrNo::Yes),
             frame_rate: Some(DEFAULT_FRAME_RATE),
             polling_rate: Some(DEFAULT_POLLING_RATE),
-            reset_on_reset: Some(YesOrNo::No),
+            reset_timer_on_game_reset: Some(YesOrNo::No),
+            reset_game_on_timer_reset: Some(YesOrNo::No),
             global_hotkeys: Some(YesOrNo::Yes),
         }
     }
@@ -440,8 +443,11 @@ impl LiveSplitCoreRenderer {
             if cli_config.polling_rate.is_some() {
                 self.app_config.polling_rate = cli_config.polling_rate;
             }
-            if cli_config.reset_on_reset.is_some() {
-                self.app_config.reset_on_reset = cli_config.reset_on_reset;
+            if cli_config.reset_timer_on_game_reset.is_some() {
+                self.app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
+            }
+            if cli_config.reset_game_on_timer_reset.is_some() {
+                self.app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
             }
             if cli_config.global_hotkeys.is_some() {
                 self.app_config.global_hotkeys = cli_config.global_hotkeys;
@@ -1462,7 +1468,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let layout = Layout::from_settings(layout_settings);
 
     use std::sync::mpsc::sync_channel;
-    let (sync_sender, sync_receiver) = sync_channel(0);
+    let (sync_sender, sync_receiver) = sync_channel(1);
 
     let project_dirs = directories::ProjectDirs::from("", "", "annelid")
         .ok_or("Unable to computer configuration directory")?;
@@ -1547,7 +1553,8 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                                     timer.write().unwrap().start();
                                 }
                                 if summary.reset
-                                    && app.app_config.reset_on_reset == Some(YesOrNo::Yes)
+                                    && app.app_config.reset_timer_on_game_reset
+                                        == Some(YesOrNo::Yes)
                                 {
                                     // TODO: fix this unwrap
                                     timer.write().unwrap().reset(true);
@@ -1567,6 +1574,12 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                                 // If the timer gets reset, we need to make a fresh snes state
                                 if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                     snes = SNESState::new();
+                                    //Reset the snes
+                                    if app.app_config.reset_game_on_timer_reset
+                                        == Some(YesOrNo::Yes)
+                                    {
+                                        client.reset()?;
+                                    }
                                 }
                                 std::thread::sleep(std::time::Duration::from_millis(
                                     (1000.0 / polling_rate) as u64,
