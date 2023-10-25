@@ -36,9 +36,16 @@ memoffset = "*"
 thread-priority = "0.10.0"
 
 # Remember to test with --release
-#[profile.dev]
-#opt-level = 2
-#debug = true
+[profile.dev]
+opt-level = 3
+debug = false
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+# Enable this to make even smaller binaries
+#panic = abort
 
 [package.metadata.bundle]
 name = "Annelid"
