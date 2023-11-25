@@ -14,10 +14,10 @@ tungstenite = "0"
 livesplit-core = { git = "https://github.com/dagit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/dagit/livesplit-core" }
 
-epaint = "0.22"
-eframe = "0.22"
-egui = { version = "0.22", features = ["serde"] }
-egui_glow = "0.22"
+epaint = "0.24"
+eframe = "0.24"
+egui = { version = "0.24", features = ["serde"] }
+egui_glow = "0.24"
 
 lazy_static = "1"
 strum = "0"

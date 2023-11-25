@@ -65,7 +65,7 @@ struct AppConfig {
     frame_rate: Option<f32>,
     #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
     reset_timer_on_game_reset: Option<YesOrNo>,
-    #[clap(name = "reset-game-on-timer-reset", long, short = 's', value_parser)]
+    #[clap(name = "reset-game-on-timer-reset", long, value_parser)]
     reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     global_hotkeys: Option<YesOrNo>,
@@ -329,8 +329,8 @@ fn show_children(
 }
 
 impl LiveSplitCoreRenderer {
-    fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
-        use rfd::{MessageButtons, MessageDialog, MessageLevel};
+    fn confirm_save(&mut self, gl: &std::rc::Rc<glow::Context>) {
+        use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -347,7 +347,7 @@ impl LiveSplitCoreRenderer {
                 .set_description("Splits have been modified. Save splits?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_splits_dialog(&document_dir);
             }
         }
@@ -360,7 +360,7 @@ impl LiveSplitCoreRenderer {
                 )
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_autosplitter_dialog(&document_dir);
             }
         }
@@ -456,12 +456,12 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn process_app_config(&mut self, frame: &mut eframe::Frame) {
+    fn process_app_config(&mut self, ctx: &egui::Context) {
         messagebox_on_error(|| {
             // Now that we've converged on a config, try loading what we can
             if let Some(layout) = &self.app_config.recent_layout {
                 let f = std::fs::File::open(layout)?;
-                self.load_layout(f, frame)?;
+                self.load_layout(f, ctx)?;
             }
             if let Some(splits) = &self.app_config.recent_splits {
                 let f = std::fs::File::open(splits)?;
@@ -478,11 +478,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn load_layout(
-        &mut self,
-        f: std::fs::File,
-        frame: &mut eframe::Frame,
-    ) -> Result<(), Box<dyn Error>> {
+    fn load_layout(&mut self, f: std::fs::File, ctx: &egui::Context) -> Result<(), Box<dyn Error>> {
         use std::io::Read;
         let mut reader = std::io::BufReader::new(f);
         let mut layout_file = String::new();
@@ -515,8 +511,12 @@ impl LiveSplitCoreRenderer {
                         height = d.text().and_then(|d| f32::from_str(d).ok());
                     }
                     if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height) {
-                        frame.set_window_size(egui::Vec2::new(width, height));
-                        frame.set_window_pos(egui::Pos2::new(x, y));
+                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::InnerSize(
+                            egui::Vec2::new(width, height),
+                        ));
+                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::OuterPosition(
+                            egui::Pos2::new(x, y),
+                        ));
                     }
                 });
             }
@@ -650,7 +650,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn open_layout_dialog(&mut self, default_dir: &str, frame: &mut eframe::Frame) {
+    fn open_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
@@ -664,7 +664,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
-            me.load_layout(f, frame)?;
+            me.load_layout(f, ctx)?;
             me.app_config.recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
@@ -917,14 +917,9 @@ struct Vertex {
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
-    fn on_close_event(&mut self) -> bool {
-        self.is_exiting = true;
-        self.can_exit
-    }
-
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if !self.app_config_processed {
-            self.process_app_config(frame);
+            self.process_app_config(ctx);
             self.app_config_processed = true;
             // Since this block should only run once, we abuse it to also
             // set a thread priority only once. We want rendering to take a
@@ -963,7 +958,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     false,
                 );
 
-                //let timer = std::time::Instant::now();
+                let timer = std::time::Instant::now();
                 let gl = frame.gl().expect("Rendering context");
                 unsafe {
                     use eframe::glow::HasContext;
@@ -1222,7 +1217,7 @@ void main() {
                     gl.bind_buffer(glow::ARRAY_BUFFER, None);
                     debug_assert!(gl.get_error() == 0, "1");
                 }
-                //println!("Time to render texture: {}μs", timer.elapsed().as_micros());
+                println!("Time to render texture: {}μs", timer.elapsed().as_micros());
             }
         }
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
@@ -1246,7 +1241,7 @@ void main() {
                 ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
-                        self.open_layout_dialog(&document_dir, frame);
+                        self.open_layout_dialog(&document_dir, ctx);
                     }
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
@@ -1327,7 +1322,7 @@ void main() {
                 );
                 ui.separator();
                 if ui.button("Quit").clicked() {
-                    frame.close();
+                    ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
         settings_editor
@@ -1405,10 +1400,17 @@ void main() {
             });
         }
 
-        if self.is_exiting {
-            self.confirm_save(frame.gl().expect("No GL context"));
-            self.save_app_config();
-            frame.close();
+        ctx.input(|i| {
+            if i.viewport().close_requested() {
+                self.is_exiting = true;
+                self.confirm_save(frame.gl().expect("No GL context"));
+                self.save_app_config();
+            }
+        });
+        if self.can_exit {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
+        } else {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
         }
     }
 }
