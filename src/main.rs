@@ -63,9 +63,9 @@ struct AppConfig {
     polling_rate: Option<f32>,
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     frame_rate: Option<f32>,
-    #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
+    #[clap(name = "reset-timer-on-game-reset", long, value_parser)]
     reset_timer_on_game_reset: Option<YesOrNo>,
-    #[clap(name = "reset-game-on-timer-reset", long, short = 's', value_parser)]
+    #[clap(name = "reset-game-on-timer-reset", long, value_parser)]
     reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     global_hotkeys: Option<YesOrNo>,
@@ -330,7 +330,7 @@ fn show_children(
 
 impl LiveSplitCoreRenderer {
     fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
-        use rfd::{MessageButtons, MessageDialog, MessageLevel};
+        use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -347,7 +347,7 @@ impl LiveSplitCoreRenderer {
                 .set_description("Splits have been modified. Save splits?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_splits_dialog(&document_dir);
             }
         }
@@ -360,7 +360,7 @@ impl LiveSplitCoreRenderer {
                 )
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_autosplitter_dialog(&document_dir);
             }
         }
