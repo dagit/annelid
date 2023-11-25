@@ -958,13 +958,13 @@ impl eframe::App for LiveSplitCoreRenderer {
                     false,
                 );
 
-                let timer = std::time::Instant::now();
+                //let timer = std::time::Instant::now();
                 let gl = frame.gl().expect("Rendering context");
                 unsafe {
                     use eframe::glow::HasContext;
                     let ctx = self.opengl_resources.get_or_insert_with(|| {
                         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let source = "
 #version 330
 
@@ -981,17 +981,17 @@ void main() {
                       1.0);
     v_tc = a_tc;
 }";
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.shader_source(vert, source);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.compile_shader(vert);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         debug_assert!(
                             gl.get_shader_compile_status(vert),
                             "{}",
                             gl.get_shader_info_log(vert)
                         );
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
 
                         let frag = gl
                             .create_shader(glow::FRAGMENT_SHADER)
@@ -1009,56 +1009,56 @@ void main() {
     fragmentColor = texture(u_sampler, v_tc);
 }
 ";
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.shader_source(frag, source);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.compile_shader(frag);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         debug_assert!(
                             gl.get_shader_compile_status(frag),
                             "{}",
                             gl.get_shader_info_log(frag)
                         );
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let program = gl.create_program().expect("create program");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.attach_shader(program, vert);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.attach_shader(program, frag);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.link_program(program);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         debug_assert!(gl.get_program_link_status(program), "link failed");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.detach_shader(program, vert);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.detach_shader(program, frag);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.delete_shader(vert);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.delete_shader(frag);
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let u_screen_size =
                             gl.get_uniform_location(program, "u_screen_size").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let u_sampler = gl.get_uniform_location(program, "u_sampler").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
 
                         let vbo = gl.create_buffer().expect("vbo creation");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
 
                         let a_pos_loc = gl.get_attrib_location(program, "a_pos").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let a_tc_loc = gl.get_attrib_location(program, "a_tc").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
 
                         let stride = std::mem::size_of::<Vertex>() as i32;
                         let vao = gl.create_vertex_array().unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.bind_vertex_array(Some(vao));
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.vertex_attrib_pointer_f32(
                             a_pos_loc,
                             2,
@@ -1067,7 +1067,7 @@ void main() {
                             stride,
                             offset_of!(Vertex, pos) as i32,
                         );
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         gl.vertex_attrib_pointer_f32(
                             a_tc_loc,
                             2,
@@ -1076,14 +1076,13 @@ void main() {
                             stride,
                             offset_of!(Vertex, uv) as i32,
                         );
-                        debug_assert!(gl.get_error() == 0, "1");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
 
                         let element_array_buffer =
                             gl.create_buffer().expect("create element_array_buffer");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         let texture = gl.create_texture().expect("create texture");
-                        debug_assert!(gl.get_error() == 0, "1");
+                        debug_assert_eq!(gl.get_error(), 0);
                         OpenGLResources {
                             element_array_buffer,
                             program,
@@ -1095,54 +1094,56 @@ void main() {
                         }
                     });
                     gl.use_program(Some(ctx.program));
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_vertex_array(Some(ctx.vao));
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.enable_vertex_attrib_array(0);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.enable_vertex_attrib_array(1);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
 
                     gl.uniform_2_f32(Some(&ctx.u_screen_size), w, h);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.uniform_1_i32(Some(&ctx.u_sampler), 0);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.active_texture(glow::TEXTURE0);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_vertex_array(Some(ctx.vao));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
 
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.tex_parameter_i32(
                         glow::TEXTURE_2D,
                         glow::TEXTURE_MAG_FILTER,
                         glow::NEAREST as _,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.tex_parameter_i32(
                         glow::TEXTURE_2D,
                         glow::TEXTURE_MIN_FILTER,
                         glow::NEAREST as _,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
 
                     gl.tex_parameter_i32(
                         glow::TEXTURE_2D,
                         glow::TEXTURE_WRAP_S,
                         glow::CLAMP_TO_EDGE as i32,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.tex_parameter_i32(
                         glow::TEXTURE_2D,
                         glow::TEXTURE_WRAP_T,
                         glow::CLAMP_TO_EDGE as i32,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
 
                     gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.tex_image_2d(
                         glow::TEXTURE_2D,
                         0,
@@ -1154,7 +1155,7 @@ void main() {
                         glow::UNSIGNED_BYTE,
                         Some(self.frame_buffer.as_slice()),
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
 
                     use epaint::Pos2;
                     let vertices: Vec<Vertex> = vec![
@@ -1185,39 +1186,39 @@ void main() {
                         1, 2, 3, // second triangle
                     ];
 
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.buffer_data_u8_slice(
                         glow::ARRAY_BUFFER,
                         bytemuck::cast_slice(vertices.as_slice()),
                         glow::STREAM_DRAW,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.buffer_data_u8_slice(
                         glow::ELEMENT_ARRAY_BUFFER,
                         bytemuck::cast_slice(indices.as_slice()),
                         glow::STREAM_DRAW,
                     );
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.disable_vertex_attrib_array(0);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.disable_vertex_attrib_array(1);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_vertex_array(None);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                     gl.bind_buffer(glow::ARRAY_BUFFER, None);
-                    debug_assert!(gl.get_error() == 0, "1");
+                    debug_assert_eq!(gl.get_error(), 0);
                 }
-                println!("Time to render texture: {}μs", timer.elapsed().as_micros());
+                //println!("Time to render texture: {}μs", timer.elapsed().as_micros());
             }
         }
         ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
