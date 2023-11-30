@@ -275,7 +275,7 @@ fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Mo
 }
 
 struct LiveSplitCoreRenderer {
-    frame_buffer: std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
+    frame_buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     layout: Layout,
     renderer: livesplit_core::rendering::software::BorrowedRenderer,
     layout_state: Option<livesplit_core::layout::LayoutState>,
@@ -288,7 +288,7 @@ struct LiveSplitCoreRenderer {
     project_dirs: directories::ProjectDirs,
     app_config: AppConfig,
     app_config_processed: bool,
-    opengl_resources: std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    opengl_resources: std::sync::Arc<std::sync::Mutex<Option<OpenGLResources>>>,
     global_hotkey_hook: Option<Hook>,
 }
 
@@ -366,7 +366,7 @@ impl LiveSplitCoreRenderer {
         }
         self.can_exit = true;
         unsafe {
-            if let Some(opengl) = &*self.opengl_resources.read().unwrap() {
+            if let Some(opengl) = &*self.opengl_resources.lock().unwrap() {
                 use glow::HasContext;
                 // TODO: is this everything we're supposed to delete?
                 gl.delete_texture(opengl.texture);
@@ -929,6 +929,19 @@ impl eframe::App for LiveSplitCoreRenderer {
             // like an emulator.
             set_current_thread_priority(ThreadPriority::Min).unwrap_or(())
         }
+        ctx.input(|i| {
+            if i.viewport().close_requested() {
+                self.is_exiting = true;
+                self.confirm_save(frame.gl().expect("No GL context"));
+                self.save_app_config();
+            }
+        });
+        if self.can_exit {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
+            return;
+        } else {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
+        }
         let viewport = ctx.input(|i| i.screen_rect);
         {
             let timer = self.timer.read().unwrap();
@@ -951,19 +964,21 @@ impl eframe::App for LiveSplitCoreRenderer {
         if let Some(layout_state) = &self.layout_state {
             let szu32 = [sz.x as u32, sz.y as u32];
             let sz = [sz.x as usize, sz.y as usize];
-            self.frame_buffer
-                .write()
-                .unwrap()
-                .resize(sz[0] * sz[1] * 4, 0);
-            self.renderer.render(
-                layout_state,
-                self.frame_buffer.write().unwrap().as_mut_slice(),
-                szu32,
-                sz[0] as u32,
-                false,
-            );
+            {
+                let mut buffer = self.frame_buffer.lock().unwrap();
+                buffer.resize(sz[0] * sz[1] * 4, 0);
+                self.renderer.render(
+                    layout_state,
+                    buffer.as_mut_slice(),
+                    szu32,
+                    sz[0] as u32,
+                    false,
+                );
+            }
         }
-        let gl_ctx = if self.opengl_resources.read().unwrap().is_some() {
+        // Wish we could use get_or_insert_with here, but we need to return
+        // the Arc<Mutex<_>> instead of just a mut &_
+        let gl_ctx = if self.opengl_resources.lock().unwrap().is_some() {
             self.opengl_resources.clone()
         } else {
             unsafe {
@@ -1097,7 +1112,8 @@ void main() {
                     vbo,
                 };
                 //println!("{:?}", resources);
-                std::sync::Arc::new(std::sync::RwLock::new(Some(resources)))
+                self.opengl_resources = std::sync::Arc::new(std::sync::Mutex::new(Some(resources)));
+                self.opengl_resources.clone()
             }
         };
 
@@ -1109,7 +1125,7 @@ void main() {
                 callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
                     unsafe {
                         use eframe::glow::HasContext;
-                        let ctx = gl_ctx.read().unwrap();
+                        let ctx = gl_ctx.lock().unwrap();
                         let ctx = ctx.as_ref().unwrap();
 
                         //let timer = std::time::Instant::now();
@@ -1176,7 +1192,7 @@ void main() {
                             0,
                             glow::RGBA,
                             glow::UNSIGNED_BYTE,
-                            Some(frame_buffer.read().unwrap().as_slice()),
+                            Some(frame_buffer.lock().unwrap().as_slice()),
                         );
                         debug_assert_eq!(gl.get_error(), 0);
 
@@ -1254,7 +1270,6 @@ void main() {
             };
             ui.painter().add(callback);
         });
-        ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
         let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit")
             .enabled(!self.show_settings_editor)
@@ -1434,18 +1449,6 @@ void main() {
             });
         }
 
-        ctx.input(|i| {
-            if i.viewport().close_requested() {
-                self.is_exiting = true;
-                self.confirm_save(frame.gl().expect("No GL context"));
-                self.save_app_config();
-            }
-        });
-        if self.can_exit {
-            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
-        } else {
-            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
-        }
         //println!("Time to update: {}μs", update_timer.elapsed().as_micros());
     }
 }
@@ -1519,7 +1522,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(preference_dir)?;
 
     let mut app = LiveSplitCoreRenderer {
-        frame_buffer: std::sync::Arc::new(std::sync::RwLock::new(vec![])),
+        frame_buffer: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         timer: timer.clone(),
         layout,
         renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
@@ -1532,7 +1535,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         project_dirs,
         app_config: cli_config,
         app_config_processed: false,
-        opengl_resources: std::sync::Arc::new(std::sync::RwLock::new(None)),
+        opengl_resources: std::sync::Arc::new(std::sync::Mutex::new(None)),
         global_hotkey_hook: None,
     };
 
@@ -1541,6 +1544,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         options,
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
+            context.set_visuals(egui::Visuals::dark());
             app.load_app_config();
             if app.app_config.global_hotkeys == Some(YesOrNo::Yes) {
                 messagebox_on_error(|| app.enable_global_hotkeys());
