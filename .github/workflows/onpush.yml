@@ -88,7 +88,7 @@ jobs:
             is-osx: 1
           - os: ubuntu-latest
             target: annelid-x86_64.AppImage
-            artifact-path: annelid.AppImage
+            artifact-path: ./target/appimage/annelid.AppImage
             is-linux: 1
           - os: windows-latest
             target: annelid-x86_64.win
