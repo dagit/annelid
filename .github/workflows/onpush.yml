@@ -148,23 +148,23 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.AppImage
-          path: annelid-x86_64.AppImage/
+          path: annelid-x86_64.AppImage
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.macos
-          path: annelid-x86_64.macos/
+          path: annelid-x86_64.macos
       - uses: actions/download-artifact@v3
         with:
           name: annelid-aarch64.macos
-          path: annelid-aarch64.macos/
+          path: annelid-aarch64.macos
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.macos-11
-          path: annelid-x86_64.macos-11/
+          path: annelid-x86_64.macos-11
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.win
-          path: annelid-x86_64.win/
+          path: annelid-x86_64.win
       - name: Display structure of downloaded files
         run: ls -R
       - id: get_commit_id
