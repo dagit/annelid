@@ -30,7 +30,7 @@ where
             MessageDialog::new()
                 .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_description(&format!("{}", e))
+                .set_description(format!("{}", e))
                 .show();
         }
     }
@@ -63,9 +63,9 @@ struct AppConfig {
     polling_rate: Option<f32>,
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     frame_rate: Option<f32>,
-    #[clap(name = "reset-timer-on-game-reset", long, short = 'r', value_parser)]
+    #[clap(name = "reset-timer-on-game-reset", long, value_parser)]
     reset_timer_on_game_reset: Option<YesOrNo>,
-    #[clap(name = "reset-game-on-timer-reset", long, short = 's', value_parser)]
+    #[clap(name = "reset-game-on-timer-reset", long, value_parser)]
     reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     global_hotkeys: Option<YesOrNo>,
@@ -275,7 +275,7 @@ fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Mo
 }
 
 struct LiveSplitCoreRenderer {
-    frame_buffer: Vec<u8>,
+    frame_buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     layout: Layout,
     renderer: livesplit_core::rendering::software::BorrowedRenderer,
     layout_state: Option<livesplit_core::layout::LayoutState>,
@@ -288,7 +288,7 @@ struct LiveSplitCoreRenderer {
     project_dirs: directories::ProjectDirs,
     app_config: AppConfig,
     app_config_processed: bool,
-    opengl_resources: Option<OpenGLResources>,
+    opengl_resources: std::sync::Arc<std::sync::Mutex<Option<OpenGLResources>>>,
     global_hotkey_hook: Option<Hook>,
 }
 
@@ -329,8 +329,8 @@ fn show_children(
 }
 
 impl LiveSplitCoreRenderer {
-    fn confirm_save(&mut self, gl: &std::sync::Arc<glow::Context>) {
-        use rfd::{MessageButtons, MessageDialog, MessageLevel};
+    fn confirm_save(&mut self, gl: &std::rc::Rc<glow::Context>) {
+        use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -347,7 +347,7 @@ impl LiveSplitCoreRenderer {
                 .set_description("Splits have been modified. Save splits?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_splits_dialog(&document_dir);
             }
         }
@@ -360,13 +360,13 @@ impl LiveSplitCoreRenderer {
                 )
                 .set_buttons(MessageButtons::YesNo)
                 .show();
-            if save_requested {
+            if save_requested == MessageDialogResult::Yes {
                 self.save_autosplitter_dialog(&document_dir);
             }
         }
         self.can_exit = true;
         unsafe {
-            if let Some(opengl) = &self.opengl_resources {
+            if let Some(opengl) = &*self.opengl_resources.lock().unwrap() {
                 use glow::HasContext;
                 // TODO: is this everything we're supposed to delete?
                 gl.delete_texture(opengl.texture);
@@ -379,7 +379,7 @@ impl LiveSplitCoreRenderer {
                 debug_assert!(gl.get_error() == 0, "1");
                 gl.delete_program(opengl.program);
                 debug_assert!(gl.get_error() == 0, "1");
-                self.opengl_resources = None;
+                //self.opengl_resources = std::sync::Arc::new(std::sync::RwLock::new(None));
             }
         }
     }
@@ -456,12 +456,12 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn process_app_config(&mut self, frame: &mut eframe::Frame) {
+    fn process_app_config(&mut self, ctx: &egui::Context) {
         messagebox_on_error(|| {
             // Now that we've converged on a config, try loading what we can
             if let Some(layout) = &self.app_config.recent_layout {
                 let f = std::fs::File::open(layout)?;
-                self.load_layout(f, frame)?;
+                self.load_layout(f, ctx)?;
             }
             if let Some(splits) = &self.app_config.recent_splits {
                 let f = std::fs::File::open(splits)?;
@@ -478,11 +478,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn load_layout(
-        &mut self,
-        f: std::fs::File,
-        frame: &mut eframe::Frame,
-    ) -> Result<(), Box<dyn Error>> {
+    fn load_layout(&mut self, f: std::fs::File, ctx: &egui::Context) -> Result<(), Box<dyn Error>> {
         use std::io::Read;
         let mut reader = std::io::BufReader::new(f);
         let mut layout_file = String::new();
@@ -515,8 +511,12 @@ impl LiveSplitCoreRenderer {
                         height = d.text().and_then(|d| f32::from_str(d).ok());
                     }
                     if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height) {
-                        frame.set_window_size(egui::Vec2::new(width, height));
-                        frame.set_window_pos(egui::Pos2::new(x, y));
+                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::InnerSize(
+                            egui::Vec2::new(width, height),
+                        ));
+                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::OuterPosition(
+                            egui::Pos2::new(x, y),
+                        ));
                     }
                 });
             }
@@ -650,7 +650,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    fn open_layout_dialog(&mut self, default_dir: &str, frame: &mut eframe::Frame) {
+    fn open_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
@@ -664,7 +664,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
-            me.load_layout(f, frame)?;
+            me.load_layout(f, ctx)?;
             me.app_config.recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
@@ -899,6 +899,7 @@ impl LiveSplitCoreRenderer {
     }
 }
 
+#[derive(Debug)]
 struct OpenGLResources {
     program: glow::Program,
     u_screen_size: glow::UniformLocation,
@@ -909,7 +910,7 @@ struct OpenGLResources {
     texture: glow::Texture,
 }
 
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone, Debug)]
 #[repr(C)]
 struct Vertex {
     pos: epaint::Pos2,
@@ -917,14 +918,10 @@ struct Vertex {
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
-    fn on_close_event(&mut self) -> bool {
-        self.is_exiting = true;
-        self.can_exit
-    }
-
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        //let update_timer = std::time::Instant::now();
         if !self.app_config_processed {
-            self.process_app_config(frame);
+            self.process_app_config(ctx);
             self.app_config_processed = true;
             // Since this block should only run once, we abuse it to also
             // set a thread priority only once. We want rendering to take a
@@ -932,16 +929,25 @@ impl eframe::App for LiveSplitCoreRenderer {
             // like an emulator.
             set_current_thread_priority(ThreadPriority::Min).unwrap_or(())
         }
+        ctx.input(|i| {
+            if i.viewport().close_requested() {
+                self.is_exiting = true;
+                self.confirm_save(frame.gl().expect("No GL context"));
+                self.save_app_config();
+            }
+        });
+        if self.can_exit {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
+            return;
+        } else {
+            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
+        }
+        let viewport = ctx.input(|i| i.screen_rect);
         {
-            // TODO: please move this to its own method and refactor it....
-            let viewport = ctx.input(|i| i.screen_rect);
-            let sz = viewport.size();
-            let w = viewport.max.x - viewport.min.x;
-            let h = viewport.max.y - viewport.min.y;
-            // a local scope so the timer lock has a smaller scope
-            // TODO: fix this unwrap
             let timer = self.timer.read().unwrap();
             let snapshot = timer.snapshot();
+            // a local scope so the timer lock has a smaller scope
+            // TODO: fix this unwrap
             match &mut self.layout_state {
                 None => {
                     self.layout_state = Some(self.layout.state(&snapshot));
@@ -950,27 +956,37 @@ impl eframe::App for LiveSplitCoreRenderer {
                     self.layout.update_state(layout_state, &snapshot);
                 }
             };
+        }
+        let sz = viewport.size();
+        let w = viewport.max.x - viewport.min.x;
+        let h = viewport.max.y - viewport.min.y;
 
-            if let Some(layout_state) = &self.layout_state {
-                let szu32 = [sz.x as u32, sz.y as u32];
-                let sz = [sz.x as usize, sz.y as usize];
-                self.frame_buffer.resize(sz[0] * sz[1] * 4, 0);
+        if let Some(layout_state) = &self.layout_state {
+            let szu32 = [sz.x as u32, sz.y as u32];
+            let sz = [sz.x as usize, sz.y as usize];
+            {
+                let mut buffer = self.frame_buffer.lock().unwrap();
+                buffer.resize(sz[0] * sz[1] * 4, 0);
                 self.renderer.render(
                     layout_state,
-                    self.frame_buffer.as_mut_slice(),
+                    buffer.as_mut_slice(),
                     szu32,
                     sz[0] as u32,
                     false,
                 );
-
-                //let timer = std::time::Instant::now();
-                let gl = frame.gl().expect("Rendering context");
-                unsafe {
-                    use eframe::glow::HasContext;
-                    let ctx = self.opengl_resources.get_or_insert_with(|| {
-                        let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let source = "
+            }
+        }
+        // Wish we could use get_or_insert_with here, but we need to return
+        // the Arc<Mutex<_>> instead of just a mut &_
+        let gl_ctx = if self.opengl_resources.lock().unwrap().is_some() {
+            self.opengl_resources.clone()
+        } else {
+            unsafe {
+                use eframe::glow::HasContext;
+                let gl = frame.gl().unwrap();
+                let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
+                debug_assert_eq!(gl.get_error(), 0);
+                let source = "
 #version 330
 
 uniform vec2 u_screen_size;
@@ -986,22 +1002,22 @@ void main() {
                       1.0);
     v_tc = a_tc;
 }";
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.shader_source(vert, source);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.compile_shader(vert);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        debug_assert!(
-                            gl.get_shader_compile_status(vert),
-                            "{}",
-                            gl.get_shader_info_log(vert)
-                        );
-                        debug_assert!(gl.get_error() == 0, "1");
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.shader_source(vert, source);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.compile_shader(vert);
+                debug_assert_eq!(gl.get_error(), 0);
+                debug_assert!(
+                    gl.get_shader_compile_status(vert),
+                    "{}",
+                    gl.get_shader_info_log(vert)
+                );
+                debug_assert_eq!(gl.get_error(), 0);
 
-                        let frag = gl
-                            .create_shader(glow::FRAGMENT_SHADER)
-                            .expect("crate fragment");
-                        let source = "
+                let frag = gl
+                    .create_shader(glow::FRAGMENT_SHADER)
+                    .expect("crate fragment");
+                let source = "
 #version 330
 
 uniform sampler2D u_sampler;
@@ -1014,218 +1030,246 @@ void main() {
     fragmentColor = texture(u_sampler, v_tc);
 }
 ";
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.shader_source(frag, source);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.compile_shader(frag);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        debug_assert!(
-                            gl.get_shader_compile_status(frag),
-                            "{}",
-                            gl.get_shader_info_log(frag)
-                        );
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let program = gl.create_program().expect("create program");
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.attach_shader(program, vert);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.attach_shader(program, frag);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.link_program(program);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        debug_assert!(gl.get_program_link_status(program), "link failed");
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.detach_shader(program, vert);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.detach_shader(program, frag);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.delete_shader(vert);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.delete_shader(frag);
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let u_screen_size =
-                            gl.get_uniform_location(program, "u_screen_size").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let u_sampler = gl.get_uniform_location(program, "u_sampler").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.shader_source(frag, source);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.compile_shader(frag);
+                debug_assert_eq!(gl.get_error(), 0);
+                debug_assert!(
+                    gl.get_shader_compile_status(frag),
+                    "{}",
+                    gl.get_shader_info_log(frag)
+                );
+                debug_assert_eq!(gl.get_error(), 0);
+                let program = gl.create_program().expect("create program");
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.attach_shader(program, vert);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.attach_shader(program, frag);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.link_program(program);
+                debug_assert_eq!(gl.get_error(), 0);
+                debug_assert!(gl.get_program_link_status(program), "link failed");
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.detach_shader(program, vert);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.detach_shader(program, frag);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.delete_shader(vert);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.delete_shader(frag);
+                debug_assert_eq!(gl.get_error(), 0);
+                let u_screen_size = gl.get_uniform_location(program, "u_screen_size").unwrap();
+                debug_assert_eq!(gl.get_error(), 0);
+                let u_sampler = gl.get_uniform_location(program, "u_sampler").unwrap();
+                debug_assert_eq!(gl.get_error(), 0);
 
-                        let vbo = gl.create_buffer().expect("vbo creation");
-                        debug_assert!(gl.get_error() == 0, "1");
+                let vbo = gl.create_buffer().expect("vbo creation");
+                debug_assert_eq!(gl.get_error(), 0);
 
-                        let a_pos_loc = gl.get_attrib_location(program, "a_pos").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let a_tc_loc = gl.get_attrib_location(program, "a_tc").unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
+                let a_pos_loc = gl.get_attrib_location(program, "a_pos").unwrap();
+                debug_assert_eq!(gl.get_error(), 0);
+                let a_tc_loc = gl.get_attrib_location(program, "a_tc").unwrap();
+                debug_assert_eq!(gl.get_error(), 0);
 
-                        let stride = std::mem::size_of::<Vertex>() as i32;
-                        let vao = gl.create_vertex_array().unwrap();
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.bind_vertex_array(Some(vao));
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.vertex_attrib_pointer_f32(
-                            a_pos_loc,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            stride,
-                            offset_of!(Vertex, pos) as i32,
-                        );
-                        debug_assert!(gl.get_error() == 0, "1");
-                        gl.vertex_attrib_pointer_f32(
-                            a_tc_loc,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            stride,
-                            offset_of!(Vertex, uv) as i32,
-                        );
-                        debug_assert!(gl.get_error() == 0, "1");
-                        debug_assert!(gl.get_error() == 0, "1");
+                let stride = std::mem::size_of::<Vertex>() as i32;
+                let vao = gl.create_vertex_array().unwrap();
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.bind_vertex_array(Some(vao));
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.vertex_attrib_pointer_f32(
+                    a_pos_loc,
+                    2,
+                    glow::FLOAT,
+                    false,
+                    stride,
+                    offset_of!(Vertex, pos) as i32,
+                );
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.vertex_attrib_pointer_f32(
+                    a_tc_loc,
+                    2,
+                    glow::FLOAT,
+                    false,
+                    stride,
+                    offset_of!(Vertex, uv) as i32,
+                );
+                debug_assert_eq!(gl.get_error(), 0);
 
-                        let element_array_buffer =
-                            gl.create_buffer().expect("create element_array_buffer");
-                        debug_assert!(gl.get_error() == 0, "1");
-                        let texture = gl.create_texture().expect("create texture");
-                        debug_assert!(gl.get_error() == 0, "1");
-                        OpenGLResources {
-                            element_array_buffer,
-                            program,
-                            texture,
-                            u_sampler,
-                            u_screen_size,
-                            vao,
-                            vbo,
-                        }
-                    });
-                    gl.use_program(Some(ctx.program));
-                    gl.bind_vertex_array(Some(ctx.vao));
-                    gl.enable_vertex_attrib_array(0);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.enable_vertex_attrib_array(1);
-                    debug_assert!(gl.get_error() == 0, "1");
-
-                    gl.uniform_2_f32(Some(&ctx.u_screen_size), w, h);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.uniform_1_i32(Some(&ctx.u_sampler), 0);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.active_texture(glow::TEXTURE0);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_vertex_array(Some(ctx.vao));
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-                    debug_assert!(gl.get_error() == 0, "1");
-
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_MAG_FILTER,
-                        glow::NEAREST as _,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_MIN_FILTER,
-                        glow::NEAREST as _,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-
-                    gl.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_WRAP_S,
-                        glow::CLAMP_TO_EDGE as i32,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_WRAP_T,
-                        glow::CLAMP_TO_EDGE as i32,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-
-                    gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.tex_image_2d(
-                        glow::TEXTURE_2D,
-                        0,
-                        glow::RGBA8 as _,
-                        w as _,
-                        h as _,
-                        0,
-                        glow::RGBA,
-                        glow::UNSIGNED_BYTE,
-                        Some(self.frame_buffer.as_slice()),
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-
-                    use epaint::Pos2;
-                    let vertices: Vec<Vertex> = vec![
-                        Vertex {
-                            // top right
-                            pos: Pos2::new(viewport.max.x, viewport.min.y),
-                            uv: Pos2::new(1.0, 0.0),
-                        },
-                        Vertex {
-                            // bottom right
-                            pos: Pos2::new(viewport.max.x, viewport.max.y),
-                            uv: Pos2::new(1.0, 1.0),
-                        },
-                        Vertex {
-                            // bottom left
-                            pos: Pos2::new(viewport.min.x, viewport.max.y),
-                            uv: Pos2::new(0.0, 1.0),
-                        },
-                        Vertex {
-                            // top left
-                            pos: Pos2::new(viewport.min.x, viewport.min.y),
-                            uv: Pos2::new(0.0, 0.0),
-                        },
-                    ];
-                    let indices: Vec<u32> = vec![
-                        // note that we start from 0!
-                        0, 1, 3, // first triangle
-                        1, 2, 3, // second triangle
-                    ];
-
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.buffer_data_u8_slice(
-                        glow::ARRAY_BUFFER,
-                        bytemuck::cast_slice(vertices.as_slice()),
-                        glow::STREAM_DRAW,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.buffer_data_u8_slice(
-                        glow::ELEMENT_ARRAY_BUFFER,
-                        bytemuck::cast_slice(indices.as_slice()),
-                        glow::STREAM_DRAW,
-                    );
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.disable_vertex_attrib_array(0);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.disable_vertex_attrib_array(1);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_vertex_array(None);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
-                    debug_assert!(gl.get_error() == 0, "1");
-                    gl.bind_buffer(glow::ARRAY_BUFFER, None);
-                    debug_assert!(gl.get_error() == 0, "1");
-                }
-                //println!("Time to render texture: {}μs", timer.elapsed().as_micros());
+                let element_array_buffer = gl.create_buffer().expect("create element_array_buffer");
+                debug_assert_eq!(gl.get_error(), 0);
+                let texture = gl.create_texture().expect("create texture");
+                debug_assert_eq!(gl.get_error(), 0);
+                let resources = OpenGLResources {
+                    element_array_buffer,
+                    program,
+                    texture,
+                    u_sampler,
+                    u_screen_size,
+                    vao,
+                    vbo,
+                };
+                //println!("{:?}", resources);
+                self.opengl_resources = std::sync::Arc::new(std::sync::Mutex::new(Some(resources)));
+                self.opengl_resources.clone()
             }
-        }
-        ctx.set_visuals(egui::Visuals::dark()); // Switch to dark mode
+        };
+
+        let frame_buffer = self.frame_buffer.clone();
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let callback = egui::PaintCallback {
+                rect: viewport,
+                callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
+                    unsafe {
+                        use eframe::glow::HasContext;
+                        let ctx = gl_ctx.lock().unwrap();
+                        let ctx = ctx.as_ref().unwrap();
+
+                        //let timer = std::time::Instant::now();
+                        //let gl = frame.gl().expect("Rendering context");
+                        let gl = painter.gl();
+                        gl.use_program(Some(ctx.program));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_vertex_array(Some(ctx.vao));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.enable_vertex_attrib_array(0);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.enable_vertex_attrib_array(1);
+                        debug_assert_eq!(gl.get_error(), 0);
+
+                        gl.uniform_2_f32(Some(&ctx.u_screen_size), w, h);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.uniform_1_i32(Some(&ctx.u_sampler), 0);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.active_texture(glow::TEXTURE0);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_vertex_array(Some(ctx.vao));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
+                        debug_assert_eq!(gl.get_error(), 0);
+
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_MAG_FILTER,
+                            glow::NEAREST as _,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_MIN_FILTER,
+                            glow::NEAREST as _,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+
+                        gl.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_WRAP_S,
+                            glow::CLAMP_TO_EDGE as i32,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_WRAP_T,
+                            glow::CLAMP_TO_EDGE as i32,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+
+                        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        //println!("({},{})", w, h);
+                        gl.tex_image_2d(
+                            glow::TEXTURE_2D,
+                            0,
+                            glow::RGBA8 as _,
+                            w as _,
+                            h as _,
+                            0,
+                            glow::RGBA,
+                            glow::UNSIGNED_BYTE,
+                            Some(frame_buffer.lock().unwrap().as_slice()),
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+
+                        use epaint::Pos2;
+                        let vertices: Vec<Vertex> = vec![
+                            Vertex {
+                                // top right
+                                pos: Pos2::new(viewport.max.x, viewport.min.y),
+                                uv: Pos2::new(1.0, 0.0),
+                            },
+                            Vertex {
+                                // bottom right
+                                pos: Pos2::new(viewport.max.x, viewport.max.y),
+                                uv: Pos2::new(1.0, 1.0),
+                            },
+                            Vertex {
+                                // bottom left
+                                pos: Pos2::new(viewport.min.x, viewport.max.y),
+                                uv: Pos2::new(0.0, 1.0),
+                            },
+                            Vertex {
+                                // top left
+                                pos: Pos2::new(viewport.min.x, viewport.min.y),
+                                uv: Pos2::new(0.0, 0.0),
+                            },
+                        ];
+                        //println!("{:#?}", vertices);
+                        let indices: Vec<u32> = vec![
+                            // note that we start from 0!
+                            0, 1, 3, // first triangle
+                            1, 2, 3, // second triangle
+                        ];
+
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.buffer_data_u8_slice(
+                            glow::ARRAY_BUFFER,
+                            bytemuck::cast_slice(vertices.as_slice()),
+                            glow::STREAM_DRAW,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.buffer_data_u8_slice(
+                            glow::ELEMENT_ARRAY_BUFFER,
+                            bytemuck::cast_slice(indices.as_slice()),
+                            glow::STREAM_DRAW,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.draw_elements(
+                            glow::TRIANGLES,
+                            indices.len() as i32,
+                            glow::UNSIGNED_INT,
+                            0,
+                        );
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.disable_vertex_attrib_array(0);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.disable_vertex_attrib_array(1);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_vertex_array(None);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.bind_buffer(glow::ARRAY_BUFFER, None);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        gl.use_program(None);
+                        debug_assert_eq!(gl.get_error(), 0);
+                        //println!("Time to render texture: {}μs", timer.elapsed().as_micros());
+                    }
+                })),
+            };
+            ui.painter().add(callback);
+        });
         let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit")
             .enabled(!self.show_settings_editor)
@@ -1246,7 +1290,7 @@ void main() {
                 ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
-                        self.open_layout_dialog(&document_dir, frame);
+                        self.open_layout_dialog(&document_dir, ctx);
                     }
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
@@ -1327,7 +1371,7 @@ void main() {
                 );
                 ui.separator();
                 if ui.button("Quit").clicked() {
-                    frame.close();
+                    ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
         settings_editor
@@ -1405,11 +1449,7 @@ void main() {
             });
         }
 
-        if self.is_exiting {
-            self.confirm_save(frame.gl().expect("No GL context"));
-            self.save_app_config();
-            frame.close();
-        }
+        //println!("Time to update: {}μs", update_timer.elapsed().as_micros());
     }
 }
 
@@ -1459,6 +1499,10 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .expect("Run with at least one segment provided")
         .into_shared();
     let options = eframe::NativeOptions {
+        renderer: eframe::Renderer::Glow,
+        viewport: egui::viewport::ViewportBuilder {
+            ..Default::default()
+        },
         ..eframe::NativeOptions::default()
     };
     let latency = Arc::new(RwLock::new((0.0, 0.0)));
@@ -1478,7 +1522,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(preference_dir)?;
 
     let mut app = LiveSplitCoreRenderer {
-        frame_buffer: vec![],
+        frame_buffer: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         timer: timer.clone(),
         layout,
         renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
@@ -1491,7 +1535,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         project_dirs,
         app_config: cli_config,
         app_config_processed: false,
-        opengl_resources: None,
+        opengl_resources: std::sync::Arc::new(std::sync::Mutex::new(None)),
         global_hotkey_hook: None,
     };
 
@@ -1500,6 +1544,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         options,
         Box::new(move |cc| {
             let context = cc.egui_ctx.clone();
+            context.set_visuals(egui::Visuals::dark());
             app.load_app_config();
             if app.app_config.global_hotkeys == Some(YesOrNo::Yes) {
                 messagebox_on_error(|| app.enable_global_hotkeys());

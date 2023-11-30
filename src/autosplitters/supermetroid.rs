@@ -39,8 +39,8 @@ lazy_static! {
         m.insert("noobBridge",                     0x9FBA );
         m.insert("morphBall",                      0x9E9F );
         m.insert("blueBrinstarETankRoom",          0x9F64 );
-        m.insert("etacoonETankRoom",               0xA011 );
-        m.insert("etacoonSuperRoom",               0xA051 );
+        m.insert("etecoonETankRoom",               0xA011 );
+        m.insert("etecoonSuperRoom",               0xA051 );
         m.insert("waterway",                       0xA0D2 );
         m.insert("alphaMissileRoom",               0xA107 );
         m.insert("hopperETankRoom",                0xA15B );
@@ -589,9 +589,9 @@ impl Settings {
         );
         // Split on picking up the Super Missile Pack in the Early Supers Room
         settings.insert_with_parent("earlySupers".to_owned(), false, "specificSupers".to_owned());
-        // Split on picking up the Super Missile Pack in the Etacoon Super Room
+        // Split on picking up the Super Missile Pack in the Etecoon Super Room
         settings.insert_with_parent(
-            "etacoonSupers".to_owned(),
+            "etecoonSupers".to_owned(),
             false,
             "specificSupers".to_owned(),
         );
@@ -639,8 +639,8 @@ impl Settings {
             false,
             "specificBombs".to_owned(),
         );
-        // Split on picking up the Power Bomb Pack in the Etacoon Room section of Green Brinstar Main Shaft
-        settings.insert_with_parent("etacoonBombs".to_owned(), false, "specificBombs".to_owned());
+        // Split on picking up the Power Bomb Pack in the Etecoon Room section of Green Brinstar Main Shaft
+        settings.insert_with_parent("etecoonBombs".to_owned(), false, "specificBombs".to_owned());
         // Split on picking up the Power Bomb Pack in the Pink Brinstar Power Bomb Room
         settings.insert_with_parent(
             "pinkBrinstarBombs".to_owned(),
@@ -737,7 +737,7 @@ impl Settings {
             false,
             "specificETanks".to_owned(),
         );
-        // Split on picking up the Energy Tank in the Etacoon Energy Tank Room
+        // Split on picking up the Energy Tank in the Etecoon Energy Tank Room
         settings.insert_with_parent(
             "etecoonsETank".to_owned(),
             false,
@@ -1006,10 +1006,16 @@ impl Settings {
         self.data.insert(name, (value, Some(parent)));
     }
 
+    #[allow(dead_code)]
+    fn contains(&self, var: &str) -> bool {
+        self.data.contains_key(var)
+    }
+
     fn get(&self, var: &str) -> bool {
-        match self.data[var] {
-            (b, None) => b,
-            (b, Some(ref p)) => b && self.get(p),
+        match self.data.get(var) {
+            None => false,
+            Some((b, None)) => *b,
+            Some((b, Some(ref p))) => *b && self.get(p),
         }
     }
 
@@ -1331,8 +1337,8 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let earlySupers = settings.get("earlySupers")
         && snes["roomID"].current == roomIDEnum["earlySupers"]
         && (snes["brinstarItems2"].old + 1) == (snes["brinstarItems2"].current);
-    let etacoonSupers = settings.get("etacoonSupers")
-        && snes["roomID"].current == roomIDEnum["etacoonSuperRoom"]
+    let etecoonSupers = (settings.get("etecoonSupers") || settings.get("etacoonSupers"))
+        && snes["roomID"].current == roomIDEnum["etecoonSuperRoom"]
         && (snes["brinstarItems3"].old + 128) == (snes["brinstarItems3"].current);
     let goldTorizoSupers = settings.get("goldTorizoSupers")
         && snes["roomID"].current == roomIDEnum["goldenTorizo"]
@@ -1360,7 +1366,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let landingSiteBombs = settings.get("landingSiteBombs")
         && snes["roomID"].current == roomIDEnum["crateriaPowerBombRoom"]
         && (snes["crateriaItems"].old + 1) == (snes["crateriaItems"].current);
-    let etacoonBombs = settings.get("etacoonBombs")
+    let etecoonBombs = (settings.get("etecoonBombs") || settings.get("etacoonBombs"))
         && snes["roomID"].current == roomIDEnum["greenBrinstarMainShaft"]
         && (snes["brinteriaItems"].old + 32) == (snes["brinteriaItems"].current);
     let pinkBrinstarBombs = settings.get("pinkBrinstarBombs")
@@ -1440,7 +1446,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         || climbSupers
         || sporeSpawnSupers
         || earlySupers
-        || etacoonSupers
+        || etecoonSupers
         || goldTorizoSupers
         || wreckedShipLeftSupers
         || wreckedShipRightSupers
@@ -1450,7 +1456,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         || firstPowerBomb
         || allPowerBombs
         || landingSiteBombs
-        || etacoonBombs
+        || etecoonBombs
         || pinkBrinstarBombs
         || blueBrinstarBombs
         || alphaBombs
@@ -1555,8 +1561,8 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let ceilingETank = settings.get("ceilingETank")
         && snes["roomID"].current == roomIDEnum["blueBrinstarETankRoom"]
         && (snes["brinstarItems3"].old + 32) == (snes["brinstarItems3"].current);
-    let etecoonsETank = settings.get("etecoonsETank")
-        && snes["roomID"].current == roomIDEnum["etacoonETankRoom"]
+    let etecoonsETank = (settings.get("etecoonsETank") || settings.get("etacoonsETank"))
+        && snes["roomID"].current == roomIDEnum["etecoonETankRoom"]
         && (snes["brinstarItems3"].old + 64) == (snes["brinstarItems3"].current);
     let waterwayETank = settings.get("waterwayETank")
         && snes["roomID"].current == roomIDEnum["waterway"]

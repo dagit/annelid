@@ -14,10 +14,10 @@ tungstenite = "0"
 livesplit-core = { git = "https://github.com/dagit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/dagit/livesplit-core" }
 
-epaint = "0.22"
-eframe = "0.22"
-egui = { version = "0.22", features = ["serde"] }
-egui_glow = "0.22"
+epaint = "0.24"
+eframe = { version = "0.24", features = ["glow"] }
+egui = { version = "0.24", features = ["serde"] }
+egui_glow = "0.24"
 
 lazy_static = "1"
 strum = "0"
@@ -36,9 +36,18 @@ memoffset = "*"
 thread-priority = "0.10.0"
 
 # Remember to test with --release
-#[profile.dev]
-#opt-level = 2
+[profile.dev]
+opt-level = 3
+debug = false
+
+[profile.release]
+# Turn off strip and turn on debug when using flamegraph
+strip = true
 #debug = true
+lto = true
+codegen-units = 1
+# Enable this to make even smaller binaries
+#panic = abort
 
 [package.metadata.bundle]
 name = "Annelid"

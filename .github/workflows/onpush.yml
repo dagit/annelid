@@ -88,7 +88,7 @@ jobs:
             is-osx: 1
           - os: ubuntu-latest
             target: annelid-x86_64.AppImage
-            artifact-path: annelid-0.1.0-x86_64.AppImage
+            artifact-path: ./target/appimage/annelid.AppImage
             is-linux: 1
           - os: windows-latest
             target: annelid-x86_64.win
@@ -116,9 +116,7 @@ jobs:
           export TARGET=aarch64-apple-darwin
           rustup target add $TARGET
       - run: cargo build --release
-      - run: cargo install --force cargo-strip
       - run: cargo install --force cargo-bundle
-      - run: cargo strip -t release
       - name: macOS bundling
         if: ${{ matrix.is-osx }}
         run: |
@@ -150,23 +148,25 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.AppImage
-          path: annelid-x86_64.AppImage/
+          path: annelid-x86_64.AppImage
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.macos
-          path: annelid-x86_64.macos/
+          path: annelid-x86_64.macos
       - uses: actions/download-artifact@v3
         with:
           name: annelid-aarch64.macos
-          path: annelid-aarch64.macos/
+          path: annelid-aarch64.macos
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.macos-11
-          path: annelid-x86_64.macos-11/
+          path: annelid-x86_64.macos-11
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.win
-          path: annelid-x86_64.win/
+          path: annelid-x86_64.win
+      - name: Display structure of downloaded files
+        run: ls -R
       - id: get_commit_id
         run: echo SHORT_COMMIT_ID=$(git rev-parse --short HEAD) >> $GITHUB_OUTPUT
         shell: bash
@@ -187,7 +187,7 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./annelid-x86_64.AppImage/annelid-0.1.0-x86_64.AppImage
+          asset_path: ./annelid-x86_64.AppImage/annelid.AppImage
           asset_name: annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
           asset_content_type: application/octet-stream
       - uses: actions/upload-release-asset@v1

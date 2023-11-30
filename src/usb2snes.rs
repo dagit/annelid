@@ -136,11 +136,11 @@ impl SyncClient {
             println!("{}", json);
         }
         let message = Message::text(json);
-        Ok(self.client.write_message(message)?)
+        Ok(self.client.send(message)?)
     }
 
     fn get_reply(&mut self) -> Result<USB2SnesResult, Box<dyn Error>> {
-        let reply = self.client.read_message()?;
+        let reply = self.client.read()?;
         let mut textreply: String = String::from("");
         match reply {
             Message::Text(value) => {
@@ -228,8 +228,7 @@ impl SyncClient {
         let mut start = 0;
         let mut stop = 1024;
         while start < data.len() {
-            self.client
-                .write_message(Message::binary(&data[start..stop]))?;
+            self.client.send(Message::binary(&data[start..stop]))?;
             start += 1024;
             stop += 1024;
             if stop > data.len() {
@@ -243,10 +242,9 @@ impl SyncClient {
         self.send_command(Command::GetFile, vec![path])?;
         let string_hex = self.get_reply()?.Results[0].to_string();
         let size = usize::from_str_radix(&string_hex, 16)?;
-        let mut data: Vec<u8> = vec![];
-        data.reserve(size);
+        let mut data: Vec<u8> = Vec::with_capacity(size);
         loop {
-            let reply = self.client.read_message()?;
+            let reply = self.client.read()?;
             match reply {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
@@ -270,10 +268,9 @@ impl SyncClient {
             Some(Space::SNES),
             vec![format!("{:x}", address), format!("{:x}", size)],
         )?;
-        let mut data: Vec<u8> = vec![];
-        data.reserve(size);
+        let mut data: Vec<u8> = Vec::with_capacity(size);
         loop {
-            let reply = self.client.read_message()?;
+            let reply = self.client.read()?;
             match reply {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
@@ -303,7 +300,7 @@ impl SyncClient {
         let mut ret: Vec<Vec<u8>> = vec![];
         data.reserve(total_size);
         loop {
-            let reply = self.client.read_message()?;
+            let reply = self.client.read()?;
             match reply {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
