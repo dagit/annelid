@@ -80,7 +80,7 @@ impl LiveSplitCoreRenderer {
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
             layout_state: None,
             show_settings_editor: false,
-            settings: settings.clone(),
+            settings,
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,

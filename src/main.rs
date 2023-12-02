@@ -85,9 +85,9 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(preference_dir)?;
 
     let mut app = LiveSplitCoreRenderer::new(
-        timer.clone(),
+        timer,
         layout,
-        settings.clone(),
+        settings,
         sync_sender,
         project_dirs,
         cli_config,
