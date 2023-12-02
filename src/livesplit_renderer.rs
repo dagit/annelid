@@ -700,7 +700,6 @@ impl eframe::App for LiveSplitCoreRenderer {
             {
                 let timer = self.timer.read().unwrap();
                 let snapshot = timer.snapshot();
-                // a local scope so the timer lock has a smaller scope
                 match &mut self.layout_state {
                     None => {
                         self.layout_state = Some(self.layout.state(&snapshot));
