@@ -733,6 +733,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit")
             .enabled(!self.show_settings_editor)
+            .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.screen_rect.width()));
                 ui.set_height(ctx.input(|i| i.screen_rect.height()));
