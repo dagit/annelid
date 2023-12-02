@@ -715,7 +715,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let szu32 = [sz.x as u32, sz.y as u32];
                 let sz = [sz.x as usize, sz.y as usize];
                 {
-                    let mut buffer = frame_buffer.lock().unwrap();
+                    let mut buffer = frame_buffer.write().unwrap();
                     buffer.resize(sz[0] * sz[1] * 4, 0);
                     self.renderer.render(
                         layout_state,
