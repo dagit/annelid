@@ -696,29 +696,37 @@ impl eframe::App for LiveSplitCoreRenderer {
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
         }
         let viewport = ctx.input(|i| i.screen_rect);
-        self.glow_canvas.update_frame_buffer(
-            viewport,
-            frame.gl().unwrap(),
-            |frame_buffer, sz, stride| {
-                {
-                    let timer = self.timer.read().unwrap();
-                    let snapshot = timer.snapshot();
-                    match &mut self.layout_state {
-                        None => {
-                            self.layout_state = Some(self.layout.state(&snapshot));
-                        }
-                        Some(layout_state) => {
-                            self.layout.update_state(layout_state, &snapshot);
-                        }
-                    };
-                }
+        self.glow_canvas.update_frame_buffer(|frame_buffer| {
+            {
+                let timer = self.timer.read().unwrap();
+                let snapshot = timer.snapshot();
+                match &mut self.layout_state {
+                    None => {
+                        self.layout_state = Some(self.layout.state(&snapshot));
+                    }
+                    Some(layout_state) => {
+                        self.layout.update_state(layout_state, &snapshot);
+                    }
+                };
+            }
+            let sz = viewport.size();
 
-                if let Some(layout_state) = &self.layout_state {
-                    self.renderer
-                        .render(layout_state, frame_buffer, sz, stride, true);
+            if let Some(layout_state) = &self.layout_state {
+                let szu32 = [sz.x as u32, sz.y as u32];
+                let sz = [sz.x as usize, sz.y as usize];
+                {
+                    let mut buffer = frame_buffer.write().unwrap();
+                    buffer.resize(sz[0] * sz[1] * 4, 0);
+                    self.renderer.render(
+                        layout_state,
+                        buffer.as_mut_slice(),
+                        szu32,
+                        sz[0] as u32,
+                        false,
+                    );
                 }
-            },
-        );
+            }
+        });
         self.glow_canvas
             .paint_layer(ctx, egui::LayerId::background(), viewport);
         //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);

@@ -8,6 +8,7 @@ use memoffset::offset_of;
 /// give you a thread safe handle to the frame buffer that you can mutate.
 pub struct GlowCanvas {
     opengl_resources: std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    frame_buffer: std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     sense: egui::Sense,
     previous_texture_size: std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
 }
@@ -21,8 +22,6 @@ struct OpenGLResources {
     vao: glow::VertexArray,
     element_array_buffer: glow::Buffer,
     texture: glow::Texture,
-    pixel_buffer: Option<[glow::NativeBuffer; 2]>,
-    buffer_idx: usize,
 }
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone, Debug)]
@@ -35,6 +34,7 @@ struct Vertex {
 impl Default for GlowCanvas {
     fn default() -> Self {
         GlowCanvas {
+            frame_buffer: std::sync::Arc::new(std::sync::RwLock::new(vec![])),
             opengl_resources: std::sync::Arc::new(std::sync::RwLock::new(None)),
             sense: egui::Sense::click(),
             previous_texture_size: std::sync::Arc::new(std::sync::RwLock::new((0, 0))),
@@ -50,97 +50,11 @@ impl GlowCanvas {
     /// The frame buffer is expected to have an RGBA value for each pixel.
     /// This means that the `frame_buffer.len()` must be 4x the dimensions
     /// of the viewport. Otherwise, drawing the canvas will panic.
-    pub fn update_frame_buffer<F>(
-        &self,
-        viewport: egui::Rect,
-        gl: &std::rc::Rc<glow::Context>,
-        update: F,
-    ) where
-        F: FnOnce(&mut [u8], [u32; 2], u32),
+    pub fn update_frame_buffer<F>(&self, update: F)
+    where
+        F: FnOnce(&std::sync::Arc<std::sync::RwLock<Vec<u8>>>),
     {
-        let sz = viewport.size();
-        let szu32 = [sz.x as u32, sz.y as u32];
-        let sz = [sz.x as usize, sz.y as usize];
-        let prev_size = *self.previous_texture_size.read().unwrap();
-        let need_to_resize = sz[0] != prev_size.0 || sz[1] != prev_size.1;
-        unsafe {
-            use glow::HasContext;
-            let mut resources_lock = self.opengl_resources.write().unwrap();
-            if let Some(resources) = resources_lock.as_mut() {
-                let buffer = resources
-                    // opengl resources needs to exist by now or we're in big trouble
-                    .pixel_buffer
-                    .get_or_insert_with(|| {
-                        let buf1 = gl.create_buffer().unwrap();
-                        debug_assert_eq!(gl.get_error(), 0);
-                        let buf2 = gl.create_buffer().unwrap();
-                        debug_assert_eq!(gl.get_error(), 0);
-                        let buffers = [buf1, buf2];
-                        for b in &buffers {
-                            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(*b));
-                            debug_assert_eq!(gl.get_error(), 0);
-                            gl.buffer_data_size(
-                                glow::PIXEL_UNPACK_BUFFER,
-                                (sz[0] * sz[1] * 4) as _,
-                                glow::STREAM_DRAW,
-                            );
-                            debug_assert_eq!(gl.get_error(), 0);
-                        }
-                        buffers
-                    });
-                debug_assert_eq!(gl.get_error(), 0);
-                resources.buffer_idx = (resources.buffer_idx + 1) % 2;
-                let next_idx = (resources.buffer_idx + 1) % 2;
-                gl.bind_texture(glow::TEXTURE_2D, Some(resources.texture));
-                debug_assert_eq!(gl.get_error(), 0);
-                gl.bind_buffer(
-                    glow::PIXEL_UNPACK_BUFFER,
-                    Some(buffer[resources.buffer_idx]),
-                );
-                debug_assert_eq!(gl.get_error(), 0);
-                // If we're not longer the same size as the last frame buffer
-                // then we need to throw it way and move on to the next frame,
-                // basically
-                if !need_to_resize {
-                    gl.tex_image_2d(
-                        glow::TEXTURE_2D,
-                        0,
-                        glow::RGBA8 as _,
-                        sz[0] as _,
-                        sz[1] as _,
-                        0,
-                        glow::RGBA,
-                        glow::UNSIGNED_BYTE,
-                        None,
-                    );
-                    debug_assert_eq!(gl.get_error(), 0);
-                }
-                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer[next_idx]));
-                debug_assert_eq!(gl.get_error(), 0);
-                gl.buffer_data_size(
-                    glow::PIXEL_UNPACK_BUFFER,
-                    (sz[0] * sz[1] * 4) as _,
-                    glow::STREAM_DRAW,
-                );
-                debug_assert_eq!(gl.get_error(), 0);
-                let perms = glow::MAP_WRITE_BIT;
-                let ptr = gl.map_buffer_range(
-                    glow::PIXEL_UNPACK_BUFFER,
-                    0,
-                    (sz[0] * sz[1] * 4) as _,
-                    perms,
-                );
-                debug_assert_eq!(gl.get_error(), 0);
-                assert_ne!(ptr, std::ptr::null_mut());
-                let slice = std::slice::from_raw_parts_mut(ptr, sz[0] * sz[1] * 4);
-                debug_assert_eq!(gl.get_error(), 0);
-                update(slice, szu32, sz[0] as _);
-                gl.unmap_buffer(glow::PIXEL_UNPACK_BUFFER);
-                debug_assert_eq!(gl.get_error(), 0);
-                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
-                debug_assert_eq!(gl.get_error(), 0);
-            }
-        }
+        update(&self.frame_buffer);
     }
 
     /// Paints immediately using the GL context. In some versions of egui, this painting will be
@@ -149,7 +63,14 @@ impl GlowCanvas {
     pub fn paint_immediate(&self, gl: &std::rc::Rc<eframe::glow::Context>, rect: egui::Rect) {
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        paint(&gl_ctx, viewport, gl, &self.previous_texture_size);
+        let frame_buffer = self.frame_buffer.clone();
+        paint(
+            &gl_ctx,
+            &frame_buffer,
+            viewport,
+            gl,
+            &self.previous_texture_size,
+        );
     }
 
     /// This uses a paint callback to draw to a chosen layer. Usually, the layer will be `LayerId::background()`.
@@ -159,11 +80,12 @@ impl GlowCanvas {
         let painter = ctx.layer_painter(layer);
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
+        let frame_buffer = self.frame_buffer.clone();
         let prev_size = self.previous_texture_size.clone();
         let callback = egui::PaintCallback {
             rect: viewport,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                paint(&gl_ctx, viewport, painter.gl(), &prev_size);
+                paint(&gl_ctx, &frame_buffer, viewport, painter.gl(), &prev_size);
             })),
         };
 
@@ -177,11 +99,12 @@ impl GlowCanvas {
         if ui.is_rect_visible(rect) {
             let viewport = rect;
             let gl_ctx = self.opengl_resources.clone();
+            let frame_buffer = self.frame_buffer.clone();
             let prev_size = self.previous_texture_size.clone();
             let callback = egui::PaintCallback {
                 rect: viewport,
                 callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                    paint(&gl_ctx, viewport, painter.gl(), &prev_size);
+                    paint(&gl_ctx, &frame_buffer, viewport, painter.gl(), &prev_size);
                 })),
             };
 
@@ -215,6 +138,7 @@ impl GlowCanvas {
 /// Safe-ish Wrapper around the low level painting primitives
 fn paint(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    frame_buffer: &std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
     previous_size: &std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
@@ -231,28 +155,18 @@ fn paint(
     };
     unsafe {
         let mut previous_size = previous_size.write().unwrap();
-        paint_lowlevel(&gl_ctx, viewport, gl);
+        let texture_resized = viewport.width() as usize != previous_size.0
+            || viewport.height() as usize != previous_size.1;
+        paint_lowlevel(&gl_ctx, frame_buffer, viewport, gl, texture_resized);
         *previous_size = (viewport.width() as usize, viewport.height() as usize);
     }
 }
 
 // Everything after this point is just the low level opengl rendering code
 
-fn gl_debug(source: u32, typ: u32, id: u32, severity: u32, message: &str) {
-    println!(
-        "source: {}, type: {}, id: {}, severity: {}: {}",
-        source, typ, id, severity, message
-    );
-}
-
 unsafe fn init_gl_resources(gl: &eframe::glow::Context) -> OpenGLResources {
     unsafe {
         use eframe::glow::HasContext;
-        debug_assert_eq!(gl.get_error(), 0);
-        //gl.enable(glow::DEBUG_OUTPUT);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.debug_message_callback(gl_debug);
-        debug_assert_eq!(gl.get_error(), 0);
         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
         debug_assert_eq!(gl.get_error(), 0);
         let source = "
@@ -371,20 +285,6 @@ void main() {
         debug_assert_eq!(gl.get_error(), 0);
         let texture = gl.create_texture().expect("create texture");
         debug_assert_eq!(gl.get_error(), 0);
-        // We need to do this at least once to set the opengl parameters
-        // on the texture so that later we can use tex_sub_image_2d.
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA8 as _,
-            0 as _,
-            0 as _,
-            0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            None,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
         OpenGLResources {
             element_array_buffer,
             program,
@@ -393,16 +293,16 @@ void main() {
             u_screen_size,
             vao,
             vbo,
-            pixel_buffer: None,
-            buffer_idx: 0,
         }
     }
 }
 
 unsafe fn paint_lowlevel(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    frame_buffer: &std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
+    texture_resized: bool,
 ) {
     let w = viewport.max.x - viewport.min.x;
     let h = viewport.max.y - viewport.min.y;
@@ -413,6 +313,7 @@ unsafe fn paint_lowlevel(
         let ctx = ctx.as_ref().unwrap();
 
         //let timer = std::time::Instant::now();
+        //let gl = frame.gl().expect("Rendering context");
         gl.use_program(Some(ctx.program));
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_vertex_array(Some(ctx.vao));
@@ -464,6 +365,34 @@ unsafe fn paint_lowlevel(
 
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         debug_assert_eq!(gl.get_error(), 0);
+        //println!("({},{})", w, h);
+        if texture_resized {
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as _,
+                w as _,
+                h as _,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                Some(frame_buffer.read().unwrap().as_slice()),
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+        } else {
+            gl.tex_sub_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                0,
+                0,
+                w as _,
+                h as _,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(frame_buffer.read().unwrap().as_slice()),
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+        }
 
         use epaint::Pos2;
         let vertices: Vec<Vertex> = vec![
