@@ -964,9 +964,9 @@ pub fn app_init(
                 let latency = Arc::new(RwLock::new((0.0, 0.0)));
                 print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
                     let mut client = crate::usb2snes::SyncClient::connect()?;
-                    client.set_name("annelid".to_owned())?;
+                    client.set_name("annelid")?;
                     println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?;
+                    let mut devices = client.list_device()?.to_vec();
                     if devices.len() != 1 {
                         if devices.is_empty() {
                             Err("No devices present")?;
