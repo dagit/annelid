@@ -244,7 +244,7 @@ lazy_static! {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
-    data: HashMap<String, (bool, Option<String>)>,
+    data: HashMap<std::sync::Arc<str>, (bool, Option<String>)>,
     #[serde(skip)]
     modified_after_creation: bool,
 }
@@ -614,13 +614,13 @@ impl Settings {
 
     fn insert(&mut self, name: &str, value: bool) {
         self.modified_after_creation = true;
-        self.data.insert(name.to_owned(), (value, None));
+        self.data.insert(name.into(), (value, None));
     }
 
     fn insert_with_parent(&mut self, name: &str, value: bool, parent: &str) {
         self.modified_after_creation = true;
         self.data
-            .insert(name.to_owned(), (value, Some(parent.to_owned())));
+            .insert(name.into(), (value, Some(parent.to_owned())));
     }
 
     #[allow(dead_code)]
@@ -641,7 +641,7 @@ impl Settings {
             None => (value, None),
             Some((_, x)) => (value, x.clone()),
         };
-        self.data.insert(var.to_owned(), val);
+        self.data.insert(std::sync::Arc::from(var), val);
     }
 
     /// The keys which have no parent defined
@@ -649,7 +649,7 @@ impl Settings {
         let mut rs = vec![];
         for (key, (_, parent)) in self.data.iter() {
             if parent.is_none() {
-                rs.push(key.to_owned());
+                rs.push(key.to_string());
             }
         }
         rs
@@ -661,7 +661,7 @@ impl Settings {
         for (k, (_, parent)) in self.data.iter() {
             if let Some(parent) = parent {
                 if key == parent {
-                    rs.push(k.to_owned())
+                    rs.push(k.to_string())
                 }
             }
         }
@@ -1640,7 +1640,7 @@ pub struct SNESSummary {
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct SNESState {
-    vars: HashMap<String, MemoryWatcher>,
+    vars: HashMap<&'static str, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
     latency_samples: VecDeque<u128>,
@@ -1666,177 +1666,51 @@ impl SNESState {
             pickedUpSporeSpawnSuper: false,
             vars: HashMap::from([
                 // Word
-                (
-                    "controller".to_owned(),
-                    MemoryWatcher::new(0x008B, Width::Word),
-                ),
-                ("roomID".to_owned(), MemoryWatcher::new(0x079B, Width::Word)),
-                (
-                    "enemyHP".to_owned(),
-                    MemoryWatcher::new(0x0F8C, Width::Word),
-                ),
-                ("shipAI".to_owned(), MemoryWatcher::new(0x0FB2, Width::Word)),
-                (
-                    "motherBrainHP".to_owned(),
-                    MemoryWatcher::new(0x0FCC, Width::Word),
-                ),
+                ("controller", MemoryWatcher::new(0x008B, Width::Word)),
+                ("roomID", MemoryWatcher::new(0x079B, Width::Word)),
+                ("enemyHP", MemoryWatcher::new(0x0F8C, Width::Word)),
+                ("shipAI", MemoryWatcher::new(0x0FB2, Width::Word)),
+                ("motherBrainHP", MemoryWatcher::new(0x0FCC, Width::Word)),
                 // Byte
-                (
-                    "mapInUse".to_owned(),
-                    MemoryWatcher::new(0x079F, Width::Byte),
-                ),
-                (
-                    "gameState".to_owned(),
-                    MemoryWatcher::new(0x0998, Width::Byte),
-                ),
-                (
-                    "unlockedEquips2".to_owned(),
-                    MemoryWatcher::new(0x09A4, Width::Byte),
-                ),
-                (
-                    "unlockedEquips".to_owned(),
-                    MemoryWatcher::new(0x09A5, Width::Byte),
-                ),
-                (
-                    "unlockedBeams".to_owned(),
-                    MemoryWatcher::new(0x09A8, Width::Byte),
-                ),
-                (
-                    "unlockedCharge".to_owned(),
-                    MemoryWatcher::new(0x09A9, Width::Byte),
-                ),
-                (
-                    "maxEnergy".to_owned(),
-                    MemoryWatcher::new(0x09C4, Width::Word),
-                ),
-                (
-                    "maxMissiles".to_owned(),
-                    MemoryWatcher::new(0x09C8, Width::Byte),
-                ),
-                (
-                    "maxSupers".to_owned(),
-                    MemoryWatcher::new(0x09CC, Width::Byte),
-                ),
-                (
-                    "maxPowerBombs".to_owned(),
-                    MemoryWatcher::new(0x09D0, Width::Byte),
-                ),
-                (
-                    "maxReserve".to_owned(),
-                    MemoryWatcher::new(0x09D4, Width::Word),
-                ),
-                (
-                    "igtFrames".to_owned(),
-                    MemoryWatcher::new(0x09DA, Width::Byte),
-                ),
-                (
-                    "igtSeconds".to_owned(),
-                    MemoryWatcher::new(0x09DC, Width::Byte),
-                ),
-                (
-                    "igtMinutes".to_owned(),
-                    MemoryWatcher::new(0x09DE, Width::Byte),
-                ),
-                (
-                    "igtHours".to_owned(),
-                    MemoryWatcher::new(0x09E0, Width::Byte),
-                ),
-                (
-                    "playerState".to_owned(),
-                    MemoryWatcher::new(0x0A28, Width::Byte),
-                ),
-                (
-                    "eventFlags".to_owned(),
-                    MemoryWatcher::new(0xD821, Width::Byte),
-                ),
-                (
-                    "crateriaBosses".to_owned(),
-                    MemoryWatcher::new(0xD828, Width::Byte),
-                ),
-                (
-                    "brinstarBosses".to_owned(),
-                    MemoryWatcher::new(0xD829, Width::Byte),
-                ),
-                (
-                    "norfairBosses".to_owned(),
-                    MemoryWatcher::new(0xD82A, Width::Byte),
-                ),
-                (
-                    "wreckedShipBosses".to_owned(),
-                    MemoryWatcher::new(0xD82B, Width::Byte),
-                ),
-                (
-                    "maridiaBosses".to_owned(),
-                    MemoryWatcher::new(0xD82C, Width::Byte),
-                ),
-                (
-                    "tourianBosses".to_owned(),
-                    MemoryWatcher::new(0xD82D, Width::Byte),
-                ),
-                (
-                    "ceresBosses".to_owned(),
-                    MemoryWatcher::new(0xD82E, Width::Byte),
-                ),
-                (
-                    "crateriaItems".to_owned(),
-                    MemoryWatcher::new(0xD870, Width::Byte),
-                ),
-                (
-                    "brinteriaItems".to_owned(),
-                    MemoryWatcher::new(0xD871, Width::Byte),
-                ),
-                (
-                    "brinstarItems2".to_owned(),
-                    MemoryWatcher::new(0xD872, Width::Byte),
-                ),
-                (
-                    "brinstarItems3".to_owned(),
-                    MemoryWatcher::new(0xD873, Width::Byte),
-                ),
-                (
-                    "brinstarItems4".to_owned(),
-                    MemoryWatcher::new(0xD874, Width::Byte),
-                ),
-                (
-                    "brinstarItems5".to_owned(),
-                    MemoryWatcher::new(0xD875, Width::Byte),
-                ),
-                (
-                    "norfairItems1".to_owned(),
-                    MemoryWatcher::new(0xD876, Width::Byte),
-                ),
-                (
-                    "norfairItems2".to_owned(),
-                    MemoryWatcher::new(0xD877, Width::Byte),
-                ),
-                (
-                    "norfairItems3".to_owned(),
-                    MemoryWatcher::new(0xD878, Width::Byte),
-                ),
-                (
-                    "norfairItems4".to_owned(),
-                    MemoryWatcher::new(0xD879, Width::Byte),
-                ),
-                (
-                    "norfairItems5".to_owned(),
-                    MemoryWatcher::new(0xD87A, Width::Byte),
-                ),
-                (
-                    "wreckedShipItems".to_owned(),
-                    MemoryWatcher::new(0xD880, Width::Byte),
-                ),
-                (
-                    "maridiaItems1".to_owned(),
-                    MemoryWatcher::new(0xD881, Width::Byte),
-                ),
-                (
-                    "maridiaItems2".to_owned(),
-                    MemoryWatcher::new(0xD882, Width::Byte),
-                ),
-                (
-                    "maridiaItems3".to_owned(),
-                    MemoryWatcher::new(0xD883, Width::Byte),
-                ),
+                ("mapInUse", MemoryWatcher::new(0x079F, Width::Byte)),
+                ("gameState", MemoryWatcher::new(0x0998, Width::Byte)),
+                ("unlockedEquips2", MemoryWatcher::new(0x09A4, Width::Byte)),
+                ("unlockedEquips", MemoryWatcher::new(0x09A5, Width::Byte)),
+                ("unlockedBeams", MemoryWatcher::new(0x09A8, Width::Byte)),
+                ("unlockedCharge", MemoryWatcher::new(0x09A9, Width::Byte)),
+                ("maxEnergy", MemoryWatcher::new(0x09C4, Width::Word)),
+                ("maxMissiles", MemoryWatcher::new(0x09C8, Width::Byte)),
+                ("maxSupers", MemoryWatcher::new(0x09CC, Width::Byte)),
+                ("maxPowerBombs", MemoryWatcher::new(0x09D0, Width::Byte)),
+                ("maxReserve", MemoryWatcher::new(0x09D4, Width::Word)),
+                ("igtFrames", MemoryWatcher::new(0x09DA, Width::Byte)),
+                ("igtSeconds", MemoryWatcher::new(0x09DC, Width::Byte)),
+                ("igtMinutes", MemoryWatcher::new(0x09DE, Width::Byte)),
+                ("igtHours", MemoryWatcher::new(0x09E0, Width::Byte)),
+                ("playerState", MemoryWatcher::new(0x0A28, Width::Byte)),
+                ("eventFlags", MemoryWatcher::new(0xD821, Width::Byte)),
+                ("crateriaBosses", MemoryWatcher::new(0xD828, Width::Byte)),
+                ("brinstarBosses", MemoryWatcher::new(0xD829, Width::Byte)),
+                ("norfairBosses", MemoryWatcher::new(0xD82A, Width::Byte)),
+                ("wreckedShipBosses", MemoryWatcher::new(0xD82B, Width::Byte)),
+                ("maridiaBosses", MemoryWatcher::new(0xD82C, Width::Byte)),
+                ("tourianBosses", MemoryWatcher::new(0xD82D, Width::Byte)),
+                ("ceresBosses", MemoryWatcher::new(0xD82E, Width::Byte)),
+                ("crateriaItems", MemoryWatcher::new(0xD870, Width::Byte)),
+                ("brinteriaItems", MemoryWatcher::new(0xD871, Width::Byte)),
+                ("brinstarItems2", MemoryWatcher::new(0xD872, Width::Byte)),
+                ("brinstarItems3", MemoryWatcher::new(0xD873, Width::Byte)),
+                ("brinstarItems4", MemoryWatcher::new(0xD874, Width::Byte)),
+                ("brinstarItems5", MemoryWatcher::new(0xD875, Width::Byte)),
+                ("norfairItems1", MemoryWatcher::new(0xD876, Width::Byte)),
+                ("norfairItems2", MemoryWatcher::new(0xD877, Width::Byte)),
+                ("norfairItems3", MemoryWatcher::new(0xD878, Width::Byte)),
+                ("norfairItems4", MemoryWatcher::new(0xD879, Width::Byte)),
+                ("norfairItems5", MemoryWatcher::new(0xD87A, Width::Byte)),
+                ("wreckedShipItems", MemoryWatcher::new(0xD880, Width::Byte)),
+                ("maridiaItems1", MemoryWatcher::new(0xD881, Width::Byte)),
+                ("maridiaItems2", MemoryWatcher::new(0xD882, Width::Byte)),
+                ("maridiaItems3", MemoryWatcher::new(0xD883, Width::Byte)),
             ]),
         }
     }
