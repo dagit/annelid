@@ -244,7 +244,7 @@ lazy_static! {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Settings {
-    data: HashMap<String, (bool, Option<String>)>,
+    data: HashMap<std::sync::Arc<str>, (bool, Option<String>)>,
     #[serde(skip)]
     modified_after_creation: bool,
 }
@@ -256,754 +256,371 @@ impl Settings {
             modified_after_creation: false,
         };
         // Split on Missiles, Super Missiles, and Power Bombs
-        settings.insert("ammoPickups".to_owned(), true);
+        settings.insert("ammoPickups", true);
         // Split on the first Missile pickup
-        settings.insert_with_parent("firstMissile".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("firstMissile", false, "ammoPickups");
         // Split on each Missile upgrade
-        settings.insert_with_parent("allMissiles".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("allMissiles", false, "ammoPickups");
         // Split on specific Missile Pack locations
-        settings.insert_with_parent(
-            "specificMissiles".to_owned(),
-            false,
-            "ammoPickups".to_owned(),
-        );
+        settings.insert_with_parent("specificMissiles", false, "ammoPickups");
         // Split on Crateria Missile Pack locations
-        settings.insert_with_parent(
-            "crateriaMissiles".to_owned(),
-            false,
-            "specificMissiles".to_owned(),
-        );
+        settings.insert_with_parent("crateriaMissiles", false, "specificMissiles");
         // Split on picking up the Missile Pack located at the bottom left of the West Ocean
-        settings.insert_with_parent(
-            "oceanBottomMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("oceanBottomMissiles", false, "crateriaMissiles");
         // Split on picking up the Missile Pack located in the ceiling tile in West Ocean
-        settings.insert_with_parent(
-            "oceanTopMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("oceanTopMissiles", false, "crateriaMissiles");
         // Split on picking up the Missile Pack located in the Morphball maze section of West Ocean
-        settings.insert_with_parent(
-            "oceanMiddleMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("oceanMiddleMissiles", false, "crateriaMissiles");
         // Split on picking up the Missile Pack in The Moat, also known as The Lake
-        settings.insert_with_parent(
-            "moatMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("moatMissiles", false, "crateriaMissiles");
         // Split on picking up the Missile Pack in the Pit Room
-        settings.insert_with_parent(
-            "oldTourianMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("oldTourianMissiles", false, "crateriaMissiles");
         // Split on picking up the right side Missile Pack at the end of Gauntlet(Green Pirates Shaft)
-        settings.insert_with_parent(
-            "gauntletRightMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("gauntletRightMissiles", false, "crateriaMissiles");
         // Split on picking up the left side Missile Pack at the end of Gauntlet(Green Pirates Shaft)
-        settings.insert_with_parent(
-            "gauntletLeftMissiles".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("gauntletLeftMissiles", false, "crateriaMissiles");
         // Split on picking up the Missile Pack located in The Final Missile
-        settings.insert_with_parent(
-            "dentalPlan".to_owned(),
-            false,
-            "crateriaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("dentalPlan", false, "crateriaMissiles");
         // Split on Brinstar Missile Pack locations
-        settings.insert_with_parent(
-            "brinstarMissiles".to_owned(),
-            false,
-            "specificMissiles".to_owned(),
-        );
+        settings.insert_with_parent("brinstarMissiles", false, "specificMissiles");
         // Split on picking up the Missile Pack located below the crumble bridge in the Early Supers Room
-        settings.insert_with_parent(
-            "earlySuperBridgeMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("earlySuperBridgeMissiles", false, "brinstarMissiles");
         // Split on picking up the first Missile Pack behind the Brinstar Reserve Tank
-        settings.insert_with_parent(
-            "greenBrinstarReserveMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("greenBrinstarReserveMissiles", false, "brinstarMissiles");
         // Split on picking up the second Missile Pack behind the Brinstar Reserve Tank Room
         settings.insert_with_parent(
-            "greenBrinstarExtraReserveMissiles".to_owned(),
+            "greenBrinstarExtraReserveMissiles",
             false,
-            "brinstarMissiles".to_owned(),
+            "brinstarMissiles",
         );
         // Split on picking up the Missile Pack located left of center in Big Pink
-        settings.insert_with_parent(
-            "bigPinkTopMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("bigPinkTopMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack located at the bottom left of Big Pink
-        settings.insert_with_parent(
-            "chargeMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("chargeMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack in Green Hill Zone
-        settings.insert_with_parent(
-            "greenHillsMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("greenHillsMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack in the Blue Brinstar Energy Tank Room
-        settings.insert_with_parent(
-            "blueBrinstarETankMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("blueBrinstarETankMissiles", false, "brinstarMissiles");
         // Split on picking up the first Missile Pack of the game(First Missile Room)
-        settings.insert_with_parent(
-            "alphaMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("alphaMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack located on the pedestal in Billy Mays' Room
-        settings.insert_with_parent(
-            "billyMaysMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("billyMaysMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack located in the floor of Billy Mays' Room
-        settings.insert_with_parent(
-            "butWaitTheresMoreMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("butWaitTheresMoreMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack in the Alpha Power Bombs Room
-        settings.insert_with_parent(
-            "redBrinstarMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("redBrinstarMissiles", false, "brinstarMissiles");
         // Split on picking up the Missile Pack in the Warehouse Kihunter Room
-        settings.insert_with_parent(
-            "warehouseMissiles".to_owned(),
-            false,
-            "brinstarMissiles".to_owned(),
-        );
+        settings.insert_with_parent("warehouseMissiles", false, "brinstarMissiles");
         // Split on Norfair Missile Pack locations
-        settings.insert_with_parent(
-            "norfairMissiles".to_owned(),
-            false,
-            "specificMissiles".to_owned(),
-        );
+        settings.insert_with_parent("norfairMissiles", false, "specificMissiles");
         // Split on picking up the Missile Pack in Cathedral
-        settings.insert_with_parent(
-            "cathedralMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("cathedralMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in Crumble Shaft
-        settings.insert_with_parent(
-            "crumbleShaftMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("crumbleShaftMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in Crocomire Escape
-        settings.insert_with_parent(
-            "crocomireEscapeMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("crocomireEscapeMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Hi Jump Energy Tank Room
-        settings.insert_with_parent(
-            "hiJumpMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("hiJumpMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Post Crocomire Missile Room, also known as Cosine Room
-        settings.insert_with_parent(
-            "postCrocomireMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("postCrocomireMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Post Crocomire Jump Room
-        settings.insert_with_parent(
-            "grappleMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("grappleMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Norfair Reserve Tank Room
-        settings.insert_with_parent(
-            "norfairReserveMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("norfairReserveMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Green Bubbles Missile Room
-        settings.insert_with_parent(
-            "greenBubblesMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("greenBubblesMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in Bubble Mountain
-        settings.insert_with_parent(
-            "bubbleMountainMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("bubbleMountainMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in Speed Booster Hall
-        settings.insert_with_parent(
-            "speedBoostMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("speedBoostMissiles", false, "norfairMissiles");
         // Split on picking up the Wave Missile Pack in Double Chamber
-        settings.insert_with_parent(
-            "waveMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("waveMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Golden Torizo's Room
-        settings.insert_with_parent(
-            "goldTorizoMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("goldTorizoMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Mickey Mouse Room
-        settings.insert_with_parent(
-            "mickeyMouseMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("mickeyMouseMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the Lower Norfair Springball Maze Room
-        settings.insert_with_parent(
-            "lowerNorfairSpringMazeMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("lowerNorfairSpringMazeMissiles", false, "norfairMissiles");
         // Split on picking up the Missile Pack in the The Musketeers' Room
-        settings.insert_with_parent(
-            "threeMusketeersMissiles".to_owned(),
-            false,
-            "norfairMissiles".to_owned(),
-        );
+        settings.insert_with_parent("threeMusketeersMissiles", false, "norfairMissiles");
         // Split on Wrecked Ship Missile Pack locations
-        settings.insert_with_parent(
-            "wreckedShipMissiles".to_owned(),
-            false,
-            "specificMissiles".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipMissiles", false, "specificMissiles");
         // Split on picking up the Missile Pack in Wrecked Ship Main Shaft
-        settings.insert_with_parent(
-            "wreckedShipMainShaftMissiles".to_owned(),
-            false,
-            "wreckedShipMissiles".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipMainShaftMissiles", false, "wreckedShipMissiles");
         // Split on picking up the Missile Pack in Bowling Alley
-        settings.insert_with_parent(
-            "bowlingMissiles".to_owned(),
-            false,
-            "wreckedShipMissiles".to_owned(),
-        );
+        settings.insert_with_parent("bowlingMissiles", false, "wreckedShipMissiles");
         // Split on picking up the Missile Pack in the Wrecked Ship East Missile Room
-        settings.insert_with_parent(
-            "atticMissiles".to_owned(),
-            false,
-            "wreckedShipMissiles".to_owned(),
-        );
+        settings.insert_with_parent("atticMissiles", false, "wreckedShipMissiles");
         // Split on Maridia Missile Pack locations
-        settings.insert_with_parent(
-            "maridiaMissiles".to_owned(),
-            false,
-            "specificMissiles".to_owned(),
-        );
+        settings.insert_with_parent("maridiaMissiles", false, "specificMissiles");
         // Split on picking up the Missile Pack in Main Street
-        settings.insert_with_parent(
-            "mainStreetMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("mainStreetMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in the Mama Turtle Room
-        settings.insert_with_parent(
-            "mamaTurtleMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("mamaTurtleMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in Watering Hole
-        settings.insert_with_parent(
-            "wateringHoleMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("wateringHoleMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in the Pseudo Plasma Spark Room
-        settings.insert_with_parent(
-            "beachMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("beachMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in West Sand Hole
-        settings.insert_with_parent(
-            "leftSandPitMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("leftSandPitMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in East Sand Hole
-        settings.insert_with_parent(
-            "rightSandPitMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("rightSandPitMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in Aqueduct
-        settings.insert_with_parent(
-            "aqueductMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("aqueductMissiles", false, "maridiaMissiles");
         // Split on picking up the Missile Pack in The Precious Room
-        settings.insert_with_parent(
-            "preDraygonMissiles".to_owned(),
-            false,
-            "maridiaMissiles".to_owned(),
-        );
+        settings.insert_with_parent("preDraygonMissiles", false, "maridiaMissiles");
         // Split on the first Super Missile pickup
-        settings.insert_with_parent("firstSuper".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("firstSuper", false, "ammoPickups");
         // Split on each Super Missile upgrade
-        settings.insert_with_parent("allSupers".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("allSupers", false, "ammoPickups");
         // Split on specific Super Missile Pack locations
-        settings.insert_with_parent("specificSupers".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("specificSupers", false, "ammoPickups");
         // Split on picking up the Super Missile Pack in the Crateria Super Room
-        settings.insert_with_parent("climbSupers".to_owned(), false, "specificSupers".to_owned());
+        settings.insert_with_parent("climbSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Spore Spawn Super Room (NOTE: SSTRA splits when the dialogue box disappears, not on touch. Use Spore Spawn RTA Finish for SSTRA runs.)
-        settings.insert_with_parent(
-            "sporeSpawnSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("sporeSpawnSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Early Supers Room
-        settings.insert_with_parent("earlySupers".to_owned(), false, "specificSupers".to_owned());
+        settings.insert_with_parent("earlySupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Etecoon Super Room
-        settings.insert_with_parent(
-            "etecoonSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("etecoonSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Golden Torizo's Room
-        settings.insert_with_parent(
-            "goldTorizoSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("goldTorizoSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Wrecked Ship West Super Room
-        settings.insert_with_parent(
-            "wreckedShipLeftSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipLeftSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in the Wrecked Ship East Super Room
-        settings.insert_with_parent(
-            "wreckedShipRightSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipRightSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in Main Street
-        settings.insert_with_parent("crabSupers".to_owned(), false, "specificSupers".to_owned());
+        settings.insert_with_parent("crabSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in Watering Hole
-        settings.insert_with_parent(
-            "wateringHoleSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("wateringHoleSupers", false, "specificSupers");
         // Split on picking up the Super Missile Pack in Aqueduct
-        settings.insert_with_parent(
-            "aqueductSupers".to_owned(),
-            false,
-            "specificSupers".to_owned(),
-        );
+        settings.insert_with_parent("aqueductSupers", false, "specificSupers");
         // Split on the first Power Bomb pickup
-        settings.insert_with_parent("firstPowerBomb".to_owned(), true, "ammoPickups".to_owned());
+        settings.insert_with_parent("firstPowerBomb", true, "ammoPickups");
         // Split on each Power Bomb upgrade
-        settings.insert_with_parent("allPowerBombs".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("allPowerBombs", false, "ammoPickups");
         // Split on specific Power Bomb Pack locations
-        settings.insert_with_parent("specificBombs".to_owned(), false, "ammoPickups".to_owned());
+        settings.insert_with_parent("specificBombs", false, "ammoPickups");
         // Split on picking up the Power Bomb Pack in the Crateria Power Bomb Room
-        settings.insert_with_parent(
-            "landingSiteBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("landingSiteBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Etecoon Room section of Green Brinstar Main Shaft
-        settings.insert_with_parent("etecoonBombs".to_owned(), false, "specificBombs".to_owned());
+        settings.insert_with_parent("etecoonBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Pink Brinstar Power Bomb Room
-        settings.insert_with_parent(
-            "pinkBrinstarBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("pinkBrinstarBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Morph Ball Room
-        settings.insert_with_parent(
-            "blueBrinstarBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("blueBrinstarBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Alpha Power Bomb Room
-        settings.insert_with_parent("alphaBombs".to_owned(), false, "specificBombs".to_owned());
+        settings.insert_with_parent("alphaBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Beta Power Bomb Room
-        settings.insert_with_parent("betaBombs".to_owned(), false, "specificBombs".to_owned());
+        settings.insert_with_parent("betaBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Post Crocomire Power Bomb Room
-        settings.insert_with_parent(
-            "crocomireBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("crocomireBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in the Lower Norfair Escape Power Bomb Room
-        settings.insert_with_parent(
-            "lowerNorfairEscapeBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("lowerNorfairEscapeBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in Wasteland
-        settings.insert_with_parent("shameBombs".to_owned(), false, "specificBombs".to_owned());
+        settings.insert_with_parent("shameBombs", false, "specificBombs");
         // Split on picking up the Power Bomb Pack in East Sand Hall
-        settings.insert_with_parent(
-            "rightSandPitBombs".to_owned(),
-            false,
-            "specificBombs".to_owned(),
-        );
+        settings.insert_with_parent("rightSandPitBombs", false, "specificBombs");
 
         // Split on Varia and Gravity pickups
-        settings.insert("suitUpgrades".to_owned(), true);
+        settings.insert("suitUpgrades", true);
         // Split on picking up the Varia Suit
-        settings.insert_with_parent("variaSuit".to_owned(), true, "suitUpgrades".to_owned());
+        settings.insert_with_parent("variaSuit", true, "suitUpgrades");
         // Split on picking up the Gravity Suit
-        settings.insert_with_parent("gravSuit".to_owned(), true, "suitUpgrades".to_owned());
+        settings.insert_with_parent("gravSuit", true, "suitUpgrades");
 
         // Split on beam upgrades
-        settings.insert("beamUpgrades".to_owned(), true);
+        settings.insert("beamUpgrades", true);
         // Split on picking up the Charge Beam
-        settings.insert_with_parent("chargeBeam".to_owned(), false, "beamUpgrades".to_owned());
+        settings.insert_with_parent("chargeBeam", false, "beamUpgrades");
         // Split on picking up the Spazer
-        settings.insert_with_parent("spazer".to_owned(), false, "beamUpgrades".to_owned());
+        settings.insert_with_parent("spazer", false, "beamUpgrades");
         // Split on picking up the Wave Beam
-        settings.insert_with_parent("wave".to_owned(), true, "beamUpgrades".to_owned());
+        settings.insert_with_parent("wave", true, "beamUpgrades");
         // Split on picking up the Ice Beam
-        settings.insert_with_parent("ice".to_owned(), false, "beamUpgrades".to_owned());
+        settings.insert_with_parent("ice", false, "beamUpgrades");
         // Split on picking up the Plasma Beam
-        settings.insert_with_parent("plasma".to_owned(), false, "beamUpgrades".to_owned());
+        settings.insert_with_parent("plasma", false, "beamUpgrades");
 
         // Split on boot upgrades
-        settings.insert("bootUpgrades".to_owned(), false);
+        settings.insert("bootUpgrades", false);
         // Split on picking up the Hi-Jump Boots
-        settings.insert_with_parent("hiJump".to_owned(), false, "bootUpgrades".to_owned());
+        settings.insert_with_parent("hiJump", false, "bootUpgrades");
         // Split on picking up Space Jump
-        settings.insert_with_parent("spaceJump".to_owned(), false, "bootUpgrades".to_owned());
+        settings.insert_with_parent("spaceJump", false, "bootUpgrades");
         // Split on picking up the Speed Booster
-        settings.insert_with_parent("speedBooster".to_owned(), false, "bootUpgrades".to_owned());
+        settings.insert_with_parent("speedBooster", false, "bootUpgrades");
 
         // Split on Energy Tanks and Reserve Tanks
-        settings.insert("energyUpgrades".to_owned(), false);
+        settings.insert("energyUpgrades", false);
         // Split on picking up the first Energy Tank
-        settings.insert_with_parent("firstETank".to_owned(), false, "energyUpgrades".to_owned());
+        settings.insert_with_parent("firstETank", false, "energyUpgrades");
         // Split on picking up each Energy Tank
-        settings.insert_with_parent("allETanks".to_owned(), false, "energyUpgrades".to_owned());
+        settings.insert_with_parent("allETanks", false, "energyUpgrades");
         // Split on specific Energy Tank locations
-        settings.insert_with_parent(
-            "specificETanks".to_owned(),
-            false,
-            "energyUpgrades".to_owned(),
-        );
+        settings.insert_with_parent("specificETanks", false, "energyUpgrades");
         // Split on picking up the Energy Tank in the Gauntlet Energy Tank Room
-        settings.insert_with_parent(
-            "gauntletETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("gauntletETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Terminator Room
-        settings.insert_with_parent(
-            "terminatorETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("terminatorETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Blue Brinstar Energy Tank Room
-        settings.insert_with_parent(
-            "ceilingETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("ceilingETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Etecoon Energy Tank Room
-        settings.insert_with_parent(
-            "etecoonsETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("etecoonsETank", false, "specificETanks");
         // Split on picking up the Energy Tank in Waterway
-        settings.insert_with_parent(
-            "waterwayETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("waterwayETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Hopper Energy Tank Room
-        settings.insert_with_parent(
-            "waveGateETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("waveGateETank", false, "specificETanks");
         // Split on picking up the Kraid Energy Tank in the Warehouse Energy Tank Room
-        settings.insert_with_parent("kraidETank".to_owned(), false, "specificETanks".to_owned());
+        settings.insert_with_parent("kraidETank", false, "specificETanks");
         // Split on picking up the Energy Tank in Crocomire's Room
-        settings.insert_with_parent(
-            "crocomireETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("crocomireETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Hi Jump Energy Tank Room
-        settings.insert_with_parent("hiJumpETank".to_owned(), false, "specificETanks".to_owned());
+        settings.insert_with_parent("hiJumpETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Ridley Tank Room
-        settings.insert_with_parent("ridleyETank".to_owned(), false, "specificETanks".to_owned());
+        settings.insert_with_parent("ridleyETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Lower Norfair Fireflea Room
-        settings.insert_with_parent(
-            "firefleaETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("firefleaETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Wrecked Ship Energy Tank Room
-        settings.insert_with_parent(
-            "wreckedShipETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Mama Turtle Room
-        settings.insert_with_parent("tatoriETank".to_owned(), false, "specificETanks".to_owned());
+        settings.insert_with_parent("tatoriETank", false, "specificETanks");
         // Split on picking up the Energy Tank in the Botwoon Energy Tank Room
-        settings.insert_with_parent(
-            "botwoonETank".to_owned(),
-            false,
-            "specificETanks".to_owned(),
-        );
+        settings.insert_with_parent("botwoonETank", false, "specificETanks");
         // Split on picking up each Reserve Tank
-        settings.insert_with_parent(
-            "reserveTanks".to_owned(),
-            false,
-            "energyUpgrades".to_owned(),
-        );
+        settings.insert_with_parent("reserveTanks", false, "energyUpgrades");
         // Split on specific Reserve Tank locations
-        settings.insert_with_parent(
-            "specificRTanks".to_owned(),
-            false,
-            "energyUpgrades".to_owned(),
-        );
+        settings.insert_with_parent("specificRTanks", false, "energyUpgrades");
         // Split on picking up the Reserve Tank in the Brinstar Reserve Tank Room
-        settings.insert_with_parent(
-            "brinstarReserve".to_owned(),
-            false,
-            "specificRTanks".to_owned(),
-        );
+        settings.insert_with_parent("brinstarReserve", false, "specificRTanks");
         // Split on picking up the Reserve Tank in the Norfair Reserve Tank Room
-        settings.insert_with_parent(
-            "norfairReserve".to_owned(),
-            false,
-            "specificRTanks".to_owned(),
-        );
+        settings.insert_with_parent("norfairReserve", false, "specificRTanks");
         // Split on picking up the Reserve Tank in Bowling Alley
-        settings.insert_with_parent(
-            "wreckedShipReserve".to_owned(),
-            false,
-            "specificRTanks".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipReserve", false, "specificRTanks");
         // Split on picking up the Reserve Tank in West Sand Hole
-        settings.insert_with_parent(
-            "maridiaReserve".to_owned(),
-            false,
-            "specificRTanks".to_owned(),
-        );
+        settings.insert_with_parent("maridiaReserve", false, "specificRTanks");
 
         // Split on the miscellaneous upgrades
-        settings.insert("miscUpgrades".to_owned(), false);
+        settings.insert("miscUpgrades", false);
         // Split on picking up the Morphing Ball
-        settings.insert_with_parent("morphBall".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("morphBall", false, "miscUpgrades");
         // Split on picking up the Bomb
-        settings.insert_with_parent("bomb".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("bomb", false, "miscUpgrades");
         // Split on picking up the Spring Ball
-        settings.insert_with_parent("springBall".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("springBall", false, "miscUpgrades");
         // Split on picking up the Screw Attack
-        settings.insert_with_parent("screwAttack".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("screwAttack", false, "miscUpgrades");
         // Split on picking up the Grapple Beam
-        settings.insert_with_parent("grapple".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("grapple", false, "miscUpgrades");
         // Split on picking up the X-Ray Scope
-        settings.insert_with_parent("xray".to_owned(), false, "miscUpgrades".to_owned());
+        settings.insert_with_parent("xray", false, "miscUpgrades");
 
         // Split on transitions between areas
-        settings.insert("areaTransitions".to_owned(), true);
+        settings.insert("areaTransitions", true);
         // Split on entering miniboss rooms (except Bomb Torizo)
-        settings.insert_with_parent(
-            "miniBossRooms".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("miniBossRooms", false, "areaTransitions");
         // Split on entering major boss rooms
-        settings.insert_with_parent("bossRooms".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("bossRooms", false, "areaTransitions");
         // Split on elevator transitions between areas (except Statue Room to Tourian)
-        settings.insert_with_parent(
-            "elevatorTransitions".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("elevatorTransitions", false, "areaTransitions");
         // Split on leaving Ceres Station
-        settings.insert_with_parent(
-            "ceresEscape".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("ceresEscape", false, "areaTransitions");
         // Split on entering the Wrecked Ship Entrance from the lower door of West Ocean
-        settings.insert_with_parent(
-            "wreckedShipEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("wreckedShipEntrance", false, "areaTransitions");
         // Split on entering Red Tower from Noob Bridge
-        settings.insert_with_parent(
-            "redTowerMiddleEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("redTowerMiddleEntrance", false, "areaTransitions");
         // Split on entering Red Tower from Skree Boost room
-        settings.insert_with_parent(
-            "redTowerBottomEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("redTowerBottomEntrance", false, "areaTransitions");
         // Split on entering Kraid's Lair
-        settings.insert_with_parent("kraidsLair".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("kraidsLair", false, "areaTransitions");
         // Split on entering Rising Tide from Cathedral
-        settings.insert_with_parent(
-            "risingTideEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("risingTideEntrance", false, "areaTransitions");
         // Split on exiting Attic
-        settings.insert_with_parent("atticExit".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("atticExit", false, "areaTransitions");
         // Split on blowing up the tube to enter Maridia
-        settings.insert_with_parent("tubeBroken".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("tubeBroken", false, "areaTransitions");
         // Split on exiting West Cacattack Alley
-        settings.insert_with_parent("cacExit".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("cacExit", false, "areaTransitions");
         // Split on entering Toilet Bowl from either direction
-        settings.insert_with_parent("toilet".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("toilet", false, "areaTransitions");
         // Split on entering Kronic Boost room
-        settings.insert_with_parent(
-            "kronicBoost".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("kronicBoost", false, "areaTransitions");
         // Split on the elevator down to Lower Norfair
-        settings.insert_with_parent(
-            "lowerNorfairEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("lowerNorfairEntrance", false, "areaTransitions");
         // Split on entering Worst Room in the Game
-        settings.insert_with_parent("writg".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("writg", false, "areaTransitions");
         // Split on entering Red Kihunter Shaft from either Amphitheatre or Wastelands (NOTE: will split twice)
-        settings.insert_with_parent("redKiShaft".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("redKiShaft", false, "areaTransitions");
         // Split on entering Metal Pirates Room from Wasteland
-        settings.insert_with_parent(
-            "metalPirates".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("metalPirates", false, "areaTransitions");
         // Split on entering Lower Norfair Springball Maze Room
-        settings.insert_with_parent(
-            "lowerNorfairSpringMaze".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("lowerNorfairSpringMaze", false, "areaTransitions");
         // Split on moving from the Three Musketeers' Room to the Single Chamber
-        settings.insert_with_parent(
-            "lowerNorfairExit".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("lowerNorfairExit", false, "areaTransitions");
         // Split on entering the Statues Room with all four major bosses defeated
-        settings.insert_with_parent("goldenFour".to_owned(), true, "areaTransitions".to_owned());
+        settings.insert_with_parent("goldenFour", true, "areaTransitions");
         // Split on the elevator down to Tourian
-        settings.insert_with_parent(
-            "tourianEntrance".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("tourianEntrance", false, "areaTransitions");
         // Split on exiting each of the Metroid rooms in Tourian
-        settings.insert_with_parent("metroids".to_owned(), false, "areaTransitions".to_owned());
+        settings.insert_with_parent("metroids", false, "areaTransitions");
         // Split on moving from the Dust Torizo Room to the Big Boy Room
-        settings.insert_with_parent(
-            "babyMetroidRoom".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("babyMetroidRoom", false, "areaTransitions");
         // Split on moving from Tourian Escape Room 4 to The Climb
-        settings.insert_with_parent(
-            "escapeClimb".to_owned(),
-            false,
-            "areaTransitions".to_owned(),
-        );
+        settings.insert_with_parent("escapeClimb", false, "areaTransitions");
 
         // Split on defeating minibosses
-        settings.insert("miniBosses".to_owned(), false);
+        settings.insert("miniBosses", false);
         // Split on starting the Ceres Escape
-        settings.insert_with_parent("ceresRidley".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("ceresRidley", false, "miniBosses");
         // Split on Bomb Torizo's drops appearing
-        settings.insert_with_parent("bombTorizo".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("bombTorizo", false, "miniBosses");
         // Split on the last hit to Spore Spawn
-        settings.insert_with_parent("sporeSpawn".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("sporeSpawn", false, "miniBosses");
         // Split on Crocomire's drops appearing
-        settings.insert_with_parent("crocomire".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("crocomire", false, "miniBosses");
         // Split on Botwoon's vertical column being fully destroyed
-        settings.insert_with_parent("botwoon".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("botwoon", false, "miniBosses");
         // Split on Golden Torizo's drops appearing
-        settings.insert_with_parent("goldenTorizo".to_owned(), false, "miniBosses".to_owned());
+        settings.insert_with_parent("goldenTorizo", false, "miniBosses");
 
         // Split on defeating major bosses
-        settings.insert("bosses".to_owned(), true);
+        settings.insert("bosses", true);
         // Split shortly after Kraid's drops appear
-        settings.insert_with_parent("kraid".to_owned(), false, "bosses".to_owned());
+        settings.insert_with_parent("kraid", false, "bosses");
         // Split on Phantoon's drops appearing
-        settings.insert_with_parent("phantoon".to_owned(), false, "bosses".to_owned());
+        settings.insert_with_parent("phantoon", false, "bosses");
         // Split on Draygon's drops appearing
-        settings.insert_with_parent("draygon".to_owned(), false, "bosses".to_owned());
+        settings.insert_with_parent("draygon", false, "bosses");
         // Split on Ridley's drops appearing
-        settings.insert_with_parent("ridley".to_owned(), true, "bosses".to_owned());
+        settings.insert_with_parent("ridley", true, "bosses");
         // Split on Mother Brain's head hitting the ground at the end of the first phase
-        settings.insert_with_parent("mb1".to_owned(), false, "bosses".to_owned());
+        settings.insert_with_parent("mb1", false, "bosses");
         // Split on the Baby Metroid detaching from Mother Brain's head
-        settings.insert_with_parent("mb2".to_owned(), true, "bosses".to_owned());
+        settings.insert_with_parent("mb2", true, "bosses");
         // Split on the start of the Zebes Escape
-        settings.insert_with_parent("mb3".to_owned(), false, "bosses".to_owned());
+        settings.insert_with_parent("mb3", false, "bosses");
 
         // Split on facing forward at the end of Zebes Escape
-        settings.insert("rtaFinish".to_owned(), true);
+        settings.insert("rtaFinish", true);
         // Split on In-Game Time finalizing, when the end cutscene starts
-        settings.insert("igtFinish".to_owned(), false);
+        settings.insert("igtFinish", false);
         // Split on the end of a Spore Spawn RTA run, when the text box clears after collecting the Super Missiles
-        settings.insert("sporeSpawnRTAFinish".to_owned(), false);
+        settings.insert("sporeSpawnRTAFinish", false);
         // Split on the end of a 100 Missile RTA run, when the text box clears after collecting the hundredth missile
-        settings.insert("hundredMissileRTAFinish".to_owned(), false);
+        settings.insert("hundredMissileRTAFinish", false);
         settings.modified_after_creation = false;
         settings
     }
 
-    fn insert(&mut self, name: String, value: bool) {
+    fn insert(&mut self, name: &str, value: bool) {
         self.modified_after_creation = true;
-        self.data.insert(name, (value, None));
+        self.data.insert(name.into(), (value, None));
     }
 
-    fn insert_with_parent(&mut self, name: String, value: bool, parent: String) {
+    fn insert_with_parent(&mut self, name: &str, value: bool, parent: &str) {
         self.modified_after_creation = true;
-        self.data.insert(name, (value, Some(parent)));
+        self.data
+            .insert(name.into(), (value, Some(parent.to_owned())));
     }
 
     #[allow(dead_code)]
@@ -1019,12 +636,12 @@ impl Settings {
         }
     }
 
-    fn set(&mut self, var: String, value: bool) {
-        let val = match self.data.get_mut(&var) {
+    fn set(&mut self, var: &str, value: bool) {
+        let val = match self.data.get_mut(var) {
             None => (value, None),
             Some((_, x)) => (value, x.clone()),
         };
-        self.data.insert(var, val);
+        self.data.insert(std::sync::Arc::from(var), val);
     }
 
     /// The keys which have no parent defined
@@ -1032,7 +649,7 @@ impl Settings {
         let mut rs = vec![];
         for (key, (_, parent)) in self.data.iter() {
             if parent.is_none() {
-                rs.push(key.to_owned());
+                rs.push(key.to_string());
             }
         }
         rs
@@ -1044,7 +661,7 @@ impl Settings {
         for (k, (_, parent)) in self.data.iter() {
             if let Some(parent) = parent {
                 if key == parent {
-                    rs.push(k.to_owned())
+                    rs.push(k.to_string())
                 }
             }
         }
@@ -1073,100 +690,100 @@ impl Settings {
     }
 
     pub fn split_on_misc_upgrades(&mut self) {
-        self.set("miscUpgrades".to_owned(), true);
-        self.set("morphBall".to_owned(), true);
-        self.set("bomb".to_owned(), true);
-        self.set("springBall".to_owned(), true);
-        self.set("screwAttack".to_owned(), true);
-        self.set("grapple".to_owned(), true);
-        self.set("xray".to_owned(), true);
+        self.set("miscUpgrades", true);
+        self.set("morphBall", true);
+        self.set("bomb", true);
+        self.set("springBall", true);
+        self.set("screwAttack", true);
+        self.set("grapple", true);
+        self.set("xray", true);
     }
 
     pub fn split_on_hundo(&mut self) {
-        self.set("ammoPickups".to_owned(), true);
-        self.set("allMissiles".to_owned(), true);
-        self.set("allSupers".to_owned(), true);
-        self.set("allPowerBombs".to_owned(), true);
-        self.set("beamUpgrades".to_owned(), true);
-        self.set("chargeBeam".to_owned(), true);
-        self.set("spazer".to_owned(), true);
-        self.set("wave".to_owned(), true);
-        self.set("ice".to_owned(), true);
-        self.set("plasma".to_owned(), true);
-        self.set("bootUpgrades".to_owned(), true);
-        self.set("hiJump".to_owned(), true);
-        self.set("spaceJump".to_owned(), true);
-        self.set("speedBooster".to_owned(), true);
-        self.set("energyUpgrades".to_owned(), true);
-        self.set("allETanks".to_owned(), true);
-        self.set("reserveTanks".to_owned(), true);
+        self.set("ammoPickups", true);
+        self.set("allMissiles", true);
+        self.set("allSupers", true);
+        self.set("allPowerBombs", true);
+        self.set("beamUpgrades", true);
+        self.set("chargeBeam", true);
+        self.set("spazer", true);
+        self.set("wave", true);
+        self.set("ice", true);
+        self.set("plasma", true);
+        self.set("bootUpgrades", true);
+        self.set("hiJump", true);
+        self.set("spaceJump", true);
+        self.set("speedBooster", true);
+        self.set("energyUpgrades", true);
+        self.set("allETanks", true);
+        self.set("reserveTanks", true);
         self.split_on_misc_upgrades();
-        self.set("areaTransitions".to_owned(), true); // should already be true
-        self.set("tubeBroken".to_owned(), true);
-        self.set("ceresEscape".to_owned(), true);
-        self.set("bosses".to_owned(), true); // should already be true
-        self.set("kraid".to_owned(), true);
-        self.set("phantoon".to_owned(), true);
-        self.set("draygon".to_owned(), true);
-        self.set("ridley".to_owned(), true);
-        self.set("mb1".to_owned(), true);
-        self.set("mb2".to_owned(), true);
-        self.set("mb3".to_owned(), true);
-        self.set("miniBosses".to_owned(), true);
-        self.set("ceresRidley".to_owned(), true);
-        self.set("bombTorizo".to_owned(), true);
-        self.set("crocomire".to_owned(), true);
-        self.set("botwoon".to_owned(), true);
-        self.set("goldenTorizo".to_owned(), true);
-        self.set("babyMetroidRoom".to_owned(), true);
+        self.set("areaTransitions", true); // should already be true
+        self.set("tubeBroken", true);
+        self.set("ceresEscape", true);
+        self.set("bosses", true); // should already be true
+        self.set("kraid", true);
+        self.set("phantoon", true);
+        self.set("draygon", true);
+        self.set("ridley", true);
+        self.set("mb1", true);
+        self.set("mb2", true);
+        self.set("mb3", true);
+        self.set("miniBosses", true);
+        self.set("ceresRidley", true);
+        self.set("bombTorizo", true);
+        self.set("crocomire", true);
+        self.set("botwoon", true);
+        self.set("goldenTorizo", true);
+        self.set("babyMetroidRoom", true);
     }
     pub fn split_on_anypercent(&mut self) {
-        self.set("ammoPickups".to_owned(), true);
-        self.set("specificMissiles".to_owned(), true);
-        self.set("specificSupers".to_owned(), true);
-        self.set("wreckedShipLeftSupers".to_owned(), true);
-        self.set("specificPowerBombs".to_owned(), true);
-        self.set("firstMissile".to_owned(), true);
-        self.set("firstSuper".to_owned(), true);
-        self.set("firstPowerBomb".to_owned(), true);
-        self.set("brinstarMissiles".to_owned(), true);
-        self.set("norfairMissiles".to_owned(), true);
-        self.set("chargeMissiles".to_owned(), true);
-        self.set("waveMissiles".to_owned(), true);
-        self.set("beamUpgrades".to_owned(), true);
-        self.set("chargeBeam".to_owned(), true);
-        self.set("wave".to_owned(), true);
-        self.set("ice".to_owned(), true);
-        self.set("plasma".to_owned(), true);
-        self.set("bootUpgrades".to_owned(), true);
-        self.set("hiJump".to_owned(), true);
-        self.set("speedBooster".to_owned(), true);
-        self.set("specificETanks".to_owned(), true);
-        self.set("energyUpgrades".to_owned(), true);
-        self.set("terminatorETank".to_owned(), true);
-        self.set("hiJumpETank".to_owned(), true);
-        self.set("botwoonETank".to_owned(), true);
-        self.set("miscUpgrades".to_owned(), true);
-        self.set("morphBall".to_owned(), true);
-        self.set("spaceJump".to_owned(), true);
-        self.set("bomb".to_owned(), true);
-        self.set("areaTransitions".to_owned(), true); // should already be true
-        self.set("tubeBroken".to_owned(), true);
-        self.set("ceresEscape".to_owned(), true);
-        self.set("bosses".to_owned(), true); // should already be true
-        self.set("kraid".to_owned(), true);
-        self.set("phantoon".to_owned(), true);
-        self.set("draygon".to_owned(), true);
-        self.set("ridley".to_owned(), true);
-        self.set("mb1".to_owned(), true);
-        self.set("mb2".to_owned(), true);
-        self.set("mb3".to_owned(), true);
-        self.set("miniBosses".to_owned(), true);
-        self.set("ceresRidley".to_owned(), true);
-        self.set("bombTorizo".to_owned(), true);
-        self.set("botwoon".to_owned(), true);
-        self.set("goldenTorizo".to_owned(), true);
-        self.set("babyMetroidRoom".to_owned(), true);
+        self.set("ammoPickups", true);
+        self.set("specificMissiles", true);
+        self.set("specificSupers", true);
+        self.set("wreckedShipLeftSupers", true);
+        self.set("specificPowerBombs", true);
+        self.set("firstMissile", true);
+        self.set("firstSuper", true);
+        self.set("firstPowerBomb", true);
+        self.set("brinstarMissiles", true);
+        self.set("norfairMissiles", true);
+        self.set("chargeMissiles", true);
+        self.set("waveMissiles", true);
+        self.set("beamUpgrades", true);
+        self.set("chargeBeam", true);
+        self.set("wave", true);
+        self.set("ice", true);
+        self.set("plasma", true);
+        self.set("bootUpgrades", true);
+        self.set("hiJump", true);
+        self.set("speedBooster", true);
+        self.set("specificETanks", true);
+        self.set("energyUpgrades", true);
+        self.set("terminatorETank", true);
+        self.set("hiJumpETank", true);
+        self.set("botwoonETank", true);
+        self.set("miscUpgrades", true);
+        self.set("morphBall", true);
+        self.set("spaceJump", true);
+        self.set("bomb", true);
+        self.set("areaTransitions", true); // should already be true
+        self.set("tubeBroken", true);
+        self.set("ceresEscape", true);
+        self.set("bosses", true); // should already be true
+        self.set("kraid", true);
+        self.set("phantoon", true);
+        self.set("draygon", true);
+        self.set("ridley", true);
+        self.set("mb1", true);
+        self.set("mb2", true);
+        self.set("mb3", true);
+        self.set("miniBosses", true);
+        self.set("ceresRidley", true);
+        self.set("bombTorizo", true);
+        self.set("botwoon", true);
+        self.set("goldenTorizo", true);
+        self.set("babyMetroidRoom", true);
     }
 }
 
@@ -2023,7 +1640,7 @@ pub struct SNESSummary {
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct SNESState {
-    vars: HashMap<String, MemoryWatcher>,
+    vars: HashMap<&'static str, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
     latency_samples: VecDeque<u128>,
@@ -2036,6 +1653,8 @@ pub struct SNESState {
     do_extra_update: bool,
 }
 
+const NUM_LATENCY_SAMPLES: usize = 10;
+
 impl SNESState {
     pub fn new() -> SNESState {
         let data = vec![0; 0x10000];
@@ -2047,177 +1666,51 @@ impl SNESState {
             pickedUpSporeSpawnSuper: false,
             vars: HashMap::from([
                 // Word
-                (
-                    "controller".to_owned(),
-                    MemoryWatcher::new(0x008B, Width::Word),
-                ),
-                ("roomID".to_owned(), MemoryWatcher::new(0x079B, Width::Word)),
-                (
-                    "enemyHP".to_owned(),
-                    MemoryWatcher::new(0x0F8C, Width::Word),
-                ),
-                ("shipAI".to_owned(), MemoryWatcher::new(0x0FB2, Width::Word)),
-                (
-                    "motherBrainHP".to_owned(),
-                    MemoryWatcher::new(0x0FCC, Width::Word),
-                ),
+                ("controller", MemoryWatcher::new(0x008B, Width::Word)),
+                ("roomID", MemoryWatcher::new(0x079B, Width::Word)),
+                ("enemyHP", MemoryWatcher::new(0x0F8C, Width::Word)),
+                ("shipAI", MemoryWatcher::new(0x0FB2, Width::Word)),
+                ("motherBrainHP", MemoryWatcher::new(0x0FCC, Width::Word)),
                 // Byte
-                (
-                    "mapInUse".to_owned(),
-                    MemoryWatcher::new(0x079F, Width::Byte),
-                ),
-                (
-                    "gameState".to_owned(),
-                    MemoryWatcher::new(0x0998, Width::Byte),
-                ),
-                (
-                    "unlockedEquips2".to_owned(),
-                    MemoryWatcher::new(0x09A4, Width::Byte),
-                ),
-                (
-                    "unlockedEquips".to_owned(),
-                    MemoryWatcher::new(0x09A5, Width::Byte),
-                ),
-                (
-                    "unlockedBeams".to_owned(),
-                    MemoryWatcher::new(0x09A8, Width::Byte),
-                ),
-                (
-                    "unlockedCharge".to_owned(),
-                    MemoryWatcher::new(0x09A9, Width::Byte),
-                ),
-                (
-                    "maxEnergy".to_owned(),
-                    MemoryWatcher::new(0x09C4, Width::Word),
-                ),
-                (
-                    "maxMissiles".to_owned(),
-                    MemoryWatcher::new(0x09C8, Width::Byte),
-                ),
-                (
-                    "maxSupers".to_owned(),
-                    MemoryWatcher::new(0x09CC, Width::Byte),
-                ),
-                (
-                    "maxPowerBombs".to_owned(),
-                    MemoryWatcher::new(0x09D0, Width::Byte),
-                ),
-                (
-                    "maxReserve".to_owned(),
-                    MemoryWatcher::new(0x09D4, Width::Word),
-                ),
-                (
-                    "igtFrames".to_owned(),
-                    MemoryWatcher::new(0x09DA, Width::Byte),
-                ),
-                (
-                    "igtSeconds".to_owned(),
-                    MemoryWatcher::new(0x09DC, Width::Byte),
-                ),
-                (
-                    "igtMinutes".to_owned(),
-                    MemoryWatcher::new(0x09DE, Width::Byte),
-                ),
-                (
-                    "igtHours".to_owned(),
-                    MemoryWatcher::new(0x09E0, Width::Byte),
-                ),
-                (
-                    "playerState".to_owned(),
-                    MemoryWatcher::new(0x0A28, Width::Byte),
-                ),
-                (
-                    "eventFlags".to_owned(),
-                    MemoryWatcher::new(0xD821, Width::Byte),
-                ),
-                (
-                    "crateriaBosses".to_owned(),
-                    MemoryWatcher::new(0xD828, Width::Byte),
-                ),
-                (
-                    "brinstarBosses".to_owned(),
-                    MemoryWatcher::new(0xD829, Width::Byte),
-                ),
-                (
-                    "norfairBosses".to_owned(),
-                    MemoryWatcher::new(0xD82A, Width::Byte),
-                ),
-                (
-                    "wreckedShipBosses".to_owned(),
-                    MemoryWatcher::new(0xD82B, Width::Byte),
-                ),
-                (
-                    "maridiaBosses".to_owned(),
-                    MemoryWatcher::new(0xD82C, Width::Byte),
-                ),
-                (
-                    "tourianBosses".to_owned(),
-                    MemoryWatcher::new(0xD82D, Width::Byte),
-                ),
-                (
-                    "ceresBosses".to_owned(),
-                    MemoryWatcher::new(0xD82E, Width::Byte),
-                ),
-                (
-                    "crateriaItems".to_owned(),
-                    MemoryWatcher::new(0xD870, Width::Byte),
-                ),
-                (
-                    "brinteriaItems".to_owned(),
-                    MemoryWatcher::new(0xD871, Width::Byte),
-                ),
-                (
-                    "brinstarItems2".to_owned(),
-                    MemoryWatcher::new(0xD872, Width::Byte),
-                ),
-                (
-                    "brinstarItems3".to_owned(),
-                    MemoryWatcher::new(0xD873, Width::Byte),
-                ),
-                (
-                    "brinstarItems4".to_owned(),
-                    MemoryWatcher::new(0xD874, Width::Byte),
-                ),
-                (
-                    "brinstarItems5".to_owned(),
-                    MemoryWatcher::new(0xD875, Width::Byte),
-                ),
-                (
-                    "norfairItems1".to_owned(),
-                    MemoryWatcher::new(0xD876, Width::Byte),
-                ),
-                (
-                    "norfairItems2".to_owned(),
-                    MemoryWatcher::new(0xD877, Width::Byte),
-                ),
-                (
-                    "norfairItems3".to_owned(),
-                    MemoryWatcher::new(0xD878, Width::Byte),
-                ),
-                (
-                    "norfairItems4".to_owned(),
-                    MemoryWatcher::new(0xD879, Width::Byte),
-                ),
-                (
-                    "norfairItems5".to_owned(),
-                    MemoryWatcher::new(0xD87A, Width::Byte),
-                ),
-                (
-                    "wreckedShipItems".to_owned(),
-                    MemoryWatcher::new(0xD880, Width::Byte),
-                ),
-                (
-                    "maridiaItems1".to_owned(),
-                    MemoryWatcher::new(0xD881, Width::Byte),
-                ),
-                (
-                    "maridiaItems2".to_owned(),
-                    MemoryWatcher::new(0xD882, Width::Byte),
-                ),
-                (
-                    "maridiaItems3".to_owned(),
-                    MemoryWatcher::new(0xD883, Width::Byte),
-                ),
+                ("mapInUse", MemoryWatcher::new(0x079F, Width::Byte)),
+                ("gameState", MemoryWatcher::new(0x0998, Width::Byte)),
+                ("unlockedEquips2", MemoryWatcher::new(0x09A4, Width::Byte)),
+                ("unlockedEquips", MemoryWatcher::new(0x09A5, Width::Byte)),
+                ("unlockedBeams", MemoryWatcher::new(0x09A8, Width::Byte)),
+                ("unlockedCharge", MemoryWatcher::new(0x09A9, Width::Byte)),
+                ("maxEnergy", MemoryWatcher::new(0x09C4, Width::Word)),
+                ("maxMissiles", MemoryWatcher::new(0x09C8, Width::Byte)),
+                ("maxSupers", MemoryWatcher::new(0x09CC, Width::Byte)),
+                ("maxPowerBombs", MemoryWatcher::new(0x09D0, Width::Byte)),
+                ("maxReserve", MemoryWatcher::new(0x09D4, Width::Word)),
+                ("igtFrames", MemoryWatcher::new(0x09DA, Width::Byte)),
+                ("igtSeconds", MemoryWatcher::new(0x09DC, Width::Byte)),
+                ("igtMinutes", MemoryWatcher::new(0x09DE, Width::Byte)),
+                ("igtHours", MemoryWatcher::new(0x09E0, Width::Byte)),
+                ("playerState", MemoryWatcher::new(0x0A28, Width::Byte)),
+                ("eventFlags", MemoryWatcher::new(0xD821, Width::Byte)),
+                ("crateriaBosses", MemoryWatcher::new(0xD828, Width::Byte)),
+                ("brinstarBosses", MemoryWatcher::new(0xD829, Width::Byte)),
+                ("norfairBosses", MemoryWatcher::new(0xD82A, Width::Byte)),
+                ("wreckedShipBosses", MemoryWatcher::new(0xD82B, Width::Byte)),
+                ("maridiaBosses", MemoryWatcher::new(0xD82C, Width::Byte)),
+                ("tourianBosses", MemoryWatcher::new(0xD82D, Width::Byte)),
+                ("ceresBosses", MemoryWatcher::new(0xD82E, Width::Byte)),
+                ("crateriaItems", MemoryWatcher::new(0xD870, Width::Byte)),
+                ("brinteriaItems", MemoryWatcher::new(0xD871, Width::Byte)),
+                ("brinstarItems2", MemoryWatcher::new(0xD872, Width::Byte)),
+                ("brinstarItems3", MemoryWatcher::new(0xD873, Width::Byte)),
+                ("brinstarItems4", MemoryWatcher::new(0xD874, Width::Byte)),
+                ("brinstarItems5", MemoryWatcher::new(0xD875, Width::Byte)),
+                ("norfairItems1", MemoryWatcher::new(0xD876, Width::Byte)),
+                ("norfairItems2", MemoryWatcher::new(0xD877, Width::Byte)),
+                ("norfairItems3", MemoryWatcher::new(0xD878, Width::Byte)),
+                ("norfairItems4", MemoryWatcher::new(0xD879, Width::Byte)),
+                ("norfairItems5", MemoryWatcher::new(0xD87A, Width::Byte)),
+                ("wreckedShipItems", MemoryWatcher::new(0xD880, Width::Byte)),
+                ("maridiaItems1", MemoryWatcher::new(0xD881, Width::Byte)),
+                ("maridiaItems2", MemoryWatcher::new(0xD882, Width::Byte)),
+                ("maridiaItems3", MemoryWatcher::new(0xD883, Width::Byte)),
             ]),
         }
     }
@@ -2274,7 +1767,7 @@ impl SNESState {
         let reset = self.reset();
         let split = split(settings, self);
         let elapsed = start_time.elapsed().as_millis();
-        if self.latency_samples.len() == 1000 {
+        if self.latency_samples.len() == NUM_LATENCY_SAMPLES {
             self.latency_samples.pop_front();
         }
         self.latency_samples.push_back(elapsed);
