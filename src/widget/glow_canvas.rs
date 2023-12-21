@@ -8,11 +8,19 @@ use memoffset::offset_of;
 /// give you a thread safe handle to the frame buffer that you can mutate.
 pub struct GlowCanvas {
     opengl_resources: std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
-    frame_buffer: std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     sense: egui::Sense,
     previous_texture_size: std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
 }
 
+// TODO: add a destroy method that is called from OpenGLResources::destroy()
+#[derive(Debug)]
+struct PixelBuffer {
+    native_buffer: glow::NativeBuffer,
+    size: [usize; 2],
+    mapped: bool,
+}
+
+// TODO: add a destroy method that is called from GlowCanvas::destroy()
 #[derive(Debug)]
 struct OpenGLResources {
     program: glow::Program,
@@ -22,6 +30,8 @@ struct OpenGLResources {
     vao: glow::VertexArray,
     element_array_buffer: glow::Buffer,
     texture: glow::Texture,
+    pixel_buffer: Option<[PixelBuffer; 2]>,
+    buffer_idx: usize,
     vertices: [Vertex; 4],
     indices: [u32; 6],
 }
@@ -36,7 +46,6 @@ struct Vertex {
 impl Default for GlowCanvas {
     fn default() -> Self {
         GlowCanvas {
-            frame_buffer: std::sync::Arc::new(std::sync::RwLock::new(vec![])),
             opengl_resources: std::sync::Arc::new(std::sync::RwLock::new(None)),
             sense: egui::Sense::click(),
             previous_texture_size: std::sync::Arc::new(std::sync::RwLock::new((0, 0))),
@@ -52,11 +61,139 @@ impl GlowCanvas {
     /// The frame buffer is expected to have an RGBA value for each pixel.
     /// This means that the `frame_buffer.len()` must be 4x the dimensions
     /// of the viewport. Otherwise, drawing the canvas will panic.
-    pub fn update_frame_buffer<F>(&self, update: F)
-    where
-        F: FnOnce(&std::sync::Arc<std::sync::RwLock<Vec<u8>>>),
+    pub fn update_frame_buffer<F>(
+        &self,
+        viewport: egui::Rect,
+        gl: &std::rc::Rc<glow::Context>,
+        update: F,
+    ) where
+        F: FnOnce(&mut [u8], [u32; 2], u32),
     {
-        update(&self.frame_buffer);
+        let sz = viewport.size();
+        let sz = [sz.x as usize, sz.y as usize];
+        unsafe {
+            use glow::HasContext;
+            let mut resources_lock = self.opengl_resources.write().unwrap();
+            if let Some(resources) = resources_lock.as_mut() {
+                let buffer = resources
+                    // opengl resources need to exist by now or we're in big trouble
+                    .pixel_buffer
+                    .get_or_insert_with(|| {
+                        let buf1 = gl.create_buffer().unwrap();
+                        debug_assert_eq!(gl.get_error(), 0);
+                        let buf2 = gl.create_buffer().unwrap();
+                        debug_assert_eq!(gl.get_error(), 0);
+                        let buffers = [
+                            PixelBuffer {
+                                native_buffer: buf1,
+                                size: sz,
+                                mapped: false,
+                            },
+                            PixelBuffer {
+                                native_buffer: buf2,
+                                size: sz,
+                                mapped: false,
+                            },
+                        ];
+                        for b in &buffers {
+                            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(b.native_buffer));
+                            debug_assert_eq!(gl.get_error(), 0);
+                            gl.buffer_data_size(
+                                glow::PIXEL_UNPACK_BUFFER,
+                                (sz[0] * sz[1] * 4) as _,
+                                glow::STREAM_DRAW,
+                            );
+                            debug_assert_eq!(gl.get_error(), 0);
+                            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
+                            debug_assert_eq!(gl.get_error(), 0);
+                        }
+                        buffers
+                    });
+                debug_assert_eq!(gl.get_error(), 0);
+                resources.buffer_idx = (resources.buffer_idx + 1) % 2;
+                let next_idx = (resources.buffer_idx + 1) % 2;
+                gl.bind_buffer(
+                    glow::PIXEL_UNPACK_BUFFER,
+                    Some(buffer[resources.buffer_idx].native_buffer),
+                );
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(resources.texture));
+                debug_assert_eq!(gl.get_error(), 0);
+                // This logic has become a mess because we need two separate code paths
+                // for each buffer (2 buffers). There's an optimization we can apply here,
+                // if the texture has been used at the current size previously then we can
+                // avoid allocating it and just copy the data back into it 'tex_sub_image_2d`
+                // instead of the potentially more expensive `tex_image_2d`.
+                // To deal with this mess, we have a flag to manage to tell when a buffer
+                // needs to be resized and are over conservative when resetting it. Really
+                // the common case we care about is when the window is not being resized
+                // and as long as we're handling that case well a bit of extra resizing is fine.
+                let buffer_size = buffer[resources.buffer_idx].size;
+                let need_to_resize = sz[0] != buffer_size[0] || sz[1] != buffer_size[1];
+                if need_to_resize {
+                    buffer[0].mapped = false;
+                    buffer[1].mapped = false;
+                }
+                if !buffer[resources.buffer_idx].mapped {
+                    gl.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA8 as _,
+                        buffer_size[0] as _,
+                        buffer_size[1] as _,
+                        0,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        None,
+                    );
+                    debug_assert_eq!(gl.get_error(), 0);
+                    buffer[resources.buffer_idx].mapped = true;
+                } else {
+                    gl.tex_sub_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        0,
+                        0,
+                        buffer_size[0] as _,
+                        buffer_size[1] as _,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelUnpackData::BufferOffset(0),
+                    );
+                    debug_assert_eq!(gl.get_error(), 0);
+                }
+                // Now we want to make sure that we're setting up the next frame's texture buffer
+                // (next here really means the current frame, because the double buffering equates
+                // to 1 frame of lag), has the correct size everywhere. It should always be the
+                // current viewport size. Anything else is an inconsistency.
+                buffer[next_idx].size = sz;
+                gl.bind_buffer(
+                    glow::PIXEL_UNPACK_BUFFER,
+                    Some(buffer[next_idx].native_buffer),
+                );
+                debug_assert_eq!(gl.get_error(), 0);
+                let buf_size = buffer[next_idx].size[0] * buffer[next_idx].size[1] * 4;
+                gl.buffer_data_size(glow::PIXEL_UNPACK_BUFFER, buf_size as _, glow::STREAM_DRAW);
+                debug_assert_eq!(gl.get_error(), 0);
+                let perms = glow::MAP_WRITE_BIT;
+                let ptr = gl.map_buffer_range(glow::PIXEL_UNPACK_BUFFER, 0, buf_size as _, perms);
+                assert_ne!(ptr, std::ptr::null_mut());
+                let slice = std::slice::from_raw_parts_mut(ptr, buf_size);
+                debug_assert_eq!(gl.get_error(), 0);
+                update(
+                    slice,
+                    [buffer[next_idx].size[0] as _, buffer[next_idx].size[1] as _],
+                    buffer[next_idx].size[0] as _,
+                );
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.unmap_buffer(glow::PIXEL_UNPACK_BUFFER);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
+                debug_assert_eq!(gl.get_error(), 0);
+                gl.bind_texture(glow::TEXTURE_2D, None);
+                debug_assert_eq!(gl.get_error(), 0);
+            }
+        }
     }
 
     /// Paints immediately using the GL context. In some versions of egui, this painting will be
@@ -65,14 +202,7 @@ impl GlowCanvas {
     pub fn paint_immediate(&self, gl: &std::rc::Rc<eframe::glow::Context>, rect: egui::Rect) {
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        let frame_buffer = self.frame_buffer.clone();
-        paint(
-            &gl_ctx,
-            &frame_buffer,
-            viewport,
-            gl,
-            &self.previous_texture_size,
-        );
+        paint(&gl_ctx, viewport, gl, &self.previous_texture_size);
     }
 
     /// This uses a paint callback to draw to a chosen layer. Usually, the layer will be `LayerId::background()`.
@@ -82,12 +212,11 @@ impl GlowCanvas {
         let painter = ctx.layer_painter(layer);
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        let frame_buffer = self.frame_buffer.clone();
         let prev_size = self.previous_texture_size.clone();
         let callback = egui::PaintCallback {
             rect: viewport,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                paint(&gl_ctx, &frame_buffer, viewport, painter.gl(), &prev_size);
+                paint(&gl_ctx, viewport, painter.gl(), &prev_size);
             })),
         };
 
@@ -101,12 +230,11 @@ impl GlowCanvas {
         if ui.is_rect_visible(rect) {
             let viewport = rect;
             let gl_ctx = self.opengl_resources.clone();
-            let frame_buffer = self.frame_buffer.clone();
             let prev_size = self.previous_texture_size.clone();
             let callback = egui::PaintCallback {
                 rect: viewport,
                 callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                    paint(&gl_ctx, &frame_buffer, viewport, painter.gl(), &prev_size);
+                    paint(&gl_ctx, viewport, painter.gl(), &prev_size);
                 })),
             };
 
@@ -131,6 +259,12 @@ impl GlowCanvas {
                 debug_assert!(gl.get_error() == 0, "1");
                 gl.delete_program(opengl.program);
                 debug_assert!(gl.get_error() == 0, "1");
+                if let Some(buffers) = opengl.pixel_buffer.as_ref() {
+                    for b in buffers {
+                        gl.delete_buffer(b.native_buffer);
+                        debug_assert!(gl.get_error() == 0, "1");
+                    }
+                };
                 //self.opengl_resources = std::sync::Arc::new(std::sync::RwLock::new(None));
             }
         }
@@ -140,7 +274,6 @@ impl GlowCanvas {
 /// Safe-ish Wrapper around the low level painting primitives
 fn paint(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
-    frame_buffer: &std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
     previous_size: &std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
@@ -159,16 +292,64 @@ fn paint(
         let mut previous_size = previous_size.write().unwrap();
         let texture_resized = viewport.width() as usize != previous_size.0
             || viewport.height() as usize != previous_size.1;
-        paint_lowlevel(&gl_ctx, frame_buffer, viewport, gl, texture_resized);
+        paint_lowlevel(&gl_ctx, viewport, gl, texture_resized);
         *previous_size = (viewport.width() as usize, viewport.height() as usize);
     }
 }
 
 // Everything after this point is just the low level opengl rendering code
 
+fn gl_debug(source: u32, typ: u32, id: u32, severity: u32, message: &str) {
+    let source_name = match source {
+        glow::DEBUG_SOURCE_API => "API",
+        glow::DEBUG_SOURCE_OTHER => "Other",
+        glow::DEBUG_SOURCE_APPLICATION => "Application",
+        glow::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
+        glow::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
+        glow::DEBUG_SOURCE_SHADER_COMPILER => "Shader Compiler",
+        _ => "Unknown",
+    };
+    let type_name = match typ {
+        glow::DEBUG_TYPE_ERROR => "Error",
+        glow::DEBUG_TYPE_OTHER => "Other",
+        glow::DEBUG_TYPE_MARKER => "Marker",
+        glow::DEBUG_TYPE_PORTABILITY => "Portability",
+        glow::DEBUG_TYPE_POP_GROUP => "Pop group",
+        glow::DEBUG_TYPE_PUSH_GROUP => "Push group",
+        glow::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "undefined behavior",
+        glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "deprecated behavior",
+        glow::DEBUG_TYPE_PERFORMANCE => "performance",
+        _ => "Unknown",
+    };
+    let severity_name = match severity {
+        glow::DEBUG_SEVERITY_LOW => "Low",
+        glow::DEBUG_SEVERITY_HIGH => "High",
+        glow::DEBUG_SEVERITY_MEDIUM => "Medium",
+        glow::DEBUG_SEVERITY_NOTIFICATION => "Notification",
+        _ => "Unknown",
+    };
+    if typ == glow::DEBUG_TYPE_ERROR
+        || typ == glow::DEBUG_TYPE_UNDEFINED_BEHAVIOR
+        || typ == glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR
+        || typ == glow::DEBUG_TYPE_PORTABILITY
+    {
+        println!(
+            "source: {}, type: {}, id: {}, severity: {}: {}",
+            source_name, type_name, id, severity_name, message
+        );
+        panic!();
+    }
+}
+
 unsafe fn init_gl_resources(gl: &eframe::glow::Context) -> OpenGLResources {
     unsafe {
         use eframe::glow::HasContext;
+        debug_assert_eq!(gl.get_error(), 0);
+        //gl.enable(glow::DEBUG_OUTPUT);
+        debug_assert_eq!(gl.get_error(), 0);
+        gl.debug_message_callback(gl_debug);
+        debug_assert_eq!(gl.get_error(), 0);
+
         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
         debug_assert_eq!(gl.get_error(), 0);
         let source = "
@@ -296,6 +477,8 @@ void main() {
             u_screen_size,
             vao,
             vbo,
+            pixel_buffer: None,
+            buffer_idx: 0,
             vertices: [
                 Vertex {
                     // top right
@@ -328,7 +511,6 @@ void main() {
 
 unsafe fn paint_lowlevel(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
-    frame_buffer: &std::sync::Arc<std::sync::RwLock<Vec<u8>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
     texture_resized: bool,
@@ -395,18 +577,6 @@ unsafe fn paint_lowlevel(
         debug_assert_eq!(gl.get_error(), 0);
         //println!("({},{})", w, h);
         if texture_resized {
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as _,
-                w as _,
-                h as _,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                Some(frame_buffer.read().unwrap().as_slice()),
-            );
-            debug_assert_eq!(gl.get_error(), 0);
             ctx.vertices[0].pos.x = viewport.max.x;
             ctx.vertices[0].pos.y = viewport.min.y;
             ctx.vertices[1].pos.x = viewport.max.x;
@@ -415,19 +585,6 @@ unsafe fn paint_lowlevel(
             ctx.vertices[2].pos.y = viewport.max.y;
             ctx.vertices[3].pos.x = viewport.min.x;
             ctx.vertices[3].pos.y = viewport.min.y;
-        } else {
-            gl.tex_sub_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                0,
-                0,
-                w as _,
-                h as _,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(frame_buffer.read().unwrap().as_slice()),
-            );
-            debug_assert_eq!(gl.get_error(), 0);
         }
 
         debug_assert_eq!(gl.get_error(), 0);
@@ -447,14 +604,14 @@ unsafe fn paint_lowlevel(
             glow::STREAM_DRAW,
         );
         debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-        debug_assert_eq!(gl.get_error(), 0);
         gl.draw_elements(
             glow::TRIANGLES,
             ctx.indices.len() as i32,
             glow::UNSIGNED_INT,
             0,
         );
+        debug_assert_eq!(gl.get_error(), 0);
+        gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_texture(glow::TEXTURE_2D, None);
         debug_assert_eq!(gl.get_error(), 0);
