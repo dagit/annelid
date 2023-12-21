@@ -22,6 +22,8 @@ struct OpenGLResources {
     vao: glow::VertexArray,
     element_array_buffer: glow::Buffer,
     texture: glow::Texture,
+    vertices: [Vertex; 4],
+    indices: [u32; 6],
 }
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone, Debug)]
@@ -285,6 +287,7 @@ void main() {
         debug_assert_eq!(gl.get_error(), 0);
         let texture = gl.create_texture().expect("create texture");
         debug_assert_eq!(gl.get_error(), 0);
+        use egui::Pos2;
         OpenGLResources {
             element_array_buffer,
             program,
@@ -293,6 +296,32 @@ void main() {
             u_screen_size,
             vao,
             vbo,
+            vertices: [
+                Vertex {
+                    // top right
+                    pos: Pos2::new(1.0, 0.0),
+                    uv: Pos2::new(1.0, 0.0),
+                },
+                Vertex {
+                    // bottom right
+                    pos: Pos2::new(1.0, 1.0),
+                    uv: Pos2::new(1.0, 1.0),
+                },
+                Vertex {
+                    // bottom left
+                    pos: Pos2::new(0.0, 1.0),
+                    uv: Pos2::new(0.0, 1.0),
+                },
+                Vertex {
+                    // top left
+                    pos: Pos2::new(0.0, 0.0),
+                    uv: Pos2::new(0.0, 0.0),
+                },
+            ],
+            indices: [
+                0, 1, 3, // first triangle
+                1, 2, 3, // second triangle
+            ],
         }
     }
 }
@@ -304,14 +333,13 @@ unsafe fn paint_lowlevel(
     gl: &eframe::glow::Context,
     texture_resized: bool,
 ) {
+    use eframe::glow::HasContext;
     let w = viewport.max.x - viewport.min.x;
     let h = viewport.max.y - viewport.min.y;
+    let mut ctx = gl_ctx.write().unwrap();
+    let ctx = ctx.as_mut().unwrap();
 
     unsafe {
-        use eframe::glow::HasContext;
-        let ctx = gl_ctx.read().unwrap();
-        let ctx = ctx.as_ref().unwrap();
-
         //let timer = std::time::Instant::now();
         //let gl = frame.gl().expect("Rendering context");
         gl.use_program(Some(ctx.program));
@@ -379,6 +407,14 @@ unsafe fn paint_lowlevel(
                 Some(frame_buffer.read().unwrap().as_slice()),
             );
             debug_assert_eq!(gl.get_error(), 0);
+            ctx.vertices[0].pos.x = viewport.max.x;
+            ctx.vertices[0].pos.y = viewport.min.y;
+            ctx.vertices[1].pos.x = viewport.max.x;
+            ctx.vertices[1].pos.y = viewport.max.y;
+            ctx.vertices[2].pos.x = viewport.min.x;
+            ctx.vertices[2].pos.y = viewport.max.y;
+            ctx.vertices[3].pos.x = viewport.min.x;
+            ctx.vertices[3].pos.y = viewport.min.y;
         } else {
             gl.tex_sub_image_2d(
                 glow::TEXTURE_2D,
@@ -394,42 +430,12 @@ unsafe fn paint_lowlevel(
             debug_assert_eq!(gl.get_error(), 0);
         }
 
-        use epaint::Pos2;
-        let vertices: Vec<Vertex> = vec![
-            Vertex {
-                // top right
-                pos: Pos2::new(viewport.max.x, viewport.min.y),
-                uv: Pos2::new(1.0, 0.0),
-            },
-            Vertex {
-                // bottom right
-                pos: Pos2::new(viewport.max.x, viewport.max.y),
-                uv: Pos2::new(1.0, 1.0),
-            },
-            Vertex {
-                // bottom left
-                pos: Pos2::new(viewport.min.x, viewport.max.y),
-                uv: Pos2::new(0.0, 1.0),
-            },
-            Vertex {
-                // top left
-                pos: Pos2::new(viewport.min.x, viewport.min.y),
-                uv: Pos2::new(0.0, 0.0),
-            },
-        ];
-        //println!("{:#?}", vertices);
-        let indices: Vec<u32> = vec![
-            // note that we start from 0!
-            0, 1, 3, // first triangle
-            1, 2, 3, // second triangle
-        ];
-
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
         debug_assert_eq!(gl.get_error(), 0);
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(vertices.as_slice()),
+            bytemuck::cast_slice(ctx.vertices.as_slice()),
             glow::STREAM_DRAW,
         );
         debug_assert_eq!(gl.get_error(), 0);
@@ -437,13 +443,18 @@ unsafe fn paint_lowlevel(
         debug_assert_eq!(gl.get_error(), 0);
         gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
-            bytemuck::cast_slice(indices.as_slice()),
+            bytemuck::cast_slice(ctx.indices.as_slice()),
             glow::STREAM_DRAW,
         );
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
         debug_assert_eq!(gl.get_error(), 0);
-        gl.draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
+        gl.draw_elements(
+            glow::TRIANGLES,
+            ctx.indices.len() as i32,
+            glow::UNSIGNED_INT,
+            0,
+        );
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_texture(glow::TEXTURE_2D, None);
         debug_assert_eq!(gl.get_error(), 0);
