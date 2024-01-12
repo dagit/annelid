@@ -353,8 +353,8 @@ unsafe fn init_gl_resources(gl: &eframe::glow::Context) -> OpenGLResources {
         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
         debug_assert_eq!(gl.get_error(), 0);
         let source = "
-#version 330
-
+#version 310 es
+precision mediump float; 
 uniform vec2 u_screen_size;
 in      vec2 a_pos;
 in      vec2 a_tc;
@@ -384,7 +384,8 @@ void main() {
             .create_shader(glow::FRAGMENT_SHADER)
             .expect("crate fragment");
         let source = "
-#version 330
+#version 310 es
+precision mediump float; 
 
 uniform sampler2D u_sampler;
 
