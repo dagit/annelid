@@ -299,6 +299,7 @@ fn paint(
 
 // Everything after this point is just the low level opengl rendering code
 
+#[allow(dead_code)]
 fn gl_debug(source: u32, typ: u32, id: u32, severity: u32, message: &str) {
     let source_name = match source {
         glow::DEBUG_SOURCE_API => "API",
@@ -347,7 +348,7 @@ unsafe fn init_gl_resources(gl: &eframe::glow::Context) -> OpenGLResources {
         debug_assert_eq!(gl.get_error(), 0);
         //gl.enable(glow::DEBUG_OUTPUT);
         debug_assert_eq!(gl.get_error(), 0);
-        gl.debug_message_callback(gl_debug);
+        //gl.debug_message_callback(gl_debug);
         debug_assert_eq!(gl.get_error(), 0);
 
         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
