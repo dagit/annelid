@@ -116,15 +116,16 @@ jobs:
           export TARGET=aarch64-apple-darwin
           rustup target add $TARGET
       - run: cargo build --release
-      - run: cargo install --force cargo-bundle
       - name: macOS bundling
         if: ${{ matrix.is-osx }}
         run: |
-          cargo bundle --release
-          pushd target/release/bundle/osx
-          zip -r Annelid.zip Annelid.app
-          cp Annelid.zip ../../
-          popd
+          mkdir -p Annelid.app/Contents/MacOS
+          mkdir -p Annelid.app/Contents/Resources
+          cp target/release/annelid Annelid.app/Contents/MacOS/
+          chmod +x Annelid.app/Contents/MacOS/annelid
+          cp Info.plist Annelid.app/Contents/
+          codesign --deep --force --sign - Annelid.app
+          zip -r ./target/release/Annelid.zip Annelid.app
       - name: Linux bundling
         if: ${{ matrix.is-linux }}
         run: |
