@@ -98,7 +98,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         options,
         Box::new(move |cc| {
             livesplit_renderer::app_init(&mut app, sync_receiver, cc);
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     )?;
     Ok(())
