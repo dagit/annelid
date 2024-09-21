@@ -15,7 +15,7 @@ pub struct GlowCanvas {
 // TODO: add a destroy method that is called from OpenGLResources::destroy()
 #[derive(Debug)]
 struct PixelBuffer {
-    native_buffer: glow::NativeBuffer,
+    native_buffer: eframe::glow::NativeBuffer,
     size: [usize; 2],
     mapped: bool,
 }
@@ -23,13 +23,13 @@ struct PixelBuffer {
 // TODO: add a destroy method that is called from GlowCanvas::destroy()
 #[derive(Debug)]
 struct OpenGLResources {
-    program: glow::Program,
-    u_screen_size: glow::UniformLocation,
-    u_sampler: glow::UniformLocation,
-    vbo: glow::Buffer,
-    vao: glow::VertexArray,
-    element_array_buffer: glow::Buffer,
-    texture: glow::Texture,
+    program: eframe::glow::Program,
+    u_screen_size: eframe::glow::UniformLocation,
+    u_sampler: eframe::glow::UniformLocation,
+    vbo: eframe::glow::Buffer,
+    vao: eframe::glow::VertexArray,
+    element_array_buffer: eframe::glow::Buffer,
+    texture: eframe::glow::Texture,
     pixel_buffer: Option<[PixelBuffer; 2]>,
     buffer_idx: usize,
     vertices: [Vertex; 4],
@@ -64,7 +64,7 @@ impl GlowCanvas {
     pub fn update_frame_buffer<F>(
         &self,
         viewport: egui::Rect,
-        gl: &std::rc::Rc<glow::Context>,
+        gl: &std::sync::Arc<eframe::glow::Context>,
         update: F,
     ) where
         F: FnOnce(&mut [u8], [u32; 2], u32),
@@ -72,7 +72,7 @@ impl GlowCanvas {
         let sz = viewport.size();
         let sz = [sz.x as usize, sz.y as usize];
         unsafe {
-            use glow::HasContext;
+            use eframe::glow::HasContext;
             let mut resources_lock = self.opengl_resources.write().unwrap();
             if let Some(resources) = resources_lock.as_mut() {
                 let buffer = resources
@@ -158,7 +158,7 @@ impl GlowCanvas {
                         buffer_size[1] as _,
                         glow::RGBA,
                         glow::UNSIGNED_BYTE,
-                        glow::PixelUnpackData::BufferOffset(0),
+                        eframe::glow::PixelUnpackData::BufferOffset(0),
                     );
                     debug_assert_eq!(gl.get_error(), 0);
                 }
@@ -244,7 +244,7 @@ impl GlowCanvas {
 
     // TODO: is there a better way to handle this? The tricky bit is that we need a valid
     // opengl context in order to destroy things.
-    pub fn destroy(&self, gl: &glow::Context) {
+    pub fn destroy(&self, gl: &eframe::glow::Context) {
         use eframe::glow::HasContext;
         unsafe {
             if let Some(opengl) = &*self.opengl_resources.read().unwrap() {

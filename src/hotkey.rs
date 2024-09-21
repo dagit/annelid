@@ -87,8 +87,39 @@ pub fn to_livesplit_keycode(key: &::egui::Key) -> livesplit_hotkey::KeyCode {
         egui::Key::F18 => F18,
         egui::Key::F19 => F19,
         egui::Key::F20 => F20,
+        egui::Key::F21 => F21,
+        egui::Key::F22 => F22,
+        egui::Key::F23 => F23,
+        egui::Key::F24 => F24,
+        egui::Key::F25 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F26 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F27 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F28 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F29 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F30 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F31 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F32 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F33 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F34 => F24, // TODO: hotkey lib doesn't support this yet
+        egui::Key::F35 => F24, // TODO: hotkey lib doesn't support this yet
         egui::Key::Minus => Minus,
-        egui::Key::PlusEquals => Equal,
+        egui::Key::Plus => Equal,
+        egui::Key::Equals => Equal,
+        egui::Key::Copy => Copy,
+        egui::Key::Cut => Cut,
+        egui::Key::Paste => Paste,
+        egui::Key::Colon => Semicolon,
+        egui::Key::Comma => Comma,
+        egui::Key::Backslash => Backslash,
+        egui::Key::Slash => Slash,
+        egui::Key::Pipe => IntlBackslash,
+        egui::Key::Questionmark => Slash,
+        egui::Key::OpenBracket => BracketLeft,
+        egui::Key::CloseBracket => BracketRight,
+        egui::Key::Backtick => Backquote,
+        egui::Key::Period => Period,
+        egui::Key::Semicolon => Semicolon,
+        egui::Key::Quote => Quote,
     }
 }
 

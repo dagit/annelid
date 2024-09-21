@@ -11,13 +11,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tungstenite = "0"
 
-livesplit-core = { git = "https://github.com/dagit/livesplit-core", features = ["software-rendering", "font-loading"] }
-livesplit-hotkey = { git = "https://github.com/dagit/livesplit-core" }
+livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
+livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
 
-epaint = "0.24"
-eframe = { version = "0.24", features = ["glow"] }
-egui = { version = "0.24", features = ["serde"] }
-egui_glow = "0.24"
+epaint = "0.28"
+eframe = { version = "0.28", features = ["glow"] }
+egui = { version = "0.28", features = ["serde"] }
+egui_glow = "0.28"
 
 lazy_static = "1"
 strum = "0"
@@ -25,15 +25,15 @@ strum_macros = "0"
 time = "0"
 parking_lot = "*"
 rfd = "0"
-directories = "4"
+directories = "5"
 roxmltree = "0"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 toml = "0"
 serde_derive = "1"
-glow = "0.12"
+glow = "0.14"
 bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
-thread-priority = "0.10.0"
+thread-priority = "1"
 
 # Remember to test with --release
 [profile.dev]
