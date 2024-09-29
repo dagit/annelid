@@ -58,6 +58,10 @@ long_description = """
 A speedrun timer with autosplitter capabilities for USB2SNES.
 """
 
+[target.'cfg(target_os = "macos")'.rustflags]
+linker-flavor = "ld"
+link-args = ["-mmacosx-version-min=11.0"]
+
 [package.metadata.appimage]
 auto_link = true
 # https://github.com/AppImage/pkg2appimage/blob/master/excludelist
