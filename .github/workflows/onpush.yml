@@ -28,24 +28,24 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-registry-
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-git-
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-check-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-target-check-
+          restore-keys: |
+            ${{ runner.os }}-target-check-
 
       - name: Run cargo check
         run: cargo check
@@ -70,24 +70,24 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-registry-
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-git-
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-target-test-
+          restore-keys: |
+            ${{ runner.os }}-target-test-
 
       - name: Run cargo test
         run: cargo test
@@ -114,24 +114,24 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-registry-
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-git-
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-lints-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-target-lints-
+          restore-keys: |
+            ${{ runner.os }}-target-lints-
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -198,24 +198,24 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-registry-
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-cargo-git-
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys:
-            - ${{ runner.os }}-target-build-${{ matrix.target }}-
+          restore-keys: |
+            ${{ runner.os }}-target-build-${{ matrix.target }}-
 
       - name: Build for x86_64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
