@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -22,28 +24,28 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          restore-keys:
+            - ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-git-
+          restore-keys:
+            - ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-check-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-target-check-
+          restore-keys:
+            - ${{ runner.os }}-target-check-
 
       - name: Run cargo check
         run: cargo check
@@ -53,7 +55,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -62,28 +66,28 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          restore-keys:
+            - ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-git-
+          restore-keys:
+            - ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-target-test-
+          restore-keys:
+            - ${{ runner.os }}-target-test-
 
       - name: Run cargo test
         run: cargo test
@@ -93,7 +97,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -104,28 +110,28 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          restore-keys:
+            - ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-git-
+          restore-keys:
+            - ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-lints-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-target-lints-
+          restore-keys:
+            - ${{ runner.os }}-target-lints-
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -160,7 +166,9 @@ jobs:
             is-windows: 1
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -186,28 +194,28 @@ jobs:
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
       - name: Cache Cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          restore-keys:
+            - ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-git-
+          restore-keys:
+            - ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-target-build-${{ matrix.target }}-
+          restore-keys:
+            - ${{ runner.os }}-target-build-${{ matrix.target }}-
 
       - name: Build for x86_64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
@@ -252,7 +260,7 @@ jobs:
         run: |
           echo "No additional bundling steps for Windows."
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: ${{ matrix.artifact-path }}
@@ -263,25 +271,26 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
+          fetch-depth: 1
           lfs: true
 
       - id: get_repository_name
         run: echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_OUTPUT
         shell: bash
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: annelid-universal.macos
           path: annelid-universal.macos
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: annelid-x86_64.AppImage
           path: annelid-x86_64.AppImage
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: annelid-x86_64.win
           path: annelid-x86_64.win
@@ -298,36 +307,28 @@ jobs:
         shell: bash
 
       - id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/create-release@v2
         with:
           tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
           release_name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
           draft: ${{ github.ref != 'refs/heads/master' }}
           prerelease: true
 
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-release-asset@v2
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./annelid-universal.macos/Annelid.zip
           asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
           asset_content_type: application/octet-stream
 
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-release-asset@v2
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./annelid-x86_64.AppImage/annelid.AppImage
           asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
           asset_content_type: application/octet-stream
 
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-release-asset@v2
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./annelid-x86_64.win/annelid.exe
