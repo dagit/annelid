@@ -214,13 +214,13 @@ jobs:
 
       - name: Set MACOSX_DEPLOYMENT_TARGET (macOS)
         if: ${{ matrix.is-osx }}
-        run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+        run: echo "MACOSX_DEPLOYMENT_TARGET=10.13" >> $GITHUB_ENV
 
       - name: Set CFLAGS and LDFLAGS for Native Code
         if: ${{ matrix.is-osx }}
         run: |
-          echo "CFLAGS=-mmacosx-version-min=11.0" >> $GITHUB_ENV
-          echo "LDFLAGS=-mmacosx-version-min=11.0" >> $GITHUB_ENV
+          echo "CFLAGS=-mmacosx-version-min=10.13" >> $GITHUB_ENV
+          echo "LDFLAGS=-mmacosx-version-min=10.13" >> $GITHUB_ENV
 
       - name: Build for x86_64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
@@ -230,7 +230,7 @@ jobs:
       - name: Check min version (x86)
         if: ${{ matrix.is-osx }}
         run: |
-          otool -l target/x86_64-apple-darwin/release/annelid | grep -A 3 LC_BUILD_VERSION
+          otool -l target/x86_64-apple-darwin/release/annelid | grep -A 3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX'
 
       - name: Build for aarch64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
@@ -240,7 +240,7 @@ jobs:
       - name: Check min version (arm)
         if: ${{ matrix.is-osx }}
         run: |
-          otool -l target/aarch64-apple-darwin/release/annelid | grep -A 3 LC_BUILD_VERSION
+          otool -l target/aarch64-apple-darwin/release/annelid | grep -A 3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX'
 
       - name: Create universal binary (macOS)
         if: ${{ matrix.is-osx }}
