@@ -58,12 +58,6 @@ long_description = """
 A speedrun timer with autosplitter capabilities for USB2SNES.
 """
 
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-args=-mmacosx-version-min=11.0"]
-
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-args=-mmacosx-version-min=11.0"]
-
 [package.metadata.appimage]
 auto_link = true
 # https://github.com/AppImage/pkg2appimage/blob/master/excludelist
