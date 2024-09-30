@@ -183,11 +183,6 @@ jobs:
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
 
-      - name: Install dependencies (macOS)
-        if: ${{ matrix.is-osx }}
-        run: |
-          brew install wget
-
       - name: Install Rust targets (macOS)
         if: ${{ matrix.is-osx }}
         run: |
@@ -217,15 +212,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-target-build-${{ matrix.target }}-
 
+      - name: Set MACOSX_DEPLOYMENT_TARGET (macOS)
+        if: ${{ matrix.is-osx }}
+        run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+
+      - name: Set CFLAGS and LDFLAGS for Native Code
+        if: ${{ matrix.is-osx }}
+        run: |
+          echo "CFLAGS=-mmacosx-version-min=11.0" >> $GITHUB_ENV
+          echo "LDFLAGS=-mmacosx-version-min=11.0" >> $GITHUB_ENV
+
       - name: Build for x86_64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
         run: |
           cargo build --release --target x86_64-apple-darwin
+          otool -l target/x86_64-apple-darwin/release/annelid | grep -A 3 LC_VERSION_MIN_MACOSX
 
       - name: Build for aarch64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
         run: |
           cargo build --release --target aarch64-apple-darwin
+          otool -l target/aarch64-apple-darwin/release/annelid | grep -A 3 LC_VERSION_MIN_MACOSX
 
       - name: Create universal binary (macOS)
         if: ${{ matrix.is-osx }}
@@ -248,6 +255,7 @@ jobs:
           chmod +x Annelid.app/Contents/MacOS/annelid
           cp Info.plist Annelid.app/Contents/
           codesign --deep --force --sign - Annelid.app
+          lipo -info Annelid.app/Contents/MacOS/annelid
           zip -r ./target/release/Annelid.zip Annelid.app
 
       - name: Linux bundling
