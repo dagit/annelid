@@ -1,5 +1,5 @@
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "link-args=-mmacosx-version-min=11.0"]
+rustflags = ["-C", "link-arg=-Wl,-platform_version,macOS,11.0,12.0"]
 
 [target.aarch64-apple-darwin]
-rustflags = ["-C", "link-args=-mmacosx-version-min=11.0"]
+rustflags = ["-C", "link-arg=-Wl,-platform_version,macOS,11.0,12.0"]
