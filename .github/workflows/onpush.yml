@@ -21,6 +21,30 @@ jobs:
       - name: Install deps
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo git repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-target-check-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-check-
+
       - name: Run cargo check
         run: cargo check
 
@@ -36,6 +60,30 @@ jobs:
 
       - name: Install deps
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo git repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-target-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-test-
 
       - name: Run cargo test
         run: cargo test
@@ -54,6 +102,30 @@ jobs:
 
       - name: Install deps
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo git repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-target-lints-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-lints-
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -75,15 +147,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: annelid-x86_64.macos
-            artifact-path: ./target/release/Annelid.zip
-            is-osx: 1
-          - os: macos-12
-            target: annelid-x86_64.macos-12
-            artifact-path: ./target/release/Annelid.zip
-            is-osx: 1
-          - os: macos-latest
-            target: annelid-aarch64.macos
+            target: annelid-universal.macos
             artifact-path: ./target/release/Annelid.zip
             is-osx: 1
           - os: ubuntu-latest
@@ -103,77 +167,136 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Linux dependencies
+      - name: Install dependencies (Linux)
         if: ${{ matrix.is-linux }}
         run: |
           sudo apt-get install -y wget libfuse-dev libgtk-3-dev
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
           chmod a+x appimagetool
-      - name: Apple arm tool chain
-        if: ${{ matrix.target == 'annelid-aarch64.macos' }}
+
+      - name: Install dependencies (macOS)
+        if: ${{ matrix.is-osx }}
         run: |
-          export TARGET=aarch64-apple-darwin
-          rustup target add $TARGET
-      - run: cargo build --release
+          brew install wget
+
+      - name: Install Rust targets (macOS)
+        if: ${{ matrix.is-osx }}
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo git repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-target-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-build-${{ matrix.target }}-
+
+      - name: Build for x86_64-apple-darwin (macOS)
+        if: ${{ matrix.is-osx }}
+        run: |
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Build for aarch64-apple-darwin (macOS)
+        if: ${{ matrix.is-osx }}
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+
+      - name: Create universal binary (macOS)
+        if: ${{ matrix.is-osx }}
+        run: |
+          mkdir -p target/universal/release
+          lipo -create -output target/universal/release/annelid \
+            target/x86_64-apple-darwin/release/annelid \
+            target/aarch64-apple-darwin/release/annelid
+
+      - name: Build project (Linux and Windows)
+        if: ${{ matrix.is-linux || matrix.is-windows }}
+        run: cargo build --release
+
       - name: macOS bundling
         if: ${{ matrix.is-osx }}
         run: |
           mkdir -p Annelid.app/Contents/MacOS
           mkdir -p Annelid.app/Contents/Resources
-          cp target/release/annelid Annelid.app/Contents/MacOS/
+          cp target/universal/release/annelid Annelid.app/Contents/MacOS/
           chmod +x Annelid.app/Contents/MacOS/annelid
           cp Info.plist Annelid.app/Contents/
           codesign --deep --force --sign - Annelid.app
           zip -r ./target/release/Annelid.zip Annelid.app
+
       - name: Linux bundling
         if: ${{ matrix.is-linux }}
         run: |
           PATH=./:$PATH cargo appimage
+
+      - name: Windows bundling
+        if: ${{ matrix.is-windows }}
+        run: |
+          echo "No additional bundling steps for Windows."
+
       - uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.target }}
           path: ${{ matrix.artifact-path }}
+
   release:
     if: github.ref == 'refs/heads/development' || github.ref == 'refs/heads/master'
     needs:
       - build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
         with:
           lfs: true
+
       - id: get_repository_name
         run: echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_OUTPUT
         shell: bash
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: annelid-universal.macos
+          path: annelid-universal.macos
+
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.AppImage
           path: annelid-x86_64.AppImage
-      - uses: actions/download-artifact@v3
-        with:
-          name: annelid-x86_64.macos
-          path: annelid-x86_64.macos
-      - uses: actions/download-artifact@v3
-        with:
-          name: annelid-aarch64.macos
-          path: annelid-aarch64.macos
-      - uses: actions/download-artifact@v3
-        with:
-          name: annelid-x86_64.macos-12
-          path: annelid-x86_64.macos-12
+
       - uses: actions/download-artifact@v3
         with:
           name: annelid-x86_64.win
           path: annelid-x86_64.win
+
       - name: Display structure of downloaded files
         run: ls -R
+
       - id: get_commit_id
         run: echo SHORT_COMMIT_ID=$(git rev-parse --short HEAD) >> $GITHUB_OUTPUT
         shell: bash
+
       - id: tag_date
-        run: echo TAG_NAME=$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.short_commit_id }} >> $GITHUB_OUTPUT
+        run: echo TAG_NAME=$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.SHORT_COMMIT_ID }} >> $GITHUB_OUTPUT
         shell: bash
+
       - id: create_release
         uses: actions/create-release@v1
         env:
@@ -183,43 +306,30 @@ jobs:
           release_name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
           draft: ${{ github.ref != 'refs/heads/master' }}
           prerelease: true
+
       - uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./annelid-universal.macos/Annelid.zip
+          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
+          asset_content_type: application/octet-stream
+
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./annelid-x86_64.AppImage/annelid.AppImage
           asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
           asset_content_type: application/octet-stream
+
       - uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-x86_64.macos/Annelid.zip
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-macOS.zip
-          asset_content_type: application/octet-stream
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-aarch64.macos/Annelid.zip
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-aarch64-macOS.zip
-          asset_content_type: application/octet-stream
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
-          asset_path: ./annelid-x86_64.macos-12/Annelid.zip
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-macOS-12.zip
-          asset_content_type: application/octet-stream
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          upload_url: '${{ steps.create_release.outputs.upload_url }}'
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./annelid-x86_64.win/annelid.exe
           asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
           asset_content_type: application/octet-stream
