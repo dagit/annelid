@@ -306,31 +306,22 @@ jobs:
         run: echo TAG_NAME=$(date +'%Y-%m-%d')-${{ steps.get_commit_id.outputs.SHORT_COMMIT_ID }} >> $GITHUB_OUTPUT
         shell: bash
 
-      - id: create_release
-        uses: actions/create-release@v2
+      - name: Rename artifacts
+        run: |
+          mv ./annelid-universal.macos/Annelid.zip ./annelid-universal.macos/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
+          mv ./annelid-x86_64.AppImage/annelid.AppImage ./annelid-x86_64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
+          mv ./annelid-x86_64.win/annelid.exe ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
+
+      - name: Upload Assets to Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
-          release_name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
           draft: ${{ github.ref != 'refs/heads/master' }}
+          tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
+          name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
           prerelease: true
-
-      - uses: actions/upload-release-asset@v2
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./annelid-universal.macos/Annelid.zip
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
-          asset_content_type: application/octet-stream
-
-      - uses: actions/upload-release-asset@v2
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./annelid-x86_64.AppImage/annelid.AppImage
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
-          asset_content_type: application/octet-stream
-
-      - uses: actions/upload-release-asset@v2
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./annelid-x86_64.win/annelid.exe
-          asset_name: Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
-          asset_content_type: application/octet-stream
+          files: |
+            ./annelid-universal.macos/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
+            ./annelid-x86_64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
+            ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
