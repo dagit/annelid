@@ -230,7 +230,7 @@ jobs:
       - name: Check min version (x86)
         if: ${{ matrix.is-osx }}
         run: |
-          otool -l target/x86_64-apple-darwin/release/annelid | grep -A 3 LC_VERSION_MIN_MACOSX
+          otool -l target/x86_64-apple-darwin/release/annelid | grep -A 3 LC_BUILD_VERSION
 
       - name: Build for aarch64-apple-darwin (macOS)
         if: ${{ matrix.is-osx }}
@@ -240,7 +240,7 @@ jobs:
       - name: Check min version (arm)
         if: ${{ matrix.is-osx }}
         run: |
-          otool -l target/aarch64-apple-darwin/release/annelid | grep -A 3 LC_VERSION_MIN_MACOSX
+          otool -l target/aarch64-apple-darwin/release/annelid | grep -A 3 LC_BUILD_VERSION
 
       - name: Create universal binary (macOS)
         if: ${{ matrix.is-osx }}
