@@ -1,9 +1,9 @@
 use crate::autosplitters::supermetroid::{SNESState, Settings};
+use anyhow::{anyhow, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::error::Error;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
@@ -32,6 +32,7 @@ pub struct LiveSplitCoreRenderer {
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
+    load_errors: Vec<anyhow::Error>,
 }
 
 fn show_children(
@@ -92,6 +93,7 @@ impl LiveSplitCoreRenderer {
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
+            load_errors: vec![],
         }
     }
 
@@ -208,33 +210,41 @@ impl LiveSplitCoreRenderer {
     }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
-        messagebox_on_error(|| {
+        use anyhow::Context;
+        let mut queue = vec![];
+        std::mem::swap(&mut queue, &mut self.load_errors);
+        queue_on_error(&mut queue, || {
             // Now that we've converged on a config, try loading what we can
             let config = self.app_config.read().unwrap().clone();
             if let Some(layout) = config.recent_layout {
-                let f = std::fs::File::open(layout)?;
-                self.load_layout(&f, ctx)?;
+                let f = std::fs::File::open(&layout)
+                    .with_context(|| format!("Failed to open layout file \"{}\"", layout))?;
+                self.load_layout(&f, ctx)
+                    .with_context(|| format!("Failed to load layout file \"{}\"", layout))?;
             }
             if let Some(splits) = config.recent_splits {
-                let f = std::fs::File::open(&splits)?;
+                let f = std::fs::File::open(&splits)
+                    .with_context(|| format!("Failed to open splits file \"{}\"", splits))?;
                 let path = std::path::Path::new(&splits)
                     .parent()
-                    .ok_or("failed to find parent directory")?;
-                self.load_splits(&f, path.to_path_buf())?;
+                    .ok_or(anyhow!("failed to find parent directory"))?;
+                self.load_splits(&f, path.to_path_buf())
+                    .with_context(|| format!("Failed to load splits file \"{}\"", splits))?;
             }
             if let Some(autosplitter) = config.recent_autosplitter {
-                let f = std::fs::File::open(autosplitter)?;
-                self.load_autosplitter(&f)?;
+                let f = std::fs::File::open(&autosplitter).with_context(|| {
+                    format!("Failed to open autosplitter config \"{}\"", autosplitter)
+                })?;
+                self.load_autosplitter(&f).with_context(|| {
+                    format!("Failed to load autosplitter config \"{}\"", autosplitter)
+                })?;
             }
             Ok(())
         });
+        self.load_errors = queue;
     }
 
-    pub fn load_layout(
-        &mut self,
-        f: &std::fs::File,
-        ctx: &egui::Context,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn load_layout(&mut self, f: &std::fs::File, ctx: &egui::Context) -> Result<()> {
         use std::io::Read;
         let mut reader = std::io::BufReader::new(f);
         let mut layout_file = String::new();
@@ -280,21 +290,17 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn load_splits(
-        &mut self,
-        f: &std::fs::File,
-        path: std::path::PathBuf,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn load_splits(&mut self, f: &std::fs::File, path: std::path::PathBuf) -> Result<()> {
         use livesplit_core::run::parser::composite;
         use std::io::Read;
-        let file_contents: Result<Vec<_>, _> = f.bytes().collect();
+        let file_contents: std::result::Result<Vec<_>, _> = f.bytes().collect();
         // TODO: fix this unwrap
         *self.timer.write().unwrap() =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
         Ok(())
     }
 
-    pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<(), Box<dyn Error>> {
+    pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<()> {
         *self.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
         Ok(())
     }
@@ -394,7 +400,7 @@ impl LiveSplitCoreRenderer {
         default_dir: &str,
         default_fname: &str,
         file_type: (&str, &str),
-        save_action: impl FnOnce(&mut Self, std::fs::File) -> Result<(), Box<dyn Error>>,
+        save_action: impl FnOnce(&mut Self, std::fs::File) -> Result<()>,
     ) {
         use rfd::FileDialog;
         messagebox_on_error(|| {
@@ -495,11 +501,7 @@ impl LiveSplitCoreRenderer {
         &mut self,
         default_dir: &str,
         file_type: (&str, &str),
-        open_action: impl FnOnce(
-            &mut Self,
-            std::fs::File,
-            std::path::PathBuf,
-        ) -> Result<(), Box<dyn Error>>,
+        open_action: impl FnOnce(&mut Self, std::fs::File, std::path::PathBuf) -> Result<()>,
     ) {
         use rfd::FileDialog;
         messagebox_on_error(|| {
@@ -518,7 +520,7 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    pub fn enable_global_hotkeys(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn enable_global_hotkeys(&mut self) -> Result<()> {
         // It would be more elegant to use get_or_insert_with, however
         // the `with` branch cannot have a `Result` type if we do that.
         let hook: &Hook = match self.global_hotkey_hook.as_ref() {
@@ -676,6 +678,13 @@ impl LiveSplitCoreRenderer {
 impl eframe::App for LiveSplitCoreRenderer {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         //let update_timer = std::time::Instant::now();
+        if self.app_config_processed && !self.load_errors.is_empty() {
+            let mut queue: Vec<anyhow::Error> = vec![];
+            std::mem::swap(&mut queue, &mut self.load_errors);
+            for e in queue.into_iter() {
+                messagebox_on_error(move || Err(e))
+            }
+        }
         if !self.app_config_processed {
             self.process_app_config(ctx);
             self.app_config_processed = true;
@@ -970,7 +979,7 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| loop {
                 let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                print_on_error(|| -> std::result::Result<(), Box<dyn Error>> {
+                print_on_error(|| -> std::result::Result<(), Box<dyn std::error::Error>> {
                     let mut client = crate::usb2snes::SyncClient::connect()?;
                     client.set_name("annelid")?;
                     println!("Server version is {:?}", client.app_version()?);
