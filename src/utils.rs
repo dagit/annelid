@@ -37,7 +37,7 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            queue.push(e.into());
+            queue.push(e);
         }
     }
 }

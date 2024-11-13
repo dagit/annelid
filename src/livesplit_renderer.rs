@@ -678,13 +678,11 @@ impl LiveSplitCoreRenderer {
 impl eframe::App for LiveSplitCoreRenderer {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         //let update_timer = std::time::Instant::now();
-        if self.app_config_processed {
-            if self.load_errors.len() > 0 {
-                let mut queue: Vec<anyhow::Error> = vec![];
-                std::mem::swap(&mut queue, &mut self.load_errors);
-                for e in queue.into_iter() {
-                    messagebox_on_error(move || Err(e))
-                }
+        if self.app_config_processed && !self.load_errors.is_empty() {
+            let mut queue: Vec<anyhow::Error> = vec![];
+            std::mem::swap(&mut queue, &mut self.load_errors);
+            for e in queue.into_iter() {
+                messagebox_on_error(move || Err(e))
             }
         }
         if !self.app_config_processed {
