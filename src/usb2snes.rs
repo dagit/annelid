@@ -24,9 +24,9 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::net::TcpStream;
 use strum_macros::Display;
+use tungstenite::Message;
 use tungstenite::protocol::WebSocket;
 use tungstenite::stream::MaybeTlsStream;
-use tungstenite::Message;
 
 use std::borrow::Cow;
 use std::rc::Rc;

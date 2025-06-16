@@ -1,11 +1,11 @@
 use crate::autosplitters::supermetroid::{SNESState, Settings};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
+use thread_priority::{ThreadBuilder, ThreadPriority, set_current_thread_priority};
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -955,11 +955,13 @@ pub fn app_init(
     let _frame_rate_thread = ThreadBuilder::default()
         .name("Frame Rate Thread".to_owned())
         .priority(ThreadPriority::Min)
-        .spawn(move |_| loop {
-            context.clone().request_repaint();
-            std::thread::sleep(std::time::Duration::from_millis(
-                (1000.0 / frame_rate) as u64,
-            ));
+        .spawn(move |_| {
+            loop {
+                context.clone().request_repaint();
+                std::thread::sleep(std::time::Duration::from_millis(
+                    (1000.0 / frame_rate) as u64,
+                ));
+            }
         })
         // TODO: fix this unwrap
         .unwrap();
@@ -977,67 +979,70 @@ pub fn app_init(
             // We could change this thread priority, but we probably
             // should leave it at the default to make sure we get timely
             // polling of SNES state
-            .spawn(move |_| loop {
-                let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                print_on_error(|| -> std::result::Result<(), Box<dyn std::error::Error>> {
-                    let mut client = crate::usb2snes::SyncClient::connect()?;
-                    client.set_name("annelid")?;
-                    println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?.to_vec();
-                    if devices.len() != 1 {
-                        if devices.is_empty() {
-                            Err("No devices present")?;
-                        } else {
-                            Err(format!("You need to select a device: {:#?}", devices))?;
-                        }
-                    }
-                    let device = devices.pop().ok_or("Device list was empty")?;
-                    println!("Using device: {}", device);
-                    client.attach(&device)?;
-                    println!("Connected.");
-                    println!("{:#?}", client.info()?);
-                    let mut snes = SNESState::new();
-                    loop {
-                        let summary = snes.fetch_all(&mut client, &settings.read())?;
-                        if summary.start {
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().start().ok();
-                        }
-                        if summary.reset
-                            && app_config.read().unwrap().reset_timer_on_game_reset
-                                == Some(YesOrNo::Yes)
-                        {
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().reset(true).ok();
-                        }
-                        if summary.split {
-                            timer
-                                .write()
-                                .unwrap()
-                                .set_game_time(snes.gametime_to_seconds())
-                                .ok();
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().split().ok();
-                        }
-                        {
-                            *latency.write() = (summary.latency_average, summary.latency_stddev);
-                        }
-                        // If the timer gets reset, we need to make a fresh snes state
-                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                            snes = SNESState::new();
-                            //Reset the snes
-                            if app_config.read().unwrap().reset_game_on_timer_reset
-                                == Some(YesOrNo::Yes)
-                            {
-                                client.reset()?;
+            .spawn(move |_| {
+                loop {
+                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                    print_on_error(|| -> std::result::Result<(), Box<dyn std::error::Error>> {
+                        let mut client = crate::usb2snes::SyncClient::connect()?;
+                        client.set_name("annelid")?;
+                        println!("Server version is {:?}", client.app_version()?);
+                        let mut devices = client.list_device()?.to_vec();
+                        if devices.len() != 1 {
+                            if devices.is_empty() {
+                                Err("No devices present")?;
+                            } else {
+                                Err(format!("You need to select a device: {:#?}", devices))?;
                             }
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            (1000.0 / polling_rate) as u64,
-                        ));
-                    }
-                });
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                        let device = devices.pop().ok_or("Device list was empty")?;
+                        println!("Using device: {}", device);
+                        client.attach(&device)?;
+                        println!("Connected.");
+                        println!("{:#?}", client.info()?);
+                        let mut snes = SNESState::new();
+                        loop {
+                            let summary = snes.fetch_all(&mut client, &settings.read())?;
+                            if summary.start {
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().start().ok();
+                            }
+                            if summary.reset
+                                && app_config.read().unwrap().reset_timer_on_game_reset
+                                    == Some(YesOrNo::Yes)
+                            {
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().reset(true).ok();
+                            }
+                            if summary.split {
+                                timer
+                                    .write()
+                                    .unwrap()
+                                    .set_game_time(snes.gametime_to_seconds())
+                                    .ok();
+                                // TODO: fix this unwrap
+                                timer.write().unwrap().split().ok();
+                            }
+                            {
+                                *latency.write() =
+                                    (summary.latency_average, summary.latency_stddev);
+                            }
+                            // If the timer gets reset, we need to make a fresh snes state
+                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                snes = SNESState::new();
+                                //Reset the snes
+                                if app_config.read().unwrap().reset_game_on_timer_reset
+                                    == Some(YesOrNo::Yes)
+                                {
+                                    client.reset()?;
+                                }
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
+                        }
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                }
             })
             //TODO: fix this unwrap
             .unwrap();
