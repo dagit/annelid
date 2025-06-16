@@ -632,7 +632,7 @@ impl Settings {
         match self.data.get(var) {
             None => false,
             Some((b, None)) => *b,
-            Some((b, Some(ref p))) => *b && self.get(p),
+            Some((b, Some(p))) => *b && self.get(p),
         }
     }
 
