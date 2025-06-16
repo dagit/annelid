@@ -292,8 +292,8 @@ impl LiveSplitCoreRenderer {
 
     pub fn load_splits(&mut self, f: &std::fs::File, path: std::path::PathBuf) -> Result<()> {
         use livesplit_core::run::parser::composite;
-        use std::io::Read;
-        let file_contents: std::result::Result<Vec<_>, _> = f.bytes().collect();
+        use std::io::{BufReader, Read};
+        let file_contents: std::result::Result<Vec<_>, _> = BufReader::new(f).bytes().collect();
         // TODO: fix this unwrap
         *self.timer.write().unwrap() =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
