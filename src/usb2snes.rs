@@ -24,9 +24,10 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::net::TcpStream;
 use strum_macros::Display;
-use tungstenite::Message;
 use tungstenite::protocol::WebSocket;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::Bytes;
+use tungstenite::Message;
 
 use std::borrow::Cow;
 use std::rc::Rc;
@@ -148,7 +149,7 @@ impl SyncClient {
         let mut textreply: String = String::from("");
         match reply {
             Message::Text(value) => {
-                textreply = value;
+                textreply = value.to_string();
             }
             _ => Err("Error getting a reply")?,
         };
@@ -232,7 +233,8 @@ impl SyncClient {
         let mut start = 0;
         let mut stop = 1024;
         while start < data.len() {
-            self.client.send(Message::binary(&data[start..stop]))?;
+            self.client
+                .send(Message::binary(Bytes::copy_from_slice(&data[start..stop])))?;
             start += 1024;
             stop += 1024;
             if stop > data.len() {

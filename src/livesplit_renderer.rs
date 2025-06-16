@@ -1,11 +1,11 @@
 use crate::autosplitters::supermetroid::{SNESState, Settings};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use thread_priority::{ThreadBuilder, ThreadPriority, set_current_thread_priority};
+use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -955,13 +955,11 @@ pub fn app_init(
     let _frame_rate_thread = ThreadBuilder::default()
         .name("Frame Rate Thread".to_owned())
         .priority(ThreadPriority::Min)
-        .spawn(move |_| {
-            loop {
-                context.clone().request_repaint();
-                std::thread::sleep(std::time::Duration::from_millis(
-                    (1000.0 / frame_rate) as u64,
-                ));
-            }
+        .spawn(move |_| loop {
+            context.clone().request_repaint();
+            std::thread::sleep(std::time::Duration::from_millis(
+                (1000.0 / frame_rate) as u64,
+            ));
         })
         // TODO: fix this unwrap
         .unwrap();
