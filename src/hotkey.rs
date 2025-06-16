@@ -120,6 +120,9 @@ pub fn to_livesplit_keycode(key: &::egui::Key) -> livesplit_hotkey::KeyCode {
         egui::Key::Period => Period,
         egui::Key::Semicolon => Semicolon,
         egui::Key::Quote => Quote,
+        egui::Key::Exclamationmark => Digit1,
+        egui::Key::OpenCurlyBracket => BracketLeft,
+        egui::Key::CloseCurlyBracket => BracketRight,
     }
 }
 

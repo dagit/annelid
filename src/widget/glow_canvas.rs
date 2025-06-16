@@ -144,7 +144,7 @@ impl GlowCanvas {
                         0,
                         glow::RGBA,
                         glow::UNSIGNED_BYTE,
-                        None,
+                        glow::PixelUnpackData::Slice(None),
                     );
                     debug_assert_eq!(gl.get_error(), 0);
                     buffer[resources.buffer_idx].mapped = true;
