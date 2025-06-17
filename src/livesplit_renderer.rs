@@ -1,5 +1,7 @@
-use crate::autosplitters::supermetroid::{SNESState, Settings};
-use anyhow::{anyhow, Result};
+use crate::autosplitters::supermetroid::Settings;
+use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
+use crate::autosplitters::AutoSplitter;
+use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
@@ -980,45 +982,62 @@ pub fn app_init(
             .spawn(move |_| {
                 loop {
                     let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                    print_on_error(|| -> std::result::Result<(), Box<dyn std::error::Error>> {
-                        let mut client = crate::usb2snes::SyncClient::connect()?;
+                    print_on_error(|| -> anyhow::Result<()> {
+                        let mut client = crate::usb2snes::SyncClient::connect()
+                            .context("creating usb2snes connection")?;
                         client.set_name("annelid")?;
                         println!("Server version is {:?}", client.app_version()?);
                         let mut devices = client.list_device()?.to_vec();
                         if devices.len() != 1 {
                             if devices.is_empty() {
-                                Err("No devices present")?;
+                                Err(anyhow!("No devices present"))?;
                             } else {
-                                Err(format!("You need to select a device: {:#?}", devices))?;
+                                Err(anyhow!("You need to select a device: {:#?}", devices))?;
                             }
                         }
-                        let device = devices.pop().ok_or("Device list was empty")?;
+                        let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
                         println!("Using device: {}", device);
                         client.attach(&device)?;
                         println!("Connected.");
                         println!("{:#?}", client.info()?);
-                        let mut snes = SNESState::new();
+                        let mut autosplitter: Box<dyn AutoSplitter> =
+                            Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
                         loop {
-                            let summary = snes.fetch_all(&mut client, &settings.read())?;
+                            let summary = autosplitter.update(&mut client)?;
                             if summary.start {
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().start().ok();
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .start()
+                                    .ok();
                             }
                             if summary.reset
                                 && app_config.read().unwrap().reset_timer_on_game_reset
                                     == Some(YesOrNo::Yes)
                             {
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().reset(true).ok();
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .reset(true)
+                                    .ok();
                             }
                             if summary.split {
                                 timer
                                     .write()
                                     .unwrap()
-                                    .set_game_time(snes.gametime_to_seconds())
+                                    .set_game_time(autosplitter.gametime_to_seconds())
                                     .ok();
-                                // TODO: fix this unwrap
-                                timer.write().unwrap().split().ok();
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .split()
+                                    .ok();
                             }
                             {
                                 *latency.write() =
@@ -1026,7 +1045,7 @@ pub fn app_init(
                             }
                             // If the timer gets reset, we need to make a fresh snes state
                             if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                snes = SNESState::new();
+                                autosplitter.reset_game_tracking();
                                 //Reset the snes
                                 if app_config.read().unwrap().reset_game_on_timer_reset
                                     == Some(YesOrNo::Yes)

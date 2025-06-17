@@ -1,12 +1,16 @@
 #![allow(non_upper_case_globals)]
 
+use anyhow::Result;
 use livesplit_core::TimeSpan;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::error::Error;
 use std::ops::Index;
+use std::sync::Arc;
 use std::time::Instant;
 use time::Duration;
+
+use super::{AutoSplitter, SNESSummary};
 
 lazy_static! {
     static ref roomIDEnum: HashMap<&'static str, u32> = {
@@ -1628,15 +1632,6 @@ impl MemoryWatcher {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct SNESSummary {
-    pub latency_average: f32,
-    pub latency_stddev: f32,
-    pub start: bool,
-    pub reset: bool,
-    pub split: bool,
-}
-
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct SNESState {
@@ -1729,7 +1724,7 @@ impl SNESState {
         &mut self,
         client: &mut crate::usb2snes::SyncClient,
         settings: &Settings,
-    ) -> Result<SNESSummary, Box<dyn Error>> {
+    ) -> Result<SNESSummary> {
         let start_time = Instant::now();
         let snes_data = client.get_addresses(&[
             (0xF5008B, 2),  // Controller 1 Input
@@ -1826,5 +1821,36 @@ impl Index<&str> for SNESState {
 
     fn index(&self, var: &str) -> &Self::Output {
         self.vars.get(var).unwrap()
+    }
+}
+
+pub struct SuperMetroidAutoSplitter {
+    snes: SNESState,
+    settings: Arc<RwLock<Settings>>,
+}
+
+impl SuperMetroidAutoSplitter {
+    pub fn new(settings: Arc<RwLock<Settings>>) -> Self {
+        Self {
+            snes: SNESState::new(),
+            settings,
+        }
+    }
+}
+
+impl AutoSplitter for SuperMetroidAutoSplitter {
+    fn update(
+        &mut self,
+        client: &mut crate::usb2snes::SyncClient,
+    ) -> Result<crate::autosplitters::SNESSummary> {
+        self.snes.fetch_all(client, &self.settings.read())
+    }
+
+    fn gametime_to_seconds(&self) -> TimeSpan {
+        self.snes.gametime_to_seconds()
+    }
+
+    fn reset_game_tracking(&mut self) {
+        self.snes = SNESState::new();
     }
 }

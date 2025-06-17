@@ -20,7 +20,7 @@ where
 
 pub fn print_on_error<F>(f: F)
 where
-    F: FnOnce() -> Result<(), Box<dyn std::error::Error>>,
+    F: FnOnce() -> Result<()>,
 {
     match f() {
         Ok(()) => {}
