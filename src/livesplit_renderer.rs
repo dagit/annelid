@@ -1097,13 +1097,15 @@ pub fn app_init(
                                     .ok();
                             }
                             if summary.split {
-                                timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .set_game_time(autosplitter.gametime_to_seconds())
-                                    .ok();
+                                if let Some(t) = autosplitter.gametime_to_seconds() {
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .set_game_time(t)
+                                        .ok();
+                                }
                                 timer
                                     .write()
                                     .map_err(|e| {

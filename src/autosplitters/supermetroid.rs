@@ -1846,8 +1846,8 @@ impl AutoSplitter for SuperMetroidAutoSplitter {
         self.snes.fetch_all(client, &self.settings.read())
     }
 
-    fn gametime_to_seconds(&self) -> TimeSpan {
-        self.snes.gametime_to_seconds()
+    fn gametime_to_seconds(&self) -> Option<TimeSpan> {
+        Some(self.snes.gametime_to_seconds())
     }
 
     fn reset_game_tracking(&mut self) {
