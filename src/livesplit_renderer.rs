@@ -577,25 +577,25 @@ impl LiveSplitCoreRenderer {
 
         // This is a bit of a mess but it lets us reduce a lot of duplication.
         // the idea here is that make_cb gives us a fresh callback each time
-        // we call it. That way we can register the call back twice,
+        // we clone it. That way we can register the call back twice,
         // once for the primary key and once for the alternate key.
-        fn reg<K, F>(hook: &Hook, hot_key: &HotKey, make_cb: F) -> Result<()>
+        fn reg<F>(hook: &Hook, hot_key: &HotKey, make_cb: F) -> Result<()>
         where
-            F: Fn() -> K,
-            K: Fn() + 'static + Send,
+            F: Fn() + Send + 'static + Clone,
         {
             // main binding
-            hook.register(hot_key.to_livesplit_hotkey(), make_cb())?;
+            hook.register(hot_key.to_livesplit_hotkey(), make_cb.clone())?;
             // optional “alt” binding
             if let Some(alt_code) = to_livesplit_keycode_alternative(&hot_key.key) {
                 let alt = livesplit_hotkey::Hotkey {
                     key_code: alt_code,
                     modifiers: to_livesplit_modifiers(&hot_key.modifiers),
                 };
-                hook.register(alt, make_cb())?;
+                hook.register(alt, make_cb)?;
             }
             Ok(())
         }
+
         let cfg = self
             .app_config
             .read()
@@ -604,137 +604,92 @@ impl LiveSplitCoreRenderer {
         let thread_chan = self.thread_chan.clone();
         let app_cfg = self.app_config.clone();
 
-        #[expect(clippy::type_complexity)]
-        let bindings: Vec<(Option<_>, Box<dyn Fn() -> Box<dyn Fn() + 'static + Send>>)> = vec![
-            (
-                // start/split
-                cfg.hot_key_start,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.split_or_start().ok())
-                                .map_err(|e| println!("split/start lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-            (
-                // reset
-                cfg.hot_key_reset,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        let tc = thread_chan.clone();
-                        let app_cfg = app_cfg.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.reset(true).ok())
-                                .map_err(|e| println!("reset lock failed: {e}"));
-                            if app_cfg
-                                .read()
-                                .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
-                                .unwrap_or(false)
-                            {
-                                tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
-                            }
-                        })
-                    }
-                }),
-            ),
-            (
-                // undo
-                cfg.hot_key_undo,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.undo_split().ok())
-                                .map_err(|e| println!("undo lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-            (
-                // Skip
-                cfg.hot_key_skip,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.skip_split().ok())
-                                .map_err(|e| println!("skip split lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-            (
-                // pause
-                cfg.hot_key_pause,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.toggle_pause().ok())
-                                .map_err(|e| println!("toggle pause lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-            (
-                // next comparison
-                cfg.hot_key_comparison_next,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.switch_to_next_comparison())
-                                .map_err(|e| println!("next comparison lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-            (
-                // prev comparison
-                cfg.hot_key_comparison_prev,
-                Box::new({
-                    let timer = timer.clone();
-                    move || {
-                        let timer = timer.clone();
-                        Box::new(move || {
-                            let _ = timer
-                                .write()
-                                .map(|mut g| g.switch_to_previous_comparison())
-                                .map_err(|e| println!("prev comparison lock failed: {e}"));
-                        })
-                    }
-                }),
-            ),
-        ];
-
         print!("Registering global hotkeys...");
-        for (maybe_hk, make_cb) in bindings {
-            if let Some(hk) = maybe_hk {
-                // maybe we should log and keep going instead?
-                reg(hook, &hk, make_cb)?;
-            }
+        if let Some(hk) = cfg.hot_key_start {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.split_or_start().ok())
+                        .map_err(|e| println!("split/start lock failed: {e}"));
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_reset {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                let tc = thread_chan.clone();
+                let app_cfg = app_cfg.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.reset(true).ok())
+                        .map_err(|e| println!("reset lock failed: {e}"));
+                    if app_cfg
+                        .read()
+                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
+                        .unwrap_or(false)
+                    {
+                        tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
+                    }
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_undo {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.undo_split().ok())
+                        .map_err(|e| println!("undo lock failed: {e}"));
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_skip {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.skip_split().ok())
+                        .map_err(|e| println!("skip split lock failed: {e}"));
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_pause {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.toggle_pause().ok())
+                        .map_err(|e| println!("toggle pause lock failed: {e}"));
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_comparison_next {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.switch_to_next_comparison())
+                        .map_err(|e| println!("next comparison lock failed: {e}"));
+                }
+            })?;
+        }
+        if let Some(hk) = cfg.hot_key_comparison_prev {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.switch_to_previous_comparison())
+                        .map_err(|e| println!("prev comparison lock failed: {e}"));
+                }
+            })?;
         }
 
         println!("registered");
