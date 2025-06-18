@@ -1,3 +1,5 @@
+use std::ops::BitOr;
+
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone)]
@@ -9,6 +11,118 @@ pub struct HotKey {
 impl HotKey {
     pub fn to_livesplit_hotkey(self) -> livesplit_hotkey::Hotkey {
         to_livesplit_keycode(&self.key).with_modifiers(to_livesplit_modifiers(&self.modifiers))
+    }
+}
+
+pub fn to_egui_keycode(key: livesplit_hotkey::KeyCode) -> ::egui::Key {
+    use livesplit_hotkey::KeyCode::*;
+
+    match key {
+        ArrowDown => egui::Key::ArrowDown,
+        ArrowLeft => egui::Key::ArrowLeft,
+        ArrowRight => egui::Key::ArrowRight,
+        ArrowUp => egui::Key::ArrowUp,
+        Escape => egui::Key::Escape,
+        Tab => egui::Key::Tab,
+        Backspace => egui::Key::Backspace,
+        Enter => egui::Key::Enter,
+        Space => egui::Key::Space,
+        Insert => egui::Key::Insert,
+        Delete => egui::Key::Delete,
+        Home => egui::Key::Home,
+        End => egui::Key::End,
+        PageUp => egui::Key::PageUp,
+        PageDown => egui::Key::PageDown,
+        Numpad0 => egui::Key::Num0,
+        Numpad1 => egui::Key::Num1,
+        Numpad2 => egui::Key::Num2,
+        Numpad3 => egui::Key::Num3,
+        Numpad4 => egui::Key::Num4,
+        Numpad5 => egui::Key::Num5,
+        Numpad6 => egui::Key::Num6,
+        Numpad7 => egui::Key::Num7,
+        Numpad8 => egui::Key::Num8,
+        Numpad9 => egui::Key::Num9,
+        KeyA => egui::Key::A,
+        KeyB => egui::Key::B,
+        KeyC => egui::Key::C,
+        KeyD => egui::Key::D,
+        KeyE => egui::Key::E,
+        KeyF => egui::Key::F,
+        KeyG => egui::Key::G,
+        KeyH => egui::Key::H,
+        KeyI => egui::Key::I,
+        KeyJ => egui::Key::J,
+        KeyK => egui::Key::K,
+        KeyL => egui::Key::L,
+        KeyM => egui::Key::M,
+        KeyN => egui::Key::N,
+        KeyO => egui::Key::O,
+        KeyP => egui::Key::P,
+        KeyQ => egui::Key::Q,
+        KeyR => egui::Key::R,
+        KeyS => egui::Key::S,
+        KeyT => egui::Key::T,
+        KeyU => egui::Key::U,
+        KeyV => egui::Key::V,
+        KeyW => egui::Key::W,
+        KeyX => egui::Key::X,
+        KeyY => egui::Key::Y,
+        KeyZ => egui::Key::Z,
+        F1 => egui::Key::F1,
+        F2 => egui::Key::F2,
+        F3 => egui::Key::F3,
+        F4 => egui::Key::F4,
+        F5 => egui::Key::F5,
+        F6 => egui::Key::F6,
+        F7 => egui::Key::F7,
+        F8 => egui::Key::F8,
+        F9 => egui::Key::F9,
+        F10 => egui::Key::F10,
+        F11 => egui::Key::F11,
+        F12 => egui::Key::F12,
+        F13 => egui::Key::F13,
+        F14 => egui::Key::F14,
+        F15 => egui::Key::F15,
+        F16 => egui::Key::F16,
+        F17 => egui::Key::F17,
+        F18 => egui::Key::F18,
+        F19 => egui::Key::F19,
+        F20 => egui::Key::F20,
+        F21 => egui::Key::F21,
+        F22 => egui::Key::F22,
+        F23 => egui::Key::F23,
+        F24 => egui::Key::F24,
+        // F24 => egui::Key::F25, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F26, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F27, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F28, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F29, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F30, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F31, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F32, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F33, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F34, // TODO: hotkey lib doesn't support this yet
+        // F24 => egui::Key::F35, // TODO: hotkey lib doesn't support this yet
+        Minus => egui::Key::Minus,
+        // Equal => egui::Key::Plus,
+        Equal => egui::Key::Equals,
+        Copy => egui::Key::Copy,
+        Cut => egui::Key::Cut,
+        Paste => egui::Key::Paste,
+        Comma => egui::Key::Comma,
+        Backslash => egui::Key::Backslash,
+        Slash => egui::Key::Slash,
+        // Slash => egui::Key::Questionmark,
+        IntlBackslash => egui::Key::Pipe,
+        BracketLeft => egui::Key::OpenBracket,
+        BracketRight => egui::Key::CloseBracket,
+        Backquote => egui::Key::Backtick,
+        Period => egui::Key::Period,
+        Semicolon => egui::Key::Semicolon,
+        // Semicolon => egui::Key::Colon,
+        Quote => egui::Key::Quote,
+        _ => egui::Key::Comma,
     }
 }
 
@@ -142,6 +256,24 @@ pub fn to_livesplit_keycode_alternative(key: &::egui::Key) -> Option<livesplit_h
         egui::Key::Num9 => Some(Digit9),
         _ => None,
     }
+}
+
+pub fn to_egui_modifiers(modifiers: &livesplit_hotkey::Modifiers) -> ::egui::Modifiers {
+    // use livesplit_hotkey::Modifiers;
+    let mut mods = ::egui::Modifiers::NONE;
+    if modifiers.contains(livesplit_hotkey::Modifiers::SHIFT) {
+        mods = ::egui::Modifiers::bitor(mods, ::egui::Modifiers::SHIFT);
+    };
+    if modifiers.contains(livesplit_hotkey::Modifiers::CONTROL) {
+        mods = ::egui::Modifiers::bitor(mods, ::egui::Modifiers::CTRL);
+    };
+    if modifiers.contains(livesplit_hotkey::Modifiers::ALT) {
+        mods = ::egui::Modifiers::bitor(mods, ::egui::Modifiers::ALT);
+    };
+    if modifiers.contains(livesplit_hotkey::Modifiers::META) {
+        mods = ::egui::Modifiers::bitor(mods, ::egui::Modifiers::COMMAND);
+    };
+    mods
 }
 
 pub fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey::Modifiers {
