@@ -3,10 +3,14 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
+use egui::Key;
+use egui::Modifiers;
 use livesplit_core::{Layout, SharedTimer, Timer};
-use livesplit_hotkey::Hook;
+use livesplit_hotkey::{Hook, Hotkey};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -29,12 +33,14 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    project_dirs: directories::ProjectDirs,
     pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
+    show_edit_settings_dialog: std::sync::Arc<AtomicBool>,
+    change_binding: std::sync::Arc<AtomicBool>,
+    hotkey_selector: std::sync::Arc<std::sync::RwLock<Option<i32>>>,
 }
 
 fn show_children(
@@ -76,8 +82,7 @@ impl LiveSplitCoreRenderer {
         layout: Layout,
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        project_dirs: directories::ProjectDirs,
-        cli_config: AppConfig,
+        config: AppConfig,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -90,12 +95,15 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            show_edit_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
+            change_binding: std::sync::Arc::new(AtomicBool::new(false)),
+            hotkey_selector: std::sync::Arc::new(std::sync::RwLock::new(None)),
+
         }
     }
 
@@ -142,87 +150,6 @@ impl LiveSplitCoreRenderer {
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
         Ok(())
-    }
-
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
-            use std::io::Write;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
-            let f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(config_path)?;
-            let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
-            writer.write_all(toml.as_bytes())?;
-            writer.flush()?;
-            Ok(())
-        });
-    }
-
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
-            use std::io::Read;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
-            let saved_config: AppConfig = std::fs::File::open(config_path)
-                .and_then(|mut f| {
-                    let mut buffer = String::new();
-                    f.read_to_string(&mut buffer)?;
-                    match toml::from_str(&buffer) {
-                        Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e)),
-                    }
-                })
-                .unwrap_or_default();
-            // Let the CLI options take precedent if any provided
-            // TODO: this logic is bad, I really need to know if the CLI
-            // stuff was present and whether the stuff was present in the config
-            // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
-            let mut new_app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                new_app_config.recent_layout = cli_config.recent_layout;
-            }
-            if cli_config.recent_splits.is_some() {
-                new_app_config.recent_splits = cli_config.recent_splits;
-            }
-            if cli_config.recent_autosplitter.is_some() {
-                new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-            }
-            if cli_config.use_autosplitter.is_some() {
-                new_app_config.use_autosplitter = cli_config.use_autosplitter;
-            }
-            if cli_config.frame_rate.is_some() {
-                new_app_config.frame_rate = cli_config.frame_rate;
-            }
-            if cli_config.polling_rate.is_some() {
-                new_app_config.polling_rate = cli_config.polling_rate;
-            }
-            if cli_config.reset_timer_on_game_reset.is_some() {
-                new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-            }
-            if cli_config.reset_game_on_timer_reset.is_some() {
-                new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-            }
-            if cli_config.global_hotkeys.is_some() {
-                new_app_config.global_hotkeys = cli_config.global_hotkeys;
-            }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
-            Ok(())
-        });
     }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
@@ -579,20 +506,20 @@ impl LiveSplitCoreRenderer {
         // the idea here is that make_cb gives us a fresh callback each time
         // we clone it. That way we can register the call back twice,
         // once for the primary key and once for the alternate key.
-        fn reg<F>(hook: &Hook, hot_key: &HotKey, make_cb: F) -> Result<()>
+        fn reg<F>(hook: &Hook, hot_key: &Hotkey, make_cb: F) -> Result<()>
         where
             F: Fn() + Send + 'static + Clone,
         {
             // main binding
-            hook.register(hot_key.to_livesplit_hotkey(), make_cb.clone())?;
+            hook.register(*hot_key, make_cb.clone())?;
             // optional “alt” binding
-            if let Some(alt_code) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alt = livesplit_hotkey::Hotkey {
-                    key_code: alt_code,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                hook.register(alt, make_cb)?;
-            }
+            // if let Some(alt_code) = Some(&hot_key.key_code) {
+            //     let alt = livesplit_hotkey::Hotkey {
+            //         key_code: *alt_code,
+            //         modifiers: hot_key.modifiers,
+            //     };
+            //     hook.register(alt, make_cb)?;
+            // }
             Ok(())
         }
 
@@ -616,6 +543,23 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_start {
+            // hook.register(hot_key, move || {
+                // TODO: fix this unwrap
+                // timer.write().unwrap().split_or_start().ok();
+            // })?;
+            // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key_code) {
+            //     let alternative = livesplit_hotkey::Hotkey {
+            //         key_code: alt_key,
+            //         modifiers: hot_key.modifiers,
+            //     };
+            //     let timer = self.timer.clone();
+            //     hook.register(alternative, move || {
+            //         // TODO: fix this unwrap
+            //         timer.write().unwrap().split_or_start().ok();
+            //     })?;
+            // }
+        // }
         if let Some(hk) = cfg.hot_key_reset {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -628,7 +572,7 @@ impl LiveSplitCoreRenderer {
                         .map_err(|e| println!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
-                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
+                        .map(|g| g.use_autosplitter == Some(true))
                         .unwrap_or(false)
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
@@ -636,6 +580,34 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // let timer = self.timer.clone();
+        // let app_config = self.app_config.clone();
+        // let thread_chan = self.thread_chan.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_reset {
+        //     let app_config_ = app_config.clone();
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().reset(true).ok();
+        //         if app_config_.read().unwrap().use_autosplitter == Some(true) {
+        //             thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+        //         }
+        //     })?;
+        //     // if let Some(alt_key) = &hot_key.key_code {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     let thread_chan = self.thread_chan.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().reset(true).ok();
+        //     //         if app_config.read().unwrap().use_autosplitter == Some(true) {
+        //     //             thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+        //     //         }
+        //     //     })?;
+        //     // }
+        // }
         if let Some(hk) = cfg.hot_key_undo {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -647,6 +619,24 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // let timer = self.timer.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_undo {
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().undo_split().ok();
+        //     })?;
+        //     // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().undo_split().ok();
+        //     //     })?;
+        //     // }
+        // }
         if let Some(hk) = cfg.hot_key_skip {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -658,6 +648,24 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // let timer = self.timer.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_skip {
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().skip_split().ok();
+        //     })?;
+        //     // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().skip_split().ok();
+        //     //     })?;
+        //     // }
+        // }
         if let Some(hk) = cfg.hot_key_pause {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -669,6 +677,24 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // let timer = self.timer.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_pause {
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().toggle_pause().ok();
+        //     })?;
+        //     // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().toggle_pause().ok();
+        //     //     })?;
+        //     // }
+        // }
         if let Some(hk) = cfg.hot_key_comparison_next {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -680,6 +706,24 @@ impl LiveSplitCoreRenderer {
                 }
             })?;
         }
+        // let timer = self.timer.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_comparison_next {
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().switch_to_next_comparison();
+        //     })?;
+        //     // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().switch_to_next_comparison();
+        //     //     })?;
+        //     // }
+        // }
         if let Some(hk) = cfg.hot_key_comparison_prev {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -692,8 +736,202 @@ impl LiveSplitCoreRenderer {
             })?;
         }
 
+        // let timer = self.timer.clone();
+        // if let Some(hot_key) = self.app_config.read().unwrap().hot_key_comparison_prev {
+        //     hook.register(hot_key, move || {
+        //         // TODO: fix this unwrap
+        //         timer.write().unwrap().switch_to_previous_comparison();
+        //     })?;
+        //     // if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
+        //     //     let alternative = livesplit_hotkey::Hotkey {
+        //     //         key_code: alt_key,
+        //     //         modifiers: hot_key.modifiers,
+        //     //     };
+        //     //     let timer = self.timer.clone();
+        //     //     hook.register(alternative, move || {
+        //     //         // TODO: fix this unwrap
+        //     //         timer.write().unwrap().switch_to_previous_comparison();
+        //     //     })?;
+        //     // }
+        // }
         println!("registered");
         Ok(())
+    }
+
+    pub fn open_setings_edit_dialog(&mut self, ctx: &egui::Context) {
+        // let mut temp_layout = livesplit_core::LayoutEditor::new(self.layout.clone()).unwrap();
+        // // self.layout_editor = temp_layout.unwrap();
+
+        if self.show_edit_settings_dialog.load(Ordering::Relaxed) {
+            let show_deferred_viewport = self.show_edit_settings_dialog.clone();
+            let local_change_binding= self.change_binding.clone();
+            let hStart = self.app_config.read().unwrap().hot_key_start.unwrap();
+            let hReset = self.app_config.read().unwrap().hot_key_reset.unwrap();
+            let hUndo = self.app_config.read().unwrap().hot_key_undo.unwrap();
+            let hSkip = self.app_config.read().unwrap().hot_key_skip.unwrap();
+            let hPause = self.app_config.read().unwrap().hot_key_pause.unwrap();
+            let hSwitchP = self.app_config.read().unwrap().hot_key_comparison_prev.unwrap();
+            let hSwitchN = self.app_config.read().unwrap().hot_key_comparison_next.unwrap();
+            let hToggleG = self.app_config.read().unwrap().hot_key_toggle_global_hotkeys.unwrap();
+            let mut hSelector = self.hotkey_selector.clone();
+            let mut globalHotkeys = self.app_config.clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("deferred_viewport"),
+                egui::ViewportBuilder::default()
+                .with_title("Settings Editor")
+                .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.label("Hotkeys");
+                        ui.label("Start / Split");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hStart));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(1);
+                        }
+                        ui.label("Reset");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hReset));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(2);
+                        }
+                        ui.label("Undo Split");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hUndo));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(3);
+                        }
+                        ui.label("Skip Split");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSkip));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(4);
+                        }
+                        ui.label("Pause");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hPause));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(5);
+                        }
+                        ui.label("Switch Comparison (Previous)");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchP));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(6);
+                        }
+                        ui.label("Switch Comparison (Next)");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchN));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(7);
+                        }
+                        ui.label("Toggle Global Hotkeys");
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hToggleG));
+                        if response.clicked() {
+                            local_change_binding.store(true, Ordering::Relaxed);
+                            hSelector.write().unwrap().replace(8);
+                        }
+                        let mut value = globalHotkeys.read().unwrap().global_hotkeys.unwrap();
+                        let response = ui.checkbox(&mut value, "Global Hotkeys");
+                        if response.clicked() {
+                            globalHotkeys.write().unwrap().global_hotkeys.replace(value);
+                        }
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+            if self.change_binding.load(Ordering::Relaxed) {
+                self.update_keybinding(ctx);
+            }
+        }
+    }
+
+    fn button_text_update (hotkey: livesplit_hotkey::Hotkey) -> String {
+        let modif = hotkey.modifiers;
+        let key = hotkey.key_code.name();
+        let mut output = String::new();
+        if modif.contains(livesplit_hotkey::Modifiers::SHIFT) {
+            output += "Shift+";
+        }
+        if modif.contains(livesplit_hotkey::Modifiers::CONTROL) {
+            output += "Control+";
+        }
+        if modif.contains(livesplit_hotkey::Modifiers::ALT) {
+            output += "Alt+";
+        }
+        if modif.contains(livesplit_hotkey::Modifiers::META) {
+            output += "Meta+";
+        }
+        output += key;
+        output
+    }
+
+    fn update_keybinding(&self, ctx: &egui::Context){
+        let hSelector = self.hotkey_selector.clone();
+        ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("change_binding"),
+            egui::ViewportBuilder::default()
+            .with_title("Change Binding")
+            // .with_decorations(false)
+            // .with_titlebar_shown(false)
+            .with_inner_size([200.0, 100.0]),
+            |ctx, class | {
+                assert!(
+                    class == egui::ViewportClass::Immediate,
+                "This egui backend doesn't support multiple viewports"
+            );
+
+            egui::CentralPanel::default()
+            .show(ctx, |ui| {
+                ui.label("Hold the modifier keys (if any)");
+                ui.label("Then press a key!");
+                ctx.input_mut(|i|{
+                    let modifiers = Modifiers::NONE;
+                    let logical_key = Key::Escape;
+                    if i.consume_key(modifiers, logical_key){
+                            ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of("deferred_viewport"),egui::ViewportCommand::Close);
+                            self.change_binding.store(false, Ordering::Relaxed);
+                        } else {
+                        if i.keys_down.len() == 1 {
+                            let keys = crate::hotkey::to_livesplit_keycode(&i.keys_down.clone().iter().next().unwrap().clone());
+                            let modif = crate::hotkey::to_livesplit_modifiers(&i.modifiers.clone());
+                            let new_hotkey = livesplit_hotkey::Hotkey {
+                                key_code: keys,
+                                modifiers: modif,
+                            };
+                            match hSelector.read().unwrap().unwrap() {
+                                1 => self.app_config.write().unwrap().hot_key_start = Some(new_hotkey),
+                                2 => self.app_config.write().unwrap().hot_key_reset = Some(new_hotkey),
+                                3 => self.app_config.write().unwrap().hot_key_undo = Some(new_hotkey),
+                                4 => self.app_config.write().unwrap().hot_key_skip = Some(new_hotkey),
+                                5 => self.app_config.write().unwrap().hot_key_pause = Some(new_hotkey),
+                                6 => self.app_config.write().unwrap().hot_key_comparison_prev = Some(new_hotkey),
+                                7 => self.app_config.write().unwrap().hot_key_comparison_next = Some(new_hotkey),
+                                8 => self.app_config.write().unwrap().hot_key_toggle_global_hotkeys = Some(new_hotkey),
+                                _ => return,
+                            }
+                            self.change_binding.store(false, Ordering::Relaxed);
+                        } else {
+                            // error
+                        }
+                    }
+                })
+            });
+
+            if ctx.input(|i| i.viewport().close_requested()) {
+                // Tell parent viewport that we should not show next frame:
+                self.change_binding.store(false, Ordering::Relaxed);
+            }
+        });
     }
 }
 
@@ -721,7 +959,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 self.is_exiting = true;
                 self.confirm_save(frame.gl().expect("No GL context"))
                     .unwrap();
-                self.save_app_config();
+                self.app_config.read().unwrap().save_app_config(); // aquire read lock then save app config
             }
         });
         if self.can_exit {
@@ -838,7 +1076,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true).ok();
-                        if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+                        if self.app_config.read().unwrap().use_autosplitter == Some(true) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
@@ -861,6 +1099,13 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                 });
                 ui.separator();
+                if ui.button("Settings").clicked() {
+                    let show_deferred_viewport = true;
+                    self.show_edit_settings_dialog
+                        .store(show_deferred_viewport, Ordering::Relaxed);
+                    ui.close_menu()
+                }
+                ui.separator();
                 ui.add(egui::widgets::Label::new(format!(
                     "Comparison: {}",
                     self.timer.read().unwrap().current_comparison()
@@ -870,6 +1115,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
+
+            self.open_setings_edit_dialog(ctx);
+
         settings_editor
             .open(&mut self.show_settings_editor)
             .resizable(true)
@@ -891,20 +1139,26 @@ impl eframe::App for LiveSplitCoreRenderer {
             }
         });
         {
+        
             let config = self.app_config.read().unwrap();
-            if config.global_hotkeys != Some(YesOrNo::Yes) {
+
+            // let test = config.global_hotkeys;
+            if config.global_hotkeys != Some(true) {
+
                 ctx.input_mut(|input| {
+
+                    
                     if let Some(hot_key) = config.hot_key_start {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().split_or_start().ok();
                         }
                     }
                     if let Some(hot_key) = config.hot_key_reset {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().reset(true).ok();
-                            if config.use_autosplitter == Some(YesOrNo::Yes) {
+                            if config.use_autosplitter == Some(true) {
                                 self.thread_chan
                                     .try_send(ThreadEvent::TimerReset)
                                     .unwrap_or(());
@@ -912,31 +1166,31 @@ impl eframe::App for LiveSplitCoreRenderer {
                         }
                     }
                     if let Some(hot_key) = config.hot_key_undo {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().undo_split().ok();
                         }
                     }
                     if let Some(hot_key) = config.hot_key_skip {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().skip_split().ok();
                         }
                     }
                     if let Some(hot_key) = config.hot_key_pause {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().toggle_pause().ok();
                         }
                     }
                     if let Some(hot_key) = config.hot_key_comparison_next {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().switch_to_next_comparison();
                         }
                     }
                     if let Some(hot_key) = config.hot_key_comparison_prev {
-                        if input.consume_key(hot_key.modifiers, hot_key.key) {
+                        if input.consume_key(to_egui_modifiers(&hot_key.modifiers), to_egui_keycode(hot_key.key_code)) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().switch_to_previous_comparison();
                         }
@@ -956,8 +1210,8 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
-    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
+    // app.load_app_config();
+    if app.app_config.read().unwrap().global_hotkeys == Some(true) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
@@ -994,7 +1248,7 @@ pub fn app_init(
     let settings = app.settings.clone();
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+    if app_config.read().unwrap().use_autosplitter == Some(true) {
         let _snes_polling_thread = ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
@@ -1002,30 +1256,30 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                let latency = Arc::new(RwLock::new((0.0, 0.0)));
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
-                        client.set_name("annelid")?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?.to_vec();
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
+                    client.set_name("annelid")?;
+                    println!("Server version is {:?}", client.app_version()?);
+                    let mut devices = client.list_device()?.to_vec();
+                    if devices.len() != 1 {
+                        if devices.is_empty() {
                                 Err(anyhow!("No devices present"))?;
-                            } else {
+                        } else {
                                 Err(anyhow!("You need to select a device: {:#?}", devices))?;
-                            }
                         }
+                    }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
+                    println!("Using device: {}", device);
+                    client.attach(&device)?;
+                    println!("Connected.");
+                    println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                        loop {
+                    loop {
                             let summary = autosplitter.update(&mut client)?;
-                            if summary.start {
+                        if summary.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1033,16 +1287,16 @@ pub fn app_init(
                                     })?
                                     .start()
                                     .ok();
-                            }
-                            if summary.reset
+                        }
+                        if summary.reset
                                 && app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_timer_on_game_reset
-                                    == Some(YesOrNo::Yes)
-                            {
+                                    == Some(true)
+                        {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1050,16 +1304,16 @@ pub fn app_init(
                                     })?
                                     .reset(true)
                                     .ok();
-                            }
-                            if summary.split {
+                        }
+                        if summary.split {
                                 if let Some(t) = autosplitter.gametime_to_seconds() {
-                                    timer
-                                        .write()
+                            timer
+                                .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .set_game_time(t)
-                                        .ok();
+                                .ok();
                                 }
                                 timer
                                     .write()
@@ -1068,32 +1322,32 @@ pub fn app_init(
                                     })?
                                     .split()
                                     .ok();
-                            }
-                            {
+                        }
+                        {
                                 *latency.write() =
                                     (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        }
+                        // If the timer gets reset, we need to make a fresh snes state
+                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
-                                //Reset the snes
+                            //Reset the snes
                                 if app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_game_on_timer_reset
-                                    == Some(YesOrNo::Yes)
-                                {
-                                    client.reset()?;
-                                }
+                                    == Some(true)
+                            {
+                                client.reset()?;
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
                         }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            (1000.0 / polling_rate) as u64,
+                        ));
+                    }
+                });
+                std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
             })
             //TODO: fix this unwrap
