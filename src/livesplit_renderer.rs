@@ -3,11 +3,15 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
-use livesplit_core::{Layout, SharedTimer, Timer};
+use livesplit_core::{settings, timing, Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
+use tungstenite::http::response;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -29,12 +33,30 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    project_dirs: directories::ProjectDirs,
     pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
+    show_edit_splits_dialog: std::sync::Arc<AtomicBool>,
+    gameName: std::sync::Arc<std::sync::RwLock<Option<String>>>,
+    gameCategory: std::sync::Arc<std::sync::RwLock<Option<String>>>,
+    timerOffset: std::sync::Arc<std::sync::RwLock<Option<String>>>,
+    attempts: std::sync::Arc<std::sync::RwLock<Option<String>>>,
+    segments: std::sync::Arc<
+        std::sync::RwLock<
+            HashMap<
+                u32,
+                (
+                    settings::Image,
+                    String,
+                    timing::Time,
+                    timing::Time,
+                    timing::Time,
+                ),
+            >,
+        >,
+    >,
 }
 
 fn show_children(
@@ -76,8 +98,17 @@ impl LiveSplitCoreRenderer {
         layout: Layout,
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        project_dirs: directories::ProjectDirs,
-        cli_config: AppConfig,
+        config: AppConfig,
+        segmentsMap: HashMap<
+            u32,
+            (
+                settings::Image,
+                String,
+                timing::Time,
+                timing::Time,
+                timing::Time,
+            ),
+        >,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -90,12 +121,21 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            show_edit_splits_dialog: std::sync::Arc::new(AtomicBool::new(false)),
+            gameName: std::sync::Arc::new(std::sync::RwLock::new(Some(
+                "Enter Game Name".to_string(),
+            ))),
+            gameCategory: std::sync::Arc::new(std::sync::RwLock::new(Some(
+                "Enter Game Category".to_string(),
+            ))),
+            timerOffset: std::sync::Arc::new(std::sync::RwLock::new(Some("0.00".to_string()))),
+            attempts: std::sync::Arc::new(std::sync::RwLock::new(Some("0.00".to_string()))),
+            segments: std::sync::Arc::new(std::sync::RwLock::new(segmentsMap)),
         }
     }
 
@@ -142,87 +182,6 @@ impl LiveSplitCoreRenderer {
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
         Ok(())
-    }
-
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
-            use std::io::Write;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
-            let f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(config_path)?;
-            let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
-            writer.write_all(toml.as_bytes())?;
-            writer.flush()?;
-            Ok(())
-        });
-    }
-
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
-            use std::io::Read;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
-            let saved_config: AppConfig = std::fs::File::open(config_path)
-                .and_then(|mut f| {
-                    let mut buffer = String::new();
-                    f.read_to_string(&mut buffer)?;
-                    match toml::from_str(&buffer) {
-                        Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e)),
-                    }
-                })
-                .unwrap_or_default();
-            // Let the CLI options take precedent if any provided
-            // TODO: this logic is bad, I really need to know if the CLI
-            // stuff was present and whether the stuff was present in the config
-            // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
-            let mut new_app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                new_app_config.recent_layout = cli_config.recent_layout;
-            }
-            if cli_config.recent_splits.is_some() {
-                new_app_config.recent_splits = cli_config.recent_splits;
-            }
-            if cli_config.recent_autosplitter.is_some() {
-                new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-            }
-            if cli_config.use_autosplitter.is_some() {
-                new_app_config.use_autosplitter = cli_config.use_autosplitter;
-            }
-            if cli_config.frame_rate.is_some() {
-                new_app_config.frame_rate = cli_config.frame_rate;
-            }
-            if cli_config.polling_rate.is_some() {
-                new_app_config.polling_rate = cli_config.polling_rate;
-            }
-            if cli_config.reset_timer_on_game_reset.is_some() {
-                new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-            }
-            if cli_config.reset_game_on_timer_reset.is_some() {
-                new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-            }
-            if cli_config.global_hotkeys.is_some() {
-                new_app_config.global_hotkeys = cli_config.global_hotkeys;
-            }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
-            Ok(())
-        });
     }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
@@ -320,7 +279,32 @@ impl LiveSplitCoreRenderer {
             .write()
             .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))? =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
-        Ok(())
+                    self.gameName
+            .write()
+            .unwrap()
+            .replace(self.timer.read().unwrap().run().game_name().to_string());
+        self.gameCategory
+            .write()
+            .unwrap()
+            .replace(self.timer.read().unwrap().run().category_name().to_string());
+
+        self.segments.write().unwrap().clear();
+        let mut i = 0;
+
+        for count in self.timer.read().unwrap().run().segments() {
+            self.segments.write().unwrap().insert(
+                i,
+                (
+                    count.icon().clone(),
+                    count.name().to_string(),
+                    count.split_time(),
+                    count.personal_best_split_time(),
+                    count.best_segment_time(),
+                ),
+            );
+            i += 1;
+        }
+                Ok(())
     }
 
     pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<()> {
@@ -628,14 +612,14 @@ impl LiveSplitCoreRenderer {
                         .map_err(|e| println!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
-                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
+                        .map(|g| g.use_autosplitter == Some(true))
                         .unwrap_or(false)
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
-                }
-            })?;
-        }
+                    }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_undo {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -645,8 +629,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.undo_split().ok())
                         .map_err(|e| println!("undo lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_skip {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -656,8 +640,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.skip_split().ok())
                         .map_err(|e| println!("skip split lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_pause {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -667,8 +651,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.toggle_pause().ok())
                         .map_err(|e| println!("toggle pause lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_comparison_next {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -678,8 +662,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_next_comparison())
                         .map_err(|e| println!("next comparison lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_comparison_prev {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -689,11 +673,145 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_previous_comparison())
                         .map_err(|e| println!("prev comparison lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
 
         println!("registered");
         Ok(())
+    }
+
+    pub fn open_splits_edit_dialog(&mut self, ctx: &egui::Context) {
+        if self.show_edit_splits_dialog.load(Ordering::Relaxed) {
+            let show_deferred_viewport = self.show_edit_splits_dialog.clone();
+            let mut editTimer = self.timer.clone();
+            let editGameName = self.gameName.clone();
+            let editGameCategory = self.gameCategory.clone();
+            let offset = self.timerOffset.clone();
+            let aCount = self.attempts.clone();
+            let editSegments = self.segments.clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("Splits Editor")
+                    .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.label("Game Name:");
+                        let test = editGameName.write().unwrap().as_mut().unwrap();
+                        ui.text_edit_singleline(editGameName.write().unwrap().as_mut().unwrap());
+                        ui.label("Run Category:");
+                        let response = ui.text_edit_singleline(
+                            editGameCategory.write().unwrap().as_mut().unwrap(),
+                        );
+                        if response.changed() {}
+                        ui.label("Timer offset:");
+                        ui.text_edit_singleline(offset.write().unwrap().as_mut().unwrap());
+                        ui.label("Attempts:");
+                        ui.text_edit_singleline(aCount.write().unwrap().as_mut().unwrap());
+
+                        // things in livesplit here
+                        // Autosplitter name, activator, settings
+                        // Split specific layout check box, selector, browser
+
+                        let insertAboveResponse = ui.button("Insert Above");
+                        if insertAboveResponse.clicked() {}
+                        let insertBelowResponse = ui.button("Insert Below");
+                        if insertBelowResponse.clicked() {}
+                        let removeResponse = ui.button("Remove Segment");
+                        if removeResponse.clicked() {}
+                        let moveUpResponse = ui.button("Move Up");
+                        if moveUpResponse.clicked() {}
+                        let moveDownResponse = ui.button("Move Down");
+                        if moveDownResponse.clicked() {}
+                        let AddComparisonResponse = ui.button("Add Comparison");
+                        if AddComparisonResponse.clicked() {}
+                        let importComparisonResponse = ui.button("Import Comparison");
+                        if importComparisonResponse.clicked() {}
+                        let otherResponse = ui.button("Other");
+                        if otherResponse.clicked() {}
+
+                        use egui_extras::{Column, TableBuilder};
+                        TableBuilder::new(ui)
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::remainder())
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.heading("Icon");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Segment Name");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Split Time");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Segment Time");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Best Segment Time");
+                                });
+                            })
+                            .body(|mut body| {
+                                //TODO: figure out how to get data out of temp variables for editting and into text edits
+
+                                // let mut i = 0;
+                                // let test = editSegments.write().unwrap().get(i).unwrap().2.real_time.unwrap().to_duration().to_string().as_mut();
+                                // for  (i,value) in &*editSegments.write().unwrap() {
+
+                                // let test = editSegments.write().unwrap().get_mut(&1).unwrap().1.clone();
+                                // let mut _test = value.1.as_mut();
+                                body.row(30.0, |mut row| {
+                                    row.col(|ui| {
+                                        // ui.button("", editSegments.write().unwrap().get(i).as_mut().unwrap().0);
+                                        // egui::widgets::Button::image(editSegments.write().unwrap().get(i).as_mut().unwrap().0.data());
+                                        ui.button("Select Image");
+                                    });
+                                    row.col(|ui| {
+                                        // let str = editSegments.write().unwrap().get(i).as_mut().unwrap().1;
+                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().1);
+                                        // ui.text_edit_singleline( value.1);
+                                    });
+                                    row.col(|ui| {
+                                        // let test = editSegments.write().unwrap().get(i).unwrap().2.real_time.unwrap().to_duration().to_string();
+                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().2.real_time.unwrap().to_duration().to_string());
+                                    });
+                                    row.col(|ui| {
+                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().3.real_time.unwrap().to_duration().to_string());
+                                    });
+                                    row.col(|ui| {
+                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().4.real_time.unwrap().to_duration().to_string());
+                                    });
+                                });
+                                // i += 1;
+                                // }
+                            });
+
+                        let okResponse = ui.button("OK");
+                        if okResponse.clicked() {
+                            // TODO: write modified values to timer
+                        }
+                        let cancelResponse = ui.button("Cancel");
+                        if cancelResponse.clicked() {
+                            // TODO: reset temporary variables
+                            show_deferred_viewport.store(false, Ordering::Relaxed);
+                        }
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+        }
     }
 }
 
@@ -721,7 +839,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 self.is_exiting = true;
                 self.confirm_save(frame.gl().expect("No GL context"))
                     .unwrap();
-                self.save_app_config();
+                self.app_config.read().unwrap().save_app_config(); // aquire read lock then save app config
             }
         });
         if self.can_exit {
@@ -786,7 +904,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         Some(d) => d.to_str().unwrap_or("").to_owned(),
                     },
                 };
-                ui.menu_button("LiveSplit Save/Load", |ui| {
+                ui.menu_button("LiveSplit Save/Load/Edit", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
                         self.open_layout_dialog(&document_dir, ctx).unwrap();
@@ -794,6 +912,12 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
                         self.open_splits_dialog(&document_dir).unwrap();
+                    }
+                    if ui.button("Edit Splits").clicked() {
+                        ui.close_menu();
+                        let show_deferred_viewport = true;
+                        self.show_edit_splits_dialog
+                            .store(show_deferred_viewport, Ordering::Relaxed);
                     }
                     if ui.button("Save Splits as...").clicked() {
                         ui.close_menu();
@@ -838,7 +962,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true).ok();
-                        if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+                        if self.app_config.read().unwrap().use_autosplitter == Some(true) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
@@ -870,6 +994,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
+
+        self.open_splits_edit_dialog(ctx);
+
         settings_editor
             .open(&mut self.show_settings_editor)
             .resizable(true)
@@ -892,7 +1019,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         });
         {
             let config = self.app_config.read().unwrap();
-            if config.global_hotkeys != Some(YesOrNo::Yes) {
+            if config.global_hotkeys != Some(true) {
                 ctx.input_mut(|input| {
                     if let Some(hot_key) = config.hot_key_start {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
@@ -904,7 +1031,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().reset(true).ok();
-                            if config.use_autosplitter == Some(YesOrNo::Yes) {
+                            if config.use_autosplitter == Some(true) {
                                 self.thread_chan
                                     .try_send(ThreadEvent::TimerReset)
                                     .unwrap_or(());
@@ -956,8 +1083,8 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
-    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
+    // app.load_app_config();
+    if app.app_config.read().unwrap().global_hotkeys == Some(true) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
@@ -994,7 +1121,7 @@ pub fn app_init(
     let settings = app.settings.clone();
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+    if app_config.read().unwrap().use_autosplitter == Some(true) {
         let _snes_polling_thread = ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
@@ -1002,30 +1129,30 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                let latency = Arc::new(RwLock::new((0.0, 0.0)));
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
-                        client.set_name("annelid")?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?.to_vec();
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
+                    client.set_name("annelid")?;
+                    println!("Server version is {:?}", client.app_version()?);
+                    let mut devices = client.list_device()?.to_vec();
+                    if devices.len() != 1 {
+                        if devices.is_empty() {
                                 Err(anyhow!("No devices present"))?;
-                            } else {
+                        } else {
                                 Err(anyhow!("You need to select a device: {:#?}", devices))?;
-                            }
                         }
+                    }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
+                    println!("Using device: {}", device);
+                    client.attach(&device)?;
+                    println!("Connected.");
+                    println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                        loop {
+                    loop {
                             let summary = autosplitter.update(&mut client)?;
-                            if summary.start {
+                        if summary.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1033,16 +1160,16 @@ pub fn app_init(
                                     })?
                                     .start()
                                     .ok();
-                            }
-                            if summary.reset
+                        }
+                        if summary.reset
                                 && app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_timer_on_game_reset
-                                    == Some(YesOrNo::Yes)
-                            {
+                                    == Some(true)
+                        {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1050,16 +1177,16 @@ pub fn app_init(
                                     })?
                                     .reset(true)
                                     .ok();
-                            }
-                            if summary.split {
+                        }
+                        if summary.split {
                                 if let Some(t) = autosplitter.gametime_to_seconds() {
-                                    timer
-                                        .write()
+                            timer
+                                .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .set_game_time(t)
-                                        .ok();
+                                .ok();
                                 }
                                 timer
                                     .write()
@@ -1068,32 +1195,32 @@ pub fn app_init(
                                     })?
                                     .split()
                                     .ok();
-                            }
-                            {
+                        }
+                        {
                                 *latency.write() =
                                     (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        }
+                        // If the timer gets reset, we need to make a fresh snes state
+                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
-                                //Reset the snes
+                            //Reset the snes
                                 if app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_game_on_timer_reset
-                                    == Some(YesOrNo::Yes)
+                                    == Some(true)
                                 {
-                                    client.reset()?;
-                                }
+                                client.reset()?;
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
                         }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            (1000.0 / polling_rate) as u64,
+                        ));
+                    }
+                });
+                std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
             })
             //TODO: fix this unwrap
