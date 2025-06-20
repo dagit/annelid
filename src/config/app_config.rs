@@ -2,8 +2,9 @@ use clap::Parser;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::hotkey::*;
+use crate::utils::*;
 
-#[derive(Deserialize, Serialize, Parser, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct AppConfig {
     #[clap(name = "load-splits", short = 's', long, value_parser)]
@@ -13,17 +14,17 @@ pub struct AppConfig {
     #[clap(name = "load-autosplitter", short = 'a', long, value_parser)]
     pub recent_autosplitter: Option<String>,
     #[clap(name = "use-autosplitter", long, action)]
-    pub use_autosplitter: Option<YesOrNo>,
+    pub use_autosplitter: Option<bool>,
     #[clap(name = "polling-rate", long, short = 'p', value_parser)]
     pub polling_rate: Option<f32>,
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     pub frame_rate: Option<f32>,
     #[clap(name = "reset-timer-on-game-reset", long, value_parser)]
-    pub reset_timer_on_game_reset: Option<YesOrNo>,
+    pub reset_timer_on_game_reset: Option<bool>,
     #[clap(name = "reset-game-on-timer-reset", long, value_parser)]
-    pub reset_game_on_timer_reset: Option<YesOrNo>,
+    pub reset_game_on_timer_reset: Option<bool>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
-    pub global_hotkeys: Option<YesOrNo>,
+    pub global_hotkeys: Option<bool>,
     #[clap(skip)]
     pub hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -40,18 +41,18 @@ pub struct AppConfig {
     pub hot_key_comparison_prev: Option<HotKey>,
 }
 
-#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub enum YesOrNo {
-    #[default]
-    Yes,
-    No,
-}
+// #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
+// pub enum YesOrNo {
+//     #[default]
+//     Yes,
+//     No,
+// }
 
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
 pub const DEFAULT_POLLING_RATE: f32 = 20.0;
 
 impl AppConfig {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let modifiers = ::egui::Modifiers::default();
         AppConfig {
             recent_splits: None,
@@ -85,18 +86,78 @@ impl AppConfig {
                 key: egui::Key::Num4,
                 modifiers,
             }),
-            use_autosplitter: Some(YesOrNo::Yes),
+            use_autosplitter: Some(false),
             frame_rate: Some(DEFAULT_FRAME_RATE),
             polling_rate: Some(DEFAULT_POLLING_RATE),
-            reset_timer_on_game_reset: Some(YesOrNo::No),
-            reset_game_on_timer_reset: Some(YesOrNo::No),
-            global_hotkeys: Some(YesOrNo::Yes),
+            reset_timer_on_game_reset: Some(false),
+            reset_game_on_timer_reset: Some(false),
+            global_hotkeys: Some(true),
         }
+    }
+
+    pub fn save_app_config(&self) {
+        use std::io::Write;
+        let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
+            .ok_or("Unable to load computer configuration directory");
+        println!("project_dirs = {:#?}", project_dirs);
+
+        let config_dir = project_dirs.unwrap(); // get preferences directory
+        println!("project_dirs = {:#?}", config_dir.preference_dir());
+
+        messagebox_on_error(|| {
+            std::fs::create_dir_all(config_dir.preference_dir()).expect("Created config dir"); // create preferences directory
+
+            let mut config_path = config_dir.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+
+            println!("Saving to {:#?}", config_path);
+            let f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(config_path)?;
+            let mut writer = std::io::BufWriter::new(f);
+            let toml = toml::to_string_pretty(&self)?;
+            writer.write_all(toml.as_bytes())?;
+            writer.flush()?;
+            Ok(())
+        });
+    }
+
+    pub fn load_app_config(mut self) -> Self {
+        let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
+            .ok_or("Unable to load computer configuration directory");
+        println!("project_dirs = {:#?}", project_dirs);
+
+        let config_dir = project_dirs.unwrap(); // get preferences directory
+        println!("project_dirs = {:#?}", config_dir.preference_dir());
+
+        messagebox_on_error(|| {
+            use std::io::Read;
+            let mut config_path = config_dir.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+            println!("Loading from {:#?}", config_path);
+            let saved_config: AppConfig = std::fs::File::open(config_path)
+                .and_then(|mut f| {
+                    let mut buffer = String::new();
+                    f.read_to_string(&mut buffer)?;
+                    match toml::from_str(&buffer) {
+                        Ok(app_config) => Ok(app_config),
+                        Err(e) => Err(from_de_error(e)),
+                    }
+
+                    // }).unwrap;
+                })
+                .unwrap_or(Self::new());
+            self = saved_config;
+            Ok(())
+        });
+        self
     }
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        AppConfig::new()
-    }
-}
+// impl Default for AppConfig {
+//     fn default() -> Self {
+//         AppConfig::new()
+//     }
+// }
