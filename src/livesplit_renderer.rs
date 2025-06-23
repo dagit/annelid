@@ -29,7 +29,7 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    project_dirs: directories::ProjectDirs,
+    // project_dirs: directories::ProjectDirs,
     pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
@@ -76,8 +76,8 @@ impl LiveSplitCoreRenderer {
         layout: Layout,
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        project_dirs: directories::ProjectDirs,
-        cli_config: AppConfig,
+        // project_dirs: directories::ProjectDirs,
+        config: AppConfig,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -90,8 +90,8 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            // project_dirs,
+            app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
@@ -144,86 +144,79 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
-            use std::io::Write;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
-            let f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(config_path)?;
-            let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
-            writer.write_all(toml.as_bytes())?;
-            writer.flush()?;
-            Ok(())
-        });
-    }
+    // pub fn save_app_config(&self) {
+    //     messagebox_on_error(|| {
+    //         use std::io::Write;
+    //         let mut config_path = self.project_dirs.preference_dir().to_path_buf();
+    //         config_path.push("settings.toml");
+    //         println!("Saving to {:#?}", config_path);
+    //         let f = std::fs::OpenOptions::new()
+    //             .create(true)
+    //             .write(true)
+    //             .truncate(true)
+    //             .open(config_path)?;
+    //         let mut writer = std::io::BufWriter::new(f);
+    //         let toml = toml::to_string_pretty(&self.app_config)?;
+    //         writer.write_all(toml.as_bytes())?;
+    //         writer.flush()?;
+    //         Ok(())
+    //     });
+    // }
 
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
-            use std::io::Read;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
-            let saved_config: AppConfig = std::fs::File::open(config_path)
-                .and_then(|mut f| {
-                    let mut buffer = String::new();
-                    f.read_to_string(&mut buffer)?;
-                    match toml::from_str(&buffer) {
-                        Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e)),
-                    }
-                })
-                .unwrap_or_default();
-            // Let the CLI options take precedent if any provided
-            // TODO: this logic is bad, I really need to know if the CLI
-            // stuff was present and whether the stuff was present in the config
-            // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
-            let mut new_app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                new_app_config.recent_layout = cli_config.recent_layout;
-            }
-            if cli_config.recent_splits.is_some() {
-                new_app_config.recent_splits = cli_config.recent_splits;
-            }
-            if cli_config.recent_autosplitter.is_some() {
-                new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-            }
-            if cli_config.use_autosplitter.is_some() {
-                new_app_config.use_autosplitter = cli_config.use_autosplitter;
-            }
-            if cli_config.frame_rate.is_some() {
-                new_app_config.frame_rate = cli_config.frame_rate;
-            }
-            if cli_config.polling_rate.is_some() {
-                new_app_config.polling_rate = cli_config.polling_rate;
-            }
-            if cli_config.reset_timer_on_game_reset.is_some() {
-                new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-            }
-            if cli_config.reset_game_on_timer_reset.is_some() {
-                new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-            }
-            if cli_config.global_hotkeys.is_some() {
-                new_app_config.global_hotkeys = cli_config.global_hotkeys;
-            }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
-            Ok(())
-        });
-    }
+    // pub fn load_app_config(&mut self) {
+    //     messagebox_on_error(|| {
+    //         use std::io::Read;
+    //         // let cli_count = std::env::args_os().count();
+    //         let mut config_path = self.project_dirs.preference_dir().to_path_buf();
+    //         config_path.push("settings.toml");
+    //         println!("Loading from {:#?}", config_path);
+    //         let saved_config: AppConfig = std::fs::File::open(config_path)
+    //             .and_then(|mut f| {
+    //                 let mut buffer = String::new();
+    //                 f.read_to_string(&mut buffer)?;
+    //                 match toml::from_str(&buffer) {
+    //                     Ok(app_config) => Ok(app_config),
+    //                     Err(e) => Err(from_de_error(e)),
+    //                 }
+    //             })
+    //             .unwrap_or_default();
+    //         // Let the CLI options take precedent if any provided
+    //         // TODO: this logic is bad, I really need to know if the CLI
+    //         // stuff was present and whether the stuff was present in the config
+    //         // but instead I just see two different states that need to be merged.
+    //         let cli_config = self.app_config.read().unwrap().clone();
+    //         let mut new_app_config = saved_config;
+    //         if cli_config.recent_layout.is_some() {
+    //             new_app_config.recent_layout = cli_config.recent_layout;
+    //         }
+    //         if cli_config.recent_splits.is_some() {
+    //             new_app_config.recent_splits = cli_config.recent_splits;
+    //         }
+    //         if cli_config.recent_autosplitter.is_some() {
+    //             new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
+    //         }
+    //         if cli_config.use_autosplitter.is_some() {
+    //             new_app_config.use_autosplitter = cli_config.use_autosplitter;
+    //         }
+    //         if cli_config.frame_rate.is_some() {
+    //             new_app_config.frame_rate = cli_config.frame_rate;
+    //         }
+    //         if cli_config.polling_rate.is_some() {
+    //             new_app_config.polling_rate = cli_config.polling_rate;
+    //         }
+    //         if cli_config.reset_timer_on_game_reset.is_some() {
+    //             new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
+    //         }
+    //         if cli_config.reset_game_on_timer_reset.is_some() {
+    //             new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
+    //         }
+    //         if cli_config.global_hotkeys.is_some() {
+    //             new_app_config.global_hotkeys = cli_config.global_hotkeys;
+    //         }
+    //         *self.app_config.write().unwrap() = new_app_config;
+    //         Ok(())
+    //     });
+    // }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
         use anyhow::Context;
@@ -628,14 +621,14 @@ impl LiveSplitCoreRenderer {
                         .map_err(|e| println!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
-                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
+                        .map(|g| g.use_autosplitter == Some(true))
                         .unwrap_or(false)
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
-                }
-            })?;
-        }
+                    }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_undo {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -645,8 +638,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.undo_split().ok())
                         .map_err(|e| println!("undo lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_skip {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -656,8 +649,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.skip_split().ok())
                         .map_err(|e| println!("skip split lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_pause {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -667,8 +660,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.toggle_pause().ok())
                         .map_err(|e| println!("toggle pause lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_comparison_next {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -678,8 +671,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_next_comparison())
                         .map_err(|e| println!("next comparison lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
         if let Some(hk) = cfg.hot_key_comparison_prev {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -689,8 +682,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_previous_comparison())
                         .map_err(|e| println!("prev comparison lock failed: {e}"));
                 }
-            })?;
-        }
+                })?;
+            }
 
         println!("registered");
         Ok(())
@@ -721,7 +714,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 self.is_exiting = true;
                 self.confirm_save(frame.gl().expect("No GL context"))
                     .unwrap();
-                self.save_app_config();
+                self.app_config.read().unwrap().save_app_config(); // aquire read lock then save app config
             }
         });
         if self.can_exit {
@@ -838,7 +831,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true).ok();
-                        if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+                        if self.app_config.read().unwrap().use_autosplitter == Some(true) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
@@ -892,7 +885,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         });
         {
             let config = self.app_config.read().unwrap();
-            if config.global_hotkeys != Some(YesOrNo::Yes) {
+            if config.global_hotkeys != Some(true) {
                 ctx.input_mut(|input| {
                     if let Some(hot_key) = config.hot_key_start {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
@@ -904,7 +897,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().reset(true).ok();
-                            if config.use_autosplitter == Some(YesOrNo::Yes) {
+                            if config.use_autosplitter == Some(true) {
                                 self.thread_chan
                                     .try_send(ThreadEvent::TimerReset)
                                     .unwrap_or(());
@@ -956,8 +949,8 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
-    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
+    // app.load_app_config();
+    if app.app_config.read().unwrap().global_hotkeys == Some(true) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
@@ -994,7 +987,7 @@ pub fn app_init(
     let settings = app.settings.clone();
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+    if app_config.read().unwrap().use_autosplitter == Some(true) {
         let _snes_polling_thread = ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
@@ -1002,30 +995,30 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                let latency = Arc::new(RwLock::new((0.0, 0.0)));
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
-                        client.set_name("annelid")?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?.to_vec();
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
+                    client.set_name("annelid")?;
+                    println!("Server version is {:?}", client.app_version()?);
+                    let mut devices = client.list_device()?.to_vec();
+                    if devices.len() != 1 {
+                        if devices.is_empty() {
                                 Err(anyhow!("No devices present"))?;
-                            } else {
+                        } else {
                                 Err(anyhow!("You need to select a device: {:#?}", devices))?;
-                            }
                         }
+                    }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
+                    println!("Using device: {}", device);
+                    client.attach(&device)?;
+                    println!("Connected.");
+                    println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                        loop {
+                    loop {
                             let summary = autosplitter.update(&mut client)?;
-                            if summary.start {
+                        if summary.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1033,16 +1026,16 @@ pub fn app_init(
                                     })?
                                     .start()
                                     .ok();
-                            }
-                            if summary.reset
+                        }
+                        if summary.reset
                                 && app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_timer_on_game_reset
-                                    == Some(YesOrNo::Yes)
-                            {
+                                    == Some(true)
+                        {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1050,16 +1043,16 @@ pub fn app_init(
                                     })?
                                     .reset(true)
                                     .ok();
-                            }
-                            if summary.split {
+                        }
+                        if summary.split {
                                 if let Some(t) = autosplitter.gametime_to_seconds() {
-                                    timer
-                                        .write()
+                            timer
+                                .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .set_game_time(t)
-                                        .ok();
+                                .ok();
                                 }
                                 timer
                                     .write()
@@ -1068,32 +1061,32 @@ pub fn app_init(
                                     })?
                                     .split()
                                     .ok();
-                            }
-                            {
+                        }
+                        {
                                 *latency.write() =
                                     (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                        }
+                        // If the timer gets reset, we need to make a fresh snes state
+                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
-                                //Reset the snes
+                            //Reset the snes
                                 if app_config
                                     .read()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_game_on_timer_reset
-                                    == Some(YesOrNo::Yes)
-                                {
-                                    client.reset()?;
-                                }
+                                    == Some(true)
+                            {
+                                client.reset()?;
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
                         }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            (1000.0 / polling_rate) as u64,
+                        ));
+                    }
+                });
+                std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
             })
             //TODO: fix this unwrap
