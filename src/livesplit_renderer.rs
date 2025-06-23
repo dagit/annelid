@@ -1,6 +1,7 @@
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::nwa;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
@@ -29,7 +30,6 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    // project_dirs: directories::ProjectDirs,
     pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
@@ -76,7 +76,6 @@ impl LiveSplitCoreRenderer {
         layout: Layout,
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        // project_dirs: directories::ProjectDirs,
         config: AppConfig,
     ) -> Self {
         LiveSplitCoreRenderer {
@@ -90,7 +89,6 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            // project_dirs,
             app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
@@ -626,9 +624,9 @@ impl LiveSplitCoreRenderer {
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
-                    }
-                })?;
-            }
+                }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_undo {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -638,8 +636,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.undo_split().ok())
                         .map_err(|e| println!("undo lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_skip {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -649,8 +647,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.skip_split().ok())
                         .map_err(|e| println!("skip split lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_pause {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -660,8 +658,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.toggle_pause().ok())
                         .map_err(|e| println!("toggle pause lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_comparison_next {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -671,8 +669,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_next_comparison())
                         .map_err(|e| println!("next comparison lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_comparison_prev {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -682,8 +680,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_previous_comparison())
                         .map_err(|e| println!("prev comparison lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
 
         println!("registered");
         Ok(())
@@ -995,30 +993,30 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
-                    client.set_name("annelid")?;
-                    println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?.to_vec();
-                    if devices.len() != 1 {
-                        if devices.is_empty() {
+                        client.set_name("annelid")?;
+                        println!("Server version is {:?}", client.app_version()?);
+                        let mut devices = client.list_device()?.to_vec();
+                        if devices.len() != 1 {
+                            if devices.is_empty() {
                                 Err(anyhow!("No devices present"))?;
-                        } else {
+                            } else {
                                 Err(anyhow!("You need to select a device: {:#?}", devices))?;
+                            }
                         }
-                    }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                    println!("Using device: {}", device);
-                    client.attach(&device)?;
-                    println!("Connected.");
-                    println!("{:#?}", client.info()?);
+                        println!("Using device: {}", device);
+                        client.attach(&device)?;
+                        println!("Connected.");
+                        println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                    loop {
+                        loop {
                             let summary = autosplitter.update(&mut client)?;
-                        if summary.start {
+                            if summary.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1026,8 +1024,8 @@ pub fn app_init(
                                     })?
                                     .start()
                                     .ok();
-                        }
-                        if summary.reset
+                            }
+                            if summary.reset
                                 && app_config
                                     .read()
                                     .map_err(|e| {
@@ -1035,7 +1033,7 @@ pub fn app_init(
                                     })?
                                     .reset_timer_on_game_reset
                                     == Some(true)
-                        {
+                            {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1043,16 +1041,16 @@ pub fn app_init(
                                     })?
                                     .reset(true)
                                     .ok();
-                        }
-                        if summary.split {
+                            }
+                            if summary.split {
                                 if let Some(t) = autosplitter.gametime_to_seconds() {
-                            timer
-                                .write()
+                                    timer
+                                        .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .set_game_time(t)
-                                .ok();
+                                        .ok();
                                 }
                                 timer
                                     .write()
@@ -1061,15 +1059,15 @@ pub fn app_init(
                                     })?
                                     .split()
                                     .ok();
-                        }
-                        {
+                            }
+                            {
                                 *latency.write() =
                                     (summary.latency_average, summary.latency_stddev);
-                        }
-                        // If the timer gets reset, we need to make a fresh snes state
-                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                            }
+                            // If the timer gets reset, we need to make a fresh snes state
+                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
-                            //Reset the snes
+                                //Reset the snes
                                 if app_config
                                     .read()
                                     .map_err(|e| {
@@ -1077,16 +1075,16 @@ pub fn app_init(
                                     })?
                                     .reset_game_on_timer_reset
                                     == Some(true)
-                            {
-                                client.reset()?;
+                                {
+                                    client.reset()?;
+                                }
                             }
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            (1000.0 / polling_rate) as u64,
-                        ));
-                    }
-                });
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
             })
             //TODO: fix this unwrap
