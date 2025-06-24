@@ -58,8 +58,8 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let mut config = AppConfig::load_app_config(AppConfig::new()); // load saved config into default object
     AppConfig::update_from(&mut config, env::args()); // reads command line options into app config object
 
-    let settings = Settings::new(); // setttings for SM autosplitter
-    let settings = Arc::new(RwLock::new(settings)); // creates a RW pointer to the autosplitter settings
+    // let settings = Settings::new(); // setttings for SM autosplitter
+    // let settings = Arc::new(RwLock::new(settings)); // creates a RW pointer to the autosplitter settings
 
     let mut run = Run::default(); // creates a default livesplit run object
     run.push_segment(Segment::new("")); // push blank segment to run
@@ -83,7 +83,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     use std::sync::mpsc::sync_channel;
     let (sync_sender, sync_receiver) = sync_channel(1); // create thread
 
-    let mut app = LiveSplitCoreRenderer::new(timer, layout, settings, sync_sender, config); // create livesplit-core renderer object
+    let mut app = LiveSplitCoreRenderer::new(timer, layout, sync_sender, config); // create livesplit-core renderer object
 
     eframe::run_native(
         "Annelid",
