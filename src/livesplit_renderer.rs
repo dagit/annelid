@@ -1,3 +1,4 @@
+use crate::autosplitters;
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
@@ -26,7 +27,7 @@ pub struct LiveSplitCoreRenderer {
     image_cache: livesplit_core::settings::ImageCache,
     timer: SharedTimer,
     show_settings_editor: bool,
-    settings: Arc<RwLock<Settings>>,
+    settings: std::sync::Arc<std::sync::RwLock<autosplitters::supermetroid::Settings>>,
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
@@ -74,7 +75,7 @@ impl LiveSplitCoreRenderer {
     pub fn new(
         timer: SharedTimer,
         layout: Layout,
-        settings: Arc<RwLock<Settings>>,
+        // settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
         config: AppConfig,
     ) -> Self {
@@ -85,7 +86,7 @@ impl LiveSplitCoreRenderer {
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
             show_settings_editor: false,
-            settings,
+            settings: std::sync::Arc::new(std::sync::RwLock::new(autosplitters::supermetroid::Settings::new())),
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
@@ -124,97 +125,23 @@ impl LiveSplitCoreRenderer {
                 self.save_splits_dialog(&document_dir)?;
             }
         }
-        if self.settings.read().has_been_modified() {
-            let save_requested = MessageDialog::new()
-                .set_level(MessageLevel::Warning)
-                .set_title("Save Autosplitter Config")
-                .set_description(
-                    "Autosplit config may have been modified. Save autosplitter config?",
-                )
-                .set_buttons(MessageButtons::YesNo)
-                .show();
-            if save_requested == MessageDialogResult::Yes {
-                self.save_autosplitter_dialog(&document_dir)?;
-            }
-        }
+        // if self.settings.read().has_been_modified() {
+        //     let save_requested = MessageDialog::new()
+        //         .set_level(MessageLevel::Warning)
+        //         .set_title("Save Autosplitter Config")
+        //         .set_description(
+        //             "Autosplit config may have been modified. Save autosplitter config?",
+        //         )
+        //         .set_buttons(MessageButtons::YesNo)
+        //         .show();
+        //     if save_requested == MessageDialogResult::Yes {
+        //         self.save_autosplitter_dialog(&document_dir)?;
+        //     }
+        // }
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
         Ok(())
     }
-
-    // pub fn save_app_config(&self) {
-    //     messagebox_on_error(|| {
-    //         use std::io::Write;
-    //         let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-    //         config_path.push("settings.toml");
-    //         println!("Saving to {:#?}", config_path);
-    //         let f = std::fs::OpenOptions::new()
-    //             .create(true)
-    //             .write(true)
-    //             .truncate(true)
-    //             .open(config_path)?;
-    //         let mut writer = std::io::BufWriter::new(f);
-    //         let toml = toml::to_string_pretty(&self.app_config)?;
-    //         writer.write_all(toml.as_bytes())?;
-    //         writer.flush()?;
-    //         Ok(())
-    //     });
-    // }
-
-    // pub fn load_app_config(&mut self) {
-    //     messagebox_on_error(|| {
-    //         use std::io::Read;
-    //         // let cli_count = std::env::args_os().count();
-    //         let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-    //         config_path.push("settings.toml");
-    //         println!("Loading from {:#?}", config_path);
-    //         let saved_config: AppConfig = std::fs::File::open(config_path)
-    //             .and_then(|mut f| {
-    //                 let mut buffer = String::new();
-    //                 f.read_to_string(&mut buffer)?;
-    //                 match toml::from_str(&buffer) {
-    //                     Ok(app_config) => Ok(app_config),
-    //                     Err(e) => Err(from_de_error(e)),
-    //                 }
-    //             })
-    //             .unwrap_or_default();
-    //         // Let the CLI options take precedent if any provided
-    //         // TODO: this logic is bad, I really need to know if the CLI
-    //         // stuff was present and whether the stuff was present in the config
-    //         // but instead I just see two different states that need to be merged.
-    //         let cli_config = self.app_config.read().unwrap().clone();
-    //         let mut new_app_config = saved_config;
-    //         if cli_config.recent_layout.is_some() {
-    //             new_app_config.recent_layout = cli_config.recent_layout;
-    //         }
-    //         if cli_config.recent_splits.is_some() {
-    //             new_app_config.recent_splits = cli_config.recent_splits;
-    //         }
-    //         if cli_config.recent_autosplitter.is_some() {
-    //             new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-    //         }
-    //         if cli_config.use_autosplitter.is_some() {
-    //             new_app_config.use_autosplitter = cli_config.use_autosplitter;
-    //         }
-    //         if cli_config.frame_rate.is_some() {
-    //             new_app_config.frame_rate = cli_config.frame_rate;
-    //         }
-    //         if cli_config.polling_rate.is_some() {
-    //             new_app_config.polling_rate = cli_config.polling_rate;
-    //         }
-    //         if cli_config.reset_timer_on_game_reset.is_some() {
-    //             new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-    //         }
-    //         if cli_config.reset_game_on_timer_reset.is_some() {
-    //             new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-    //         }
-    //         if cli_config.global_hotkeys.is_some() {
-    //             new_app_config.global_hotkeys = cli_config.global_hotkeys;
-    //         }
-    //         *self.app_config.write().unwrap() = new_app_config;
-    //         Ok(())
-    //     });
-    // }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
         use anyhow::Context;
@@ -315,7 +242,7 @@ impl LiveSplitCoreRenderer {
     }
 
     pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<()> {
-        *self.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
+        *self.settings.write().unwrap() = serde_json::from_reader(std::io::BufReader::new(f))?;
         Ok(())
     }
 
@@ -413,7 +340,7 @@ impl LiveSplitCoreRenderer {
             &autosplitter.clone(),
             ("Autosplitter Configuration", "asc"),
             |me, f| {
-                serde_json::to_writer(&f, &*me.settings.read())?;
+                serde_json::to_writer(&f, &*me.settings.read().unwrap())?;
                 Ok(())
             },
         );
@@ -686,6 +613,21 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
+    pub fn AutoSplitterSettingsEditor(&mut self, ctx: &egui::Context){
+        // let settings_editor = egui::containers::Window::new("Settings Editor");
+        // settings_editor
+        //     .open(&mut self.show_settings_editor)
+        //     .resizable(true)
+        //     .collapsible(false)
+        //     .hscroll(true)
+        //     .vscroll(true)
+        //     .show(ctx, |ui| {
+        //         ctx.move_to_top(ui.layer_id());
+        //         let mut settings = self.settings.write();
+        //         let mut roots = settings.roots();
+        //         show_children(&mut settings, ui, ctx, &mut roots);
+        //     });
+    }
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
@@ -758,10 +700,10 @@ impl eframe::App for LiveSplitCoreRenderer {
         );
         self.glow_canvas
             .paint_layer(ctx, egui::LayerId::background(), viewport);
-        //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);
-        let settings_editor = egui::containers::Window::new("Settings Editor");
+        // //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);
+        // let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit".into())
-            .enabled(!self.show_settings_editor)
+            // .enabled(!self.show_settings_editor)
             .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.screen_rect.width()));
@@ -861,18 +803,21 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
-        settings_editor
-            .open(&mut self.show_settings_editor)
-            .resizable(true)
-            .collapsible(false)
-            .hscroll(true)
-            .vscroll(true)
-            .show(ctx, |ui| {
-                ctx.move_to_top(ui.layer_id());
-                let mut settings = self.settings.write();
-                let mut roots = settings.roots();
-                show_children(&mut settings, ui, ctx, &mut roots);
-            });
+
+            self.AutoSplitterSettingsEditor(ctx);
+
+        // settings_editor
+        //     .open(&mut self.show_settings_editor)
+        //     .resizable(true)
+        //     .collapsible(false)
+        //     .hscroll(true)
+        //     .vscroll(true)
+        //     .show(ctx, |ui| {
+        //         ctx.move_to_top(ui.layer_id());
+        //         let mut settings = self.settings.write();
+        //         let mut roots = settings.roots();
+        //         show_children(&mut settings, ui, ctx, &mut roots);
+        //     });
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
             if scroll_delta.y > 0.0 {
