@@ -1,13 +1,15 @@
 use crate::autosplitters;
+use crate::autosplitters::nwa;
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
-use crate::autosplitters::nwa;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
@@ -26,8 +28,8 @@ pub struct LiveSplitCoreRenderer {
     layout_state: Option<livesplit_core::layout::LayoutState>,
     image_cache: livesplit_core::settings::ImageCache,
     timer: SharedTimer,
-    show_settings_editor: bool,
-    settings: std::sync::Arc<std::sync::RwLock<autosplitters::supermetroid::Settings>>,
+    // show_settings_editor: bool,
+    settings: std::sync::Arc<RwLock<autosplitters::supermetroid::Settings>>,
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
@@ -36,6 +38,7 @@ pub struct LiveSplitCoreRenderer {
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
+    show_edit_autosplitter_settings_dialog: std::sync::Arc<AtomicBool>,
 }
 
 fn show_children(
@@ -85,8 +88,10 @@ impl LiveSplitCoreRenderer {
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
-            show_settings_editor: false,
-            settings: std::sync::Arc::new(std::sync::RwLock::new(autosplitters::supermetroid::Settings::new())),
+            // show_settings_editor: false,
+            settings: std::sync::Arc::new(
+                RwLock::new(autosplitters::supermetroid::Settings::new()),
+            ),
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
@@ -95,6 +100,7 @@ impl LiveSplitCoreRenderer {
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            show_edit_autosplitter_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -125,19 +131,19 @@ impl LiveSplitCoreRenderer {
                 self.save_splits_dialog(&document_dir)?;
             }
         }
-        // if self.settings.read().has_been_modified() {
-        //     let save_requested = MessageDialog::new()
-        //         .set_level(MessageLevel::Warning)
-        //         .set_title("Save Autosplitter Config")
-        //         .set_description(
-        //             "Autosplit config may have been modified. Save autosplitter config?",
-        //         )
-        //         .set_buttons(MessageButtons::YesNo)
-        //         .show();
-        //     if save_requested == MessageDialogResult::Yes {
-        //         self.save_autosplitter_dialog(&document_dir)?;
-        //     }
-        // }
+        if self.settings.read().has_been_modified() {
+            let save_requested = MessageDialog::new()
+                .set_level(MessageLevel::Warning)
+                .set_title("Save Autosplitter Config")
+                .set_description(
+                    "Autosplit config may have been modified. Save autosplitter config?",
+                )
+                .set_buttons(MessageButtons::YesNo)
+                .show();
+            if save_requested == MessageDialogResult::Yes {
+                self.save_autosplitter_dialog(&document_dir)?;
+            }
+        }
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
         Ok(())
@@ -242,7 +248,7 @@ impl LiveSplitCoreRenderer {
     }
 
     pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<()> {
-        *self.settings.write().unwrap() = serde_json::from_reader(std::io::BufReader::new(f))?;
+        *self.settings.write() = serde_json::from_reader(std::io::BufReader::new(f))?;
         Ok(())
     }
 
@@ -340,7 +346,7 @@ impl LiveSplitCoreRenderer {
             &autosplitter.clone(),
             ("Autosplitter Configuration", "asc"),
             |me, f| {
-                serde_json::to_writer(&f, &*me.settings.read().unwrap())?;
+                serde_json::to_writer(&f, &*me.settings.read())?;
                 Ok(())
             },
         );
@@ -613,20 +619,115 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
-    pub fn AutoSplitterSettingsEditor(&mut self, ctx: &egui::Context){
-        // let settings_editor = egui::containers::Window::new("Settings Editor");
-        // settings_editor
-        //     .open(&mut self.show_settings_editor)
-        //     .resizable(true)
-        //     .collapsible(false)
-        //     .hscroll(true)
-        //     .vscroll(true)
-        //     .show(ctx, |ui| {
-        //         ctx.move_to_top(ui.layer_id());
-        //         let mut settings = self.settings.write();
-        //         let mut roots = settings.roots();
-        //         show_children(&mut settings, ui, ctx, &mut roots);
-        //     });
+    pub fn AutoSplitterSettingsEditor(&mut self, ctx: &egui::Context) {
+        if self
+            .show_edit_autosplitter_settings_dialog
+            .load(Ordering::Relaxed)
+        {
+            let show_deferred_viewport = self.show_edit_autosplitter_settings_dialog.clone();
+            let aSettings = self.settings.clone();
+            // let local_change_binding= self.change_binding.clone();
+            // let hStart = self.app_config.read().unwrap().hot_key_start.unwrap();
+            // let hReset = self.app_config.read().unwrap().hot_key_reset.unwrap();
+            // let hUndo = self.app_config.read().unwrap().hot_key_undo.unwrap();
+            // let hSkip = self.app_config.read().unwrap().hot_key_skip.unwrap();
+            // let hPause = self.app_config.read().unwrap().hot_key_pause.unwrap();
+            // let hSwitchP = self.app_config.read().unwrap().hot_key_comparison_prev.unwrap();
+            // let hSwitchN = self.app_config.read().unwrap().hot_key_comparison_next.unwrap();
+            // let hToggleG = self.app_config.read().unwrap().hot_key_toggle_global_hotkeys.unwrap();
+            // let mut hSelector = self.hotkey_selector.clone();
+            // let mut globalHotkeys = self.app_config.clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("AutoSplitter Settings Editor")
+                    .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let settings_editor = egui::containers::Window::new("Settings Editor");
+                        settings_editor
+                            .open(&mut show_deferred_viewport.load(Ordering::Relaxed))
+                            .resizable(true)
+                            .collapsible(false)
+                            .hscroll(true)
+                            .vscroll(true)
+                            .show(ctx, |ui| {
+                                ctx.move_to_top(ui.layer_id());
+                                let settings = aSettings.clone();
+                                let mut roots = settings.write().roots();
+                                show_children(&mut settings.write(), ui, ctx, &mut roots);
+                            });
+                        // ui.label("Hotkeys");
+                        // ui.label("Start / Split");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hStart));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(1);
+                        // }
+                        // ui.label("Reset");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hReset));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(2);
+                        // }
+                        // ui.label("Undo Split");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hUndo));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(3);
+                        // }
+                        // ui.label("Skip Split");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSkip));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(4);
+                        // }
+                        // ui.label("Pause");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hPause));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(5);
+                        // }
+                        // ui.label("Switch Comparison (Previous)");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchP));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(6);
+                        // }
+                        // ui.label("Switch Comparison (Next)");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchN));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(7);
+                        // }
+                        // ui.label("Toggle Global Hotkeys");
+                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hToggleG));
+                        // if response.clicked() {
+                        //     local_change_binding.store(true, Ordering::Relaxed);
+                        //     hSelector.write().unwrap().replace(8);
+                        // }
+                        // let mut value = globalHotkeys.read().unwrap().global_hotkeys.unwrap();
+                        // let response = ui.checkbox(&mut value, "Global Hotkeys");
+                        // if response.clicked() {
+                        //     globalHotkeys.write().unwrap().global_hotkeys.replace(value);
+                        // }
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+            // if self.change_binding.load(Ordering::Relaxed) {
+            //     self.update_keybinding(ctx);
+            // }
+        }
     }
 }
 
@@ -781,7 +882,10 @@ impl eframe::App for LiveSplitCoreRenderer {
                 });
                 ui.menu_button("Autosplitter", |ui| {
                     if ui.button("Configure").clicked() {
-                        self.show_settings_editor = true;
+                        // self.show_settings_editor = true;
+                        let show_deferred_viewport = true;
+                        self.show_edit_autosplitter_settings_dialog
+                            .store(show_deferred_viewport, Ordering::Relaxed);
                         ui.close_menu();
                     }
                     if ui.button("Load Configuration").clicked() {
@@ -804,20 +908,8 @@ impl eframe::App for LiveSplitCoreRenderer {
                 }
             });
 
-            self.AutoSplitterSettingsEditor(ctx);
+        self.AutoSplitterSettingsEditor(ctx);
 
-        // settings_editor
-        //     .open(&mut self.show_settings_editor)
-        //     .resizable(true)
-        //     .collapsible(false)
-        //     .hscroll(true)
-        //     .vscroll(true)
-        //     .show(ctx, |ui| {
-        //         ctx.move_to_top(ui.layer_id());
-        //         let mut settings = self.settings.write();
-        //         let mut roots = settings.roots();
-        //         show_children(&mut settings, ui, ctx, &mut roots);
-        //     });
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
             if scroll_delta.y > 0.0 {
@@ -957,6 +1049,7 @@ pub fn app_init(
                         client.attach(&device)?;
                         println!("Connected.");
                         println!("{:#?}", client.info()?);
+
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
                         loop {

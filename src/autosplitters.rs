@@ -1,6 +1,6 @@
 pub mod json;
-pub mod supermetroid;
 pub mod nwa;
+pub mod supermetroid;
 
 use anyhow::Result;
 use livesplit_core::TimeSpan;
