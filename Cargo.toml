@@ -35,6 +35,8 @@ bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "2"
 anyhow = "1"
+sysinfo = "0.35.2"
+process-memory = "0.5.0"
 
 # Remember to test with --release
 [profile.dev]
