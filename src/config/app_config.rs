@@ -1,5 +1,6 @@
 use clap::Parser;
 use serde_derive::{Deserialize, Serialize};
+use crate::autosplitters;
 
 use crate::hotkey::*;
 use crate::utils::*;
@@ -39,6 +40,8 @@ pub struct AppConfig {
     pub hot_key_comparison_next: Option<HotKey>,
     #[clap(skip)]
     pub hot_key_comparison_prev: Option<HotKey>,
+    #[clap(skip)]
+    pub autosplitterType: Option<autosplitters::AType>,
 }
 
 // #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -92,6 +95,7 @@ impl AppConfig {
             reset_timer_on_game_reset: Some(false),
             reset_game_on_timer_reset: Some(false),
             global_hotkeys: Some(true),
+            autosplitterType: Some(autosplitters::AType::QUSB2SNES),
         }
     }
 
