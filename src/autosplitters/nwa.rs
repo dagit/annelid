@@ -34,10 +34,11 @@ pub enum EmulatorReply {
     Binary(Vec<u8>),
 }
 
+#[derive(Debug)]
 pub struct NWASyncClient {
-    connection: TcpStream,
-    port: u32,
-    addr: SocketAddr,
+    pub connection: TcpStream,
+    pub port: u32,
+    pub addr: SocketAddr,
 }
 
 impl NWASyncClient {
