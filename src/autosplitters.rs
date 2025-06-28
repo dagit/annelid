@@ -5,6 +5,12 @@ pub mod supermetroid;
 use anyhow::Result;
 use livesplit_core::TimeSpan;
 
+#[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum AType {
+    QUSB2SNES,
+    NWA,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct SNESSummary {
     pub latency_average: f32,
