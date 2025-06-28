@@ -10,15 +10,15 @@ pub mod usb2snes;
 pub mod utils;
 pub mod widget;
 
-use autosplitters::supermetroid::Settings;
+// use autosplitters::supermetroid::Settings;
 use clap::Parser;
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::{Layout, Run, Segment, Timer};
-use parking_lot::RwLock;
+// use parking_lot::RwLock;
 use std::env;
 use std::error::Error;
-use std::sync::Arc;
+// use std::sync::Arc;
 
 use config::app_config::*;
 use livesplit_renderer::*;
