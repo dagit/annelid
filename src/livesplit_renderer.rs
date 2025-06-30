@@ -1,7 +1,5 @@
 use crate::autosplitters;
-use crate::autosplitters::nwa;
-use crate::autosplitters::nwa::EmulatorReply;
-use crate::autosplitters::nwa::NWASyncClient;
+use crate::autosplitters::battletoads;
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
@@ -10,18 +8,20 @@ use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use tungstenite::http::uri::Port;
 use std::alloc::System;
 use std::any::Any;
 use std::arch::x86_64::_CMP_ORD_S;
 use std::ffi::OsStr;
+use std::net::Ipv4Addr;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::os::linux;
 use std::process;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
-use std::net::Ipv4Addr;
+use tungstenite::http::uri::Port;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -49,8 +49,8 @@ pub struct LiveSplitCoreRenderer {
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
     show_edit_autosplitter_settings_dialog: std::sync::Arc<AtomicBool>,
-    address: Ipv4Addr,
-    port: u32,
+    // address: Ipv4Addr,
+    // port: u32,
 }
 
 fn show_children(
@@ -113,8 +113,8 @@ impl LiveSplitCoreRenderer {
             global_hotkey_hook: None,
             load_errors: vec![],
             show_edit_autosplitter_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
-            address: Ipv4Addr::new(0, 0, 0, 0),
-            port: 48879,
+            // address: Ipv4Addr::new(0, 0, 0, 0),
+            // port: 48879,
         }
     }
 
@@ -1035,204 +1035,142 @@ pub fn app_init(
     let timer = app.timer.clone();
     let app_config = app.app_config.clone();
 
-
-    // use sysinfo::*;
-    // use process_memory::*;
-    // // let mut x = 0_u32;
-    // let mut x = sysinfo::Pid::from(0);
-    // let s = System::new_all();
-    // let count = s.processes_by_exact_name(OsStr::new("retroarch"));
-    // let mut p = s.processes_by_exact_name(OsStr::new("retroarch"));
-    // if count.count() == 1 {
-    //     x = p.next().unwrap().pid();
-    // }
-    
-    // let proc_handle = process_memory
-    // let process_handle = process_memory::ProcessHandle::try_into_process_handle(&x);
-    // println!("{:#?}",client.unwrap().);
-
-
-
     // This thread deals with polling the SNES at a fixed rate.
     if app_config.read().unwrap().use_autosplitter == Some(true) {
         if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::QUSB2SNES) {
-        //QUSB2SNES stuff here
-        let settings = app.settings.clone();
-        let _snes_polling_thread = ThreadBuilder::default()
-            .name("SNES Polling Thread".to_owned())
-            // We could change this thread priority, but we probably
-            // should leave it at the default to make sure we get timely
-            // polling of SNES state
-            .spawn(move |_| {
-                loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                    print_on_error(|| -> anyhow::Result<()> {
-                        let mut client = crate::usb2snes::SyncClient::connect()
-                            .context("creating usb2snes connection")?;
-                        client.set_name("annelid")?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?.to_vec();
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
-                                Err(anyhow!("No devices present"))?;
-                            } else {
-                                Err(anyhow!("You need to select a device: {:#?}", devices))?;
+            //QUSB2SNES stuff here
+            let settings = app.settings.clone();
+            let _snes_polling_thread = ThreadBuilder::default()
+                .name("SNES Polling Thread".to_owned())
+                // We could change this thread priority, but we probably
+                // should leave it at the default to make sure we get timely
+                // polling of SNES state
+                .spawn(move |_| {
+                    loop {
+                        let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                        print_on_error(|| -> anyhow::Result<()> {
+                            let mut client = crate::usb2snes::SyncClient::connect()
+                                .context("creating usb2snes connection")?;
+                            client.set_name("annelid")?;
+                            println!("Server version is {:?}", client.app_version()?);
+                            let mut devices = client.list_device()?.to_vec();
+                            if devices.len() != 1 {
+                                if devices.is_empty() {
+                                    Err(anyhow!("No devices present"))?;
+                                } else {
+                                    Err(anyhow!("You need to select a device: {:#?}", devices))?;
+                                }
                             }
-                        }
-                        let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {}", device);
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
+                            let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
+                            println!("Using device: {}", device);
+                            client.attach(&device)?;
+                            println!("Connected.");
+                            println!("{:#?}", client.info()?);
 
-                        let mut autosplitter: Box<dyn AutoSplitter> =
-                            Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                        loop {
-                            let summary = autosplitter.update(&mut client)?;
-                            if summary.start {
-                                timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .start()
-                                    .ok();
-                            }
-                            if summary.reset
-                                && app_config
-                                    .read()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire read lock on config: {e}")
-                                    })?
-                                    .reset_timer_on_game_reset
-                                    == Some(true)
-                            {
-                                timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .reset(true)
-                                    .ok();
-                            }
-                            if summary.split {
-                                if let Some(t) = autosplitter.gametime_to_seconds() {
+                            // TODO: make this generic as well based on user input or add game selector 
+                            let mut autosplitter: Box<dyn AutoSplitter> =
+                                Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                            loop {
+                                let summary = autosplitter.update(&mut client)?;
+                                if summary.start {
                                     timer
                                         .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
-                                        .set_game_time(t)
+                                        .start()
                                         .ok();
                                 }
-                                timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .split()
-                                    .ok();
-                            }
-                            {
-                                *latency.write() =
-                                    (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                autosplitter.reset_game_tracking();
-                                // Reset the snes
-                                if app_config
-                                    .read()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire read lock on config: {e}")
-                                    })?
-                                    .reset_game_on_timer_reset
-                                    == Some(true)
+                                if summary.reset
+                                    && app_config
+                                        .read()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire read lock on config: {e}")
+                                        })?
+                                        .reset_timer_on_game_reset
+                                        == Some(true)
                                 {
-                                    client.reset()?;
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .reset(true)
+                                        .ok();
                                 }
+                                if summary.split {
+                                    if let Some(t) = autosplitter.gametime_to_seconds() {
+                                        timer
+                                            .write()
+                                            .map_err(|e| {
+                                                anyhow!(
+                                                    "failed to acquire write lock on timer: {e}"
+                                                )
+                                            })?
+                                            .set_game_time(t)
+                                            .ok();
+                                    }
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .split()
+                                        .ok();
+                                }
+                                {
+                                    *latency.write() =
+                                        (summary.latency_average, summary.latency_stddev);
+                                }
+                                // If the timer gets reset, we need to make a fresh snes state
+                                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                    autosplitter.reset_game_tracking();
+                                    // Reset the snes
+                                    if app_config
+                                        .read()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire read lock on config: {e}")
+                                        })?
+                                        .reset_game_on_timer_reset
+                                        == Some(true)
+                                    {
+                                        client.reset()?;
+                                    }
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(
+                                    (1000.0 / polling_rate) as u64,
+                                ));
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
-                        }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                }
-            })
-            //TODO: fix this unwrap
-            .unwrap();
-        }
-
-        else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::NWA) {
-        //NWA stuff here
-        let address = app.address.clone();
-        let port = app.port.clone();
-
-        let _nwa_polling_thread = ThreadBuilder::default()
-            .name("NWA Polling Thread".to_owned())
-            // We could change this thread priority, but we probably
-            // should leave it at the default to make sure we get timely
-            // polling of SNES state
-            .spawn(move |_| {
-                loop {
+                        });
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                    }
+                })
+                //TODO: fix this unwrap
+                .unwrap();
+        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::NWA) {
+            //NWA stuff here
+            let _nwa_polling_thread = ThreadBuilder::default()
+                .name("NWA Polling Thread".to_owned())
+                .spawn(move |_| loop {
                     print_on_error(|| -> anyhow::Result<()> {
-                            let mut client = NWASyncClient::connect(&address.to_string(), port).unwrap(); // TODO: Need to handle error
-                            let cmd = "EMULATOR_INFO";
-                            let args = Some("0");
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            let cmd = "GAME_INFO";
-                            let args = None;
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            // let cmd = "CORE_INFO";
-                            // let args = Some("quickerNES");
-                            // let summary = client.execute_command(cmd, args);
-                            // println!("{:#?}",summary);
-                            let cmd = "EMULATION_STATUS";
-                            let args = None;
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            // let cmd = "CORES_LIST";
-                            // let args = None;
-                            // let summary = client.execute_command(cmd, args);
-                            // println!("{:#?}",summary);
-                            let cmd = "MY_NAME_IS";
-                            let args = Some("Annelid");
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            let cmd = "CORE_CURRENT_INFO";
-                            let args = None;
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            // let cmd = "CORE_MEMORIES";
-                            // let args = None;
-                            // let summary = client.execute_command(cmd, args);
-                            // println!("{:#?}",summary);
-                            // let cmd = "LIST_BIZHAWK_DOMAINS";
-                            // let args = None;
-                            // let summary = client.execute_command(cmd, args);
-                            // println!("{:#?}",summary);
-
-                            let mut priorLevel = 0_u8;
+                            // TODO: make this generic as well based on user input or add game selector 
+                        let mut client = battletoads::battletoadsAutoSplitter::new(
+                            Ipv4Addr::new(0, 0, 0, 0),
+                            48879,
+                            app_config
+                                .read()
+                                .unwrap()
+                                .reset_timer_on_game_reset
+                                .unwrap(),
+                        );
+                        client.emuInfo();
+                        client.emuGameInfo();
+                        client.emuStatus();
+                        client.clientID();
+                        client.coreInfo();
                         loop {
-                            let cmd = "CORE_READ";
-                            let args = Some("RAM;$0010;1");
-                            let summary = client.execute_command(cmd, args);
-                            println!("{:#?}",summary);
-                            let nwaResult = summary.unwrap();
-                            println!("{:#?}",nwaResult);
-                            let mut level= 0_u8;
-
-                            match nwaResult {
-                                EmulatorReply::Ascii(nwaResult) => println!("{:?}",nwaResult),
-                                EmulatorReply::Binary(nwaResult) => level = nwaResult.first().unwrap().clone(),
-                                EmulatorReply::Error(nwaResult) => println!("{:?}",nwaResult),
-                                
-                            }
-                            println!("{:#?}",level);
-                            if level == 1 && priorLevel == 0 {
+                            let autoSplitStatus = client.update().unwrap();
+                            if autoSplitStatus.start == true {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1241,15 +1179,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                             }
-                            else if level == 0 && priorLevel != 0 
-                                && app_config
-                                    .read()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire read lock on config: {e}")
-                                    })?
-                                    .reset_timer_on_game_reset
-                                    == Some(true)
-                            {
+                            if autoSplitStatus.reset == true {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1258,7 +1188,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                             }
-                            else if level > priorLevel && priorLevel < 100 {
+                            if autoSplitStatus.split == true {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1267,7 +1197,6 @@ pub fn app_init(
                                     .split()
                                     .ok();
                             }
-                            priorLevel = level;
 
                             std::thread::sleep(std::time::Duration::from_millis(
                                 (1000.0 / polling_rate) as u64,
@@ -1275,10 +1204,58 @@ pub fn app_init(
                         }
                     });
                     std::thread::sleep(std::time::Duration::from_millis(1000));
-                }
-            })
-            //TODO: fix this unwrap
+                })
+                //TODO: fix this unwrap
+                .unwrap();
+        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::ASL) {
+            //unable to configure runtime
+
+            // let test = livesplit_auto_splitting::Runtime::new(module, timer, settings_store);
+            // Livesplit autosplitter support
+            // use livesplit_auto_splitting::*;
+            // let test = ;
+            // let test = livesplit_auto_splitting::Timer;
+            // let module = livesplit_auto_splitting::Runtime::
+            // livesplit_auto_splitting::Runtime::new(module, timer, settings_store)
+            // let x = livesplit_auto_splitting::Runtime::new(module, timer.write().unwrap().deref(), settings_store);
+        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::CUSTOM)
+        {
+            // process isn't consistently gotten
+            // reading crashes with either bad address as root or permission denied as user
+
+            use process_memory::*;
+            // use sysinfo::*;
+            // let mut x = 0_u64;
+            let mut x = sysinfo::Pid::from(17696).as_u32();
+            // let s = System::new_all();
+            // for (pid, process) in s.processes() {
+            // println!("{} {:?}", pid, process.name());
+            // }
+            // let count = s.processes().clone().("retroarch");
+            // let count = s.processes_by_exact_name(OsStr::new("retroarch")).count();
+            // let p = s.processes_by_exact_name(OsStr::new("retroarch"));
+            // if count == 2 {
+            // x = p.last().unwrap().pid().as_u32();
+            // }
+            println!("{:?}", x);
+
+            let arch = process_memory::Architecture::from_native();
+            let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(
+                x.try_into().unwrap(),
+                arch,
+            ))
             .unwrap();
-        };
+            let mut member = DataMember::<i32>::new_offset(process_handle, vec![0x10]);
+            member.set_offset(vec![0x10]);
+
+            // The memory offset can now be correctly calculated:
+            // called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+            println!(
+                "Target memory location: {}",
+                member.clone().get_offset().unwrap()
+            );
+            // The memory offset can now be used to retrieve and modify values:
+            // println!("Current value: {}", unsafe { member.read().unwrap() });
+        }
     }
 }
