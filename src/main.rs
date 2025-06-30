@@ -5,6 +5,7 @@ pub mod autosplitters;
 pub mod config;
 pub mod hotkey;
 pub mod livesplit_renderer;
+pub mod nwa;
 pub mod routes;
 pub mod usb2snes;
 pub mod utils;
