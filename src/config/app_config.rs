@@ -1,6 +1,6 @@
+use crate::autosplitters;
 use clap::Parser;
 use serde_derive::{Deserialize, Serialize};
-use crate::autosplitters;
 
 use crate::hotkey::*;
 use crate::utils::*;
