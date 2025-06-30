@@ -1,5 +1,6 @@
 pub mod json;
-pub mod nwa;
+// pub mod nwa;
+pub mod battletoads;
 pub mod supermetroid;
 
 use anyhow::Result;
@@ -9,6 +10,15 @@ use livesplit_core::TimeSpan;
 pub enum AType {
     QUSB2SNES,
     NWA,
+    ASL,
+    CUSTOM,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct NWASummary {
+    pub start: bool,
+    pub reset: bool,
+    pub split: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
