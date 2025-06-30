@@ -195,6 +195,7 @@ dependencies = [
  "memoffset 0.9.1",
  "parking_lot",
  "process-memory",
+ "read-process-memory",
  "rfd",
  "roxmltree",
  "serde",
@@ -777,7 +778,7 @@ version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2c7947ae4cc3d851207c1adb5b5e260ff0cca11446b1d6d1423788e442257ce"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -1704,6 +1705,12 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+
+[[package]]
+name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
@@ -2040,7 +2047,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 [[package]]
 name = "livesplit-core"
 version = "0.13.0"
-source = "git+https://github.com/LiveSplit/livesplit-core#ee36c2755d888184e93db31939562fbb2c715661"
+source = "git+https://github.com/LiveSplit/livesplit-core#59a237fd59fc52133cef7e247888788871983110"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -2073,7 +2080,7 @@ dependencies = [
 [[package]]
 name = "livesplit-hotkey"
 version = "0.8.0"
-source = "git+https://github.com/LiveSplit/livesplit-core#ee36c2755d888184e93db31939562fbb2c715661"
+source = "git+https://github.com/LiveSplit/livesplit-core#59a237fd59fc52133cef7e247888788871983110"
 dependencies = [
  "bitflags 2.9.1",
  "cfg-if",
@@ -2090,7 +2097,7 @@ dependencies = [
 [[package]]
 name = "livesplit-title-abbreviations"
 version = "0.3.0"
-source = "git+https://github.com/LiveSplit/livesplit-core#ee36c2755d888184e93db31939562fbb2c715661"
+source = "git+https://github.com/LiveSplit/livesplit-core#59a237fd59fc52133cef7e247888788871983110"
 
 [[package]]
 name = "lock_api"
@@ -3038,6 +3045,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "read-process-memory"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8497683b2f0b6887786f1928c118f26ecc6bb3d78bbb6ed23e8e7ba110af3bb0"
+dependencies = [
+ "libc",
+ "log",
+ "mach",
+ "winapi",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3409,7 +3428,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn",
@@ -3469,7 +3488,7 @@ version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -3482,7 +3501,7 @@ version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "rustversion",
