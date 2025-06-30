@@ -1,10 +1,9 @@
 pub mod json;
-// pub mod nwa;
 pub mod battletoads;
 pub mod supermetroid;
-
 use anyhow::Result;
-use livesplit_core::TimeSpan;
+use std::net::Ipv4Addr;
+use livesplit_core::{GameTime, TimeSpan};
 
 #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum AType {
@@ -12,6 +11,17 @@ pub enum AType {
     NWA,
     ASL,
     CUSTOM,
+}
+
+// Not sure how to do this...
+pub fn AutoSplitterSelector(game: &str,reset_timer_on_game_reset: bool) -> Object {
+    match game {
+        "Battletoads" => return battletoads::battletoadsAutoSplitter::new(
+                            Ipv4Addr::new(0, 0, 0, 0),
+                            48879, reset_timer_on_game_reset
+                        ),
+        &_ => todo!()
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

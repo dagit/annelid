@@ -1153,6 +1153,7 @@ pub fn app_init(
                 .name("NWA Polling Thread".to_owned())
                 .spawn(move |_| loop {
                     print_on_error(|| -> anyhow::Result<()> {
+                        let _test = AutoSplitterSelector("Battletoads", true);
                             // TODO: make this generic as well based on user input or add game selector 
                         let mut client = battletoads::battletoadsAutoSplitter::new(
                             Ipv4Addr::new(0, 0, 0, 0),
