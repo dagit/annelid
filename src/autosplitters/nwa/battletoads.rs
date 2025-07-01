@@ -1,5 +1,5 @@
 use super::NWASummary;
-use crate::nwa;
+// use crate::nwa;
 use anyhow::Result;
 use std::net::Ipv4Addr;
 
