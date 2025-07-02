@@ -759,8 +759,6 @@ impl LiveSplitCoreRenderer {
     }
 
     pub fn open_setings_edit_dialog(&mut self, ctx: &egui::Context) {
-        // let mut temp_layout = livesplit_core::LayoutEditor::new(self.layout.clone()).unwrap();
-        // // self.layout_editor = temp_layout.unwrap();
 
         if self.show_edit_settings_dialog.load(Ordering::Relaxed) {
             let show_deferred_viewport = self.show_edit_settings_dialog.clone();
