@@ -174,6 +174,7 @@ impl NWASyncClient {
         }
         self.get_reply()
     }
+
     pub fn execute_raw_command(&mut self, cmd: &str, argString: Option<&str>) {
         if argString == None {
             self.connection.write(format!("{}\n", cmd).as_bytes());
