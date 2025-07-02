@@ -1,8 +1,9 @@
 use crate::autosplitters;
-use crate::autosplitters::battletoads;
+use crate::autosplitters::nwa;
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::Game;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
@@ -49,6 +50,7 @@ pub struct LiveSplitCoreRenderer {
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
     show_edit_autosplitter_settings_dialog: std::sync::Arc<AtomicBool>,
+    game: Game,
     // address: Ipv4Addr,
     // port: u32,
 }
@@ -113,6 +115,7 @@ impl LiveSplitCoreRenderer {
             global_hotkey_hook: None,
             load_errors: vec![],
             show_edit_autosplitter_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
+            game: Game::Battletoads,
             // address: Ipv4Addr::new(0, 0, 0, 0),
             // port: 48879,
         }
@@ -640,17 +643,6 @@ impl LiveSplitCoreRenderer {
         {
             let show_deferred_viewport = self.show_edit_autosplitter_settings_dialog.clone();
             let aSettings = self.settings.clone();
-            // let local_change_binding= self.change_binding.clone();
-            // let hStart = self.app_config.read().unwrap().hot_key_start.unwrap();
-            // let hReset = self.app_config.read().unwrap().hot_key_reset.unwrap();
-            // let hUndo = self.app_config.read().unwrap().hot_key_undo.unwrap();
-            // let hSkip = self.app_config.read().unwrap().hot_key_skip.unwrap();
-            // let hPause = self.app_config.read().unwrap().hot_key_pause.unwrap();
-            // let hSwitchP = self.app_config.read().unwrap().hot_key_comparison_prev.unwrap();
-            // let hSwitchN = self.app_config.read().unwrap().hot_key_comparison_next.unwrap();
-            // let hToggleG = self.app_config.read().unwrap().hot_key_toggle_global_hotkeys.unwrap();
-            // let mut hSelector = self.hotkey_selector.clone();
-            // let mut globalHotkeys = self.app_config.clone();
 
             ctx.show_viewport_deferred(
                 egui::ViewportId::from_hash_of("deferred_viewport"),
@@ -676,60 +668,6 @@ impl LiveSplitCoreRenderer {
                                 let mut roots = settings.write().roots();
                                 show_children(&mut settings.write(), ui, ctx, &mut roots);
                             });
-                        // ui.label("Hotkeys");
-                        // ui.label("Start / Split");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hStart));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(1);
-                        // }
-                        // ui.label("Reset");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hReset));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(2);
-                        // }
-                        // ui.label("Undo Split");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hUndo));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(3);
-                        // }
-                        // ui.label("Skip Split");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSkip));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(4);
-                        // }
-                        // ui.label("Pause");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hPause));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(5);
-                        // }
-                        // ui.label("Switch Comparison (Previous)");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchP));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(6);
-                        // }
-                        // ui.label("Switch Comparison (Next)");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchN));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(7);
-                        // }
-                        // ui.label("Toggle Global Hotkeys");
-                        // let response = ui.button(LiveSplitCoreRenderer::button_text_update(hToggleG));
-                        // if response.clicked() {
-                        //     local_change_binding.store(true, Ordering::Relaxed);
-                        //     hSelector.write().unwrap().replace(8);
-                        // }
-                        // let mut value = globalHotkeys.read().unwrap().global_hotkeys.unwrap();
-                        // let response = ui.checkbox(&mut value, "Global Hotkeys");
-                        // if response.clicked() {
-                        //     globalHotkeys.write().unwrap().global_hotkeys.replace(value);
-                        // }
                     });
 
                     if ctx.input(|i| i.viewport().close_requested()) {
@@ -738,9 +676,6 @@ impl LiveSplitCoreRenderer {
                     }
                 },
             );
-            // if self.change_binding.load(Ordering::Relaxed) {
-            //     self.update_keybinding(ctx);
-            // }
         }
     }
 }
@@ -895,21 +830,51 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                 });
                 ui.menu_button("Autosplitter", |ui| {
-                    if ui.button("Configure").clicked() {
-                        // self.show_settings_editor = true;
-                        let show_deferred_viewport = true;
-                        self.show_edit_autosplitter_settings_dialog
-                            .store(show_deferred_viewport, Ordering::Relaxed);
-                        ui.close_menu();
-                    }
-                    if ui.button("Load Configuration").clicked() {
-                        ui.close_menu();
-                        self.open_autosplitter_dialog(&document_dir).unwrap();
-                    }
-                    if ui.button("Save Configuration").clicked() {
-                        ui.close_menu();
-                        self.save_autosplitter_dialog(&document_dir).unwrap();
-                    }
+                    ui.menu_button("NWA", |ui| {
+                        if ui.button("Configure").clicked() {
+                            // Fill out NWA config
+                            // address
+                            // port
+                        }
+                        // TODO: Fix this. It's not updating the value
+                        egui::ComboBox::from_label("Game")
+                            .selected_text(format!("{:?}", self.game))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.game,
+                                    Game::Battletoads,
+                                    "Battletoads",
+                                );
+                                ui.selectable_value(
+                                    &mut self.game,
+                                    Game::SuperMetroid,
+                                    "Super Metroid",
+                                );
+                            })
+                        // ui.menu_button("Battletoads", |ui| {
+                        // });
+                        // ui.menu_button("Super Metroid", |ui| {
+                        // });
+                    });
+                    ui.menu_button("QUSB2SNES", |ui| {
+                        ui.menu_button("Super Metroid", |ui| {
+                            if ui.button("Configure").clicked() {
+                                // self.show_settings_editor = true;
+                                let show_deferred_viewport = true;
+                                self.show_edit_autosplitter_settings_dialog
+                                    .store(show_deferred_viewport, Ordering::Relaxed);
+                                ui.close_menu();
+                            }
+                            if ui.button("Load Configuration").clicked() {
+                                ui.close_menu();
+                                self.open_autosplitter_dialog(&document_dir).unwrap();
+                            }
+                            if ui.button("Save Configuration").clicked() {
+                                ui.close_menu();
+                                self.save_autosplitter_dialog(&document_dir).unwrap();
+                            }
+                        });
+                    });
                 });
                 ui.separator();
                 ui.add(egui::widgets::Label::new(format!(
@@ -1067,7 +1032,7 @@ pub fn app_init(
                             println!("Connected.");
                             println!("{:#?}", client.info()?);
 
-                            // TODO: make this generic as well based on user input or add game selector 
+                            // TODO: make this generic as well based on user input or add game selector
                             let mut autosplitter: Box<dyn AutoSplitter> =
                                 Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
                             loop {
@@ -1149,67 +1114,134 @@ pub fn app_init(
                 .unwrap();
         } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::NWA) {
             //NWA stuff here
-            let _nwa_polling_thread = ThreadBuilder::default()
-                .name("NWA Polling Thread".to_owned())
-                .spawn(move |_| loop {
-                    print_on_error(|| -> anyhow::Result<()> {
-                        let _test = AutoSplitterSelector("Battletoads", true);
-                            // TODO: make this generic as well based on user input or add game selector 
-                        let mut client = battletoads::battletoadsAutoSplitter::new(
-                            Ipv4Addr::new(0, 0, 0, 0),
-                            48879,
-                            app_config
-                                .read()
-                                .unwrap()
-                                .reset_timer_on_game_reset
-                                .unwrap(),
-                        );
-                        client.emuInfo();
-                        client.emuGameInfo();
-                        client.emuStatus();
-                        client.clientID();
-                        client.coreInfo();
-                        loop {
-                            let autoSplitStatus = client.update().unwrap();
-                            if autoSplitStatus.start == true {
-                                timer
+            let game = app.game.clone();
+            let _nwa_polling_thread =
+                ThreadBuilder::default()
+                    .name("NWA Polling Thread".to_owned())
+                    .spawn(move |_| loop {
+                        print_on_error(|| -> anyhow::Result<()> {
+                            // let client: battletoadsAutoSplitter = autosplitters::AutoSplitterSelector("Battletoads", true).unwrap();
+                            // TODO: make this generic as well based on user input or add game selector
+                            match game {
+                                Game::Battletoads => {
+                                    let mut client = nwa::battletoads::battletoadsAutoSplitter::new(
+                                        Ipv4Addr::new(0, 0, 0, 0),
+                                        48879,
+                                        app_config
+                                            .read()
+                                            .unwrap()
+                                            .reset_timer_on_game_reset
+                                            .unwrap(),
+                                    );
+                                    client.emuInfo();
+                                    client.emuGameInfo();
+                                    client.emuStatus();
+                                    client.clientID();
+                                    client.coreInfo();
+                                    client.coreMemories();
+                                    loop {
+                                        println!("{:#?}", game);
+                                        let autoSplitStatus = client.update().unwrap();
+                                        if autoSplitStatus.start == true {
+                                            timer
                                     .write()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire write lock on timer: {e}")
                                     })?
                                     .start()
                                     .ok();
-                            }
-                            if autoSplitStatus.reset == true {
-                                timer
+                                        }
+                                        if autoSplitStatus.reset == true {
+                                            timer
                                     .write()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire write lock on timer: {e}")
                                     })?
                                     .reset(true)
                                     .ok();
-                            }
-                            if autoSplitStatus.split == true {
-                                timer
+                                        }
+                                        if autoSplitStatus.split == true {
+                                            timer
                                     .write()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire write lock on timer: {e}")
                                     })?
                                     .split()
                                     .ok();
-                            }
+                                        }
 
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
-                        }
-                    });
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                })
-                //TODO: fix this unwrap
-                .unwrap();
+                                        std::thread::sleep(std::time::Duration::from_millis(
+                                            (1000.0 / polling_rate) as u64,
+                                        ));
+                                    }
+                                }
+                                Game::SuperMetroid => {
+                                    let mut client =
+                                        nwa::supermetroid::supermetroidAutoSplitter::new(
+                                            Ipv4Addr::new(0, 0, 0, 0),
+                                            48879,
+                                            app_config
+                                                .read()
+                                                .unwrap()
+                                                .reset_timer_on_game_reset
+                                                .unwrap(),
+                                        );
+                                    client.emuInfo();
+                                    client.emuGameInfo();
+                                    client.emuStatus();
+                                    client.clientID();
+                                    client.coreInfo();
+                                    client.coreMemories();
+                                    loop {
+                                        println!("{:#?}", game);
+                                        let autoSplitStatus = client.update().unwrap();
+                                        if autoSplitStatus.start == true {
+                                            timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .start()
+                                    .ok();
+                                        }
+                                        if autoSplitStatus.reset == true {
+                                            timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .reset(true)
+                                    .ok();
+                                        }
+                                        if autoSplitStatus.split == true {
+                                            timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .split()
+                                    .ok();
+                                        }
+
+                                        std::thread::sleep(std::time::Duration::from_millis(
+                                            (1000.0 / polling_rate) as u64,
+                                        ));
+                                    }
+                                }
+                                _ => todo!(),
+                            }
+                            // if app.game == Game::Battletoads {
+
+                            // } else if app.game == Game::SuperMetroid {
+
+                            // }
+                        });
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                    })
+                    //TODO: fix this unwrap
+                    .unwrap();
         } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::ASL) {
-            //unable to configure runtime
+            //TODO: unable to configure runtime
 
             // let test = livesplit_auto_splitting::Runtime::new(module, timer, settings_store);
             // Livesplit autosplitter support
@@ -1221,8 +1253,8 @@ pub fn app_init(
             // let x = livesplit_auto_splitting::Runtime::new(module, timer.write().unwrap().deref(), settings_store);
         } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::CUSTOM)
         {
-            // process isn't consistently gotten
-            // reading crashes with either bad address as root or permission denied as user
+            // TODO: process isn't consistently gotten
+            // TODO: reading crashes with either bad address as root or permission denied as user
 
             use process_memory::*;
             // use sysinfo::*;
