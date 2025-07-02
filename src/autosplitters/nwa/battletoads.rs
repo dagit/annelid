@@ -1,5 +1,5 @@
-use super::NWASummary;
-// use crate::nwa;
+use crate::autosplitters::NWASummary;
+use crate::nwa;
 use anyhow::Result;
 use std::net::Ipv4Addr;
 
@@ -21,8 +21,8 @@ pub struct battletoadsAutoSplitter {
 impl battletoadsAutoSplitter {
     pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
         battletoadsAutoSplitter {
-            address, // address: Ipv4Addr::new(0, 0, 0, 0),
-            port,    // port: 48879,
+            address,
+            port,
             priorLevel: 0_u8,
             level: 0_u8,
             reset_timer_on_game_reset,
