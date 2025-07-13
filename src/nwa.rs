@@ -170,9 +170,11 @@ impl NWASyncClient {
 
     pub fn execute_raw_command(&mut self, cmd: &str, arg_string: Option<&str>) {
         if arg_string.is_none() {
-            self.connection.write_all(format!("{}\n", cmd).as_bytes());
+            // TODO: handle the Err
+            let _ = self.connection.write_all(format!("{}\n", cmd).as_bytes());
         } else {
-            self.connection
+            // TODO: handle the Err
+            let _ = self.connection
                 .write_all(format!("{} {}\n", cmd, arg_string.unwrap()).as_bytes());
         }
     }
@@ -185,8 +187,10 @@ impl NWASyncClient {
         buf[2] = ((size >> 16) & 0xFF) as u8;
         buf[3] = ((size >> 8) & 0xFF) as u8;
         buf[4] = (size & 0xFF) as u8;
-        self.connection.write_all(&buf);
-        self.connection.write_all(&data);
+        // TODO: handle the Err
+        let _ = self.connection.write_all(&buf);
+        // TODO: handle the Err
+        let _ = self.connection.write_all(&data);
     }
     pub fn is_connected(&mut self) -> bool {
         let mut buf = vec![0; 0];
@@ -197,7 +201,8 @@ impl NWASyncClient {
     }
 
     pub fn close(&mut self) {
-        self.connection.shutdown(Shutdown::Both);
+        // TODO: handle the Err
+        let _ = self.connection.shutdown(Shutdown::Both);
     }
     pub fn reconnected(&mut self) -> Result<bool, std::io::Error> {
         self.connection = TcpStream::connect_timeout(&self.addr, Duration::from_millis(1000))?;
