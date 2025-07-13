@@ -43,7 +43,7 @@ pub struct NWASyncClient {
 
 impl NWASyncClient {
     pub fn connect(ip: &str, port: u32) -> Result<NWASyncClient, std::io::Error> {
-        let addr: Vec<_> = format!("{}:{}", ip, port)
+        let addr: Vec<_> = format!("{ip}:{port}")
             .to_socket_addrs()
             .expect("Can't resolve address")
             .collect();
@@ -160,7 +160,7 @@ impl NWASyncClient {
         arg_string: Option<&str>,
     ) -> Result<EmulatorReply, std::io::Error> {
         if arg_string.is_none() {
-            self.connection.write_all(format!("{}\n", cmd).as_bytes())?;
+            self.connection.write_all(format!("{cmd}\n").as_bytes())?;
         } else {
             self.connection
                 .write_all(format!("{} {}\n", cmd, arg_string.unwrap()).as_bytes())?;
@@ -171,7 +171,7 @@ impl NWASyncClient {
     pub fn execute_raw_command(&mut self, cmd: &str, arg_string: Option<&str>) {
         if arg_string.is_none() {
             // TODO: handle the Err
-            let _ = self.connection.write_all(format!("{}\n", cmd).as_bytes());
+            let _ = self.connection.write_all(format!("{cmd}\n").as_bytes());
         } else {
             // TODO: handle the Err
             let _ = self

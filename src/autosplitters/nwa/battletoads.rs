@@ -34,42 +34,42 @@ impl BattletoadsAutoSplitter {
         let cmd = "MY_NAME_IS";
         let args = Some("Annelid");
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_info(&mut self) {
         let cmd = "EMULATOR_INFO";
         let args = Some("0");
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_game_info(&mut self) {
         let cmd = "GAME_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_status(&mut self) {
         let cmd = "EMULATION_STATUS";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn core_info(&mut self) {
         let cmd = "CORE_CURRENT_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn core_memories(&mut self) {
         let cmd = "CORE_MEMORIES";
         let args = None;
         let summary = self.client.execute_command(cmd, args);
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn update(&mut self) -> Result<NWASummary> {
@@ -80,8 +80,8 @@ impl BattletoadsAutoSplitter {
         // println!("{:#?}", summary);
         match summary {
             nwa::EmulatorReply::Binary(summary) => self.level = *summary.first().unwrap(),
-            nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
-            _ => println!("{:?}", summary),
+            nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
+            _ => println!("{summary:?}"),
         }
         // println!("{:#?}", level);
 

@@ -170,25 +170,25 @@ impl LiveSplitCoreRenderer {
                 .clone();
             if let Some(layout) = config.recent_layout {
                 let f = std::fs::File::open(&layout)
-                    .with_context(|| format!("Failed to open layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to open layout file \"{layout}\""))?;
                 self.load_layout(&f, ctx)
-                    .with_context(|| format!("Failed to load layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to load layout file \"{layout}\""))?;
             }
             if let Some(splits) = config.recent_splits {
                 let f = std::fs::File::open(&splits)
-                    .with_context(|| format!("Failed to open splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to open splits file \"{splits}\""))?;
                 let path = std::path::Path::new(&splits)
                     .parent()
                     .ok_or(anyhow!("failed to find parent directory"))?;
                 self.load_splits(&f, path.to_path_buf())
-                    .with_context(|| format!("Failed to load splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to load splits file \"{splits}\""))?;
             }
             if let Some(autosplitter) = config.recent_autosplitter {
                 let f = std::fs::File::open(&autosplitter).with_context(|| {
-                    format!("Failed to open autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to open autosplitter config \"{autosplitter}\"")
                 })?;
                 self.load_autosplitter(&f).with_context(|| {
-                    format!("Failed to load autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to load autosplitter config \"{autosplitter}\"")
                 })?;
             }
             Ok(())
@@ -1018,7 +1018,7 @@ pub fn app_init(
                                 }
                             }
                             let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                            println!("Using device: {}", device);
+                            println!("Using device: {device}");
                             client.attach(&device)?;
                             println!("Connected.");
                             println!("{:#?}", client.info()?);
@@ -1131,7 +1131,7 @@ pub fn app_init(
                                     client.core_info();
                                     client.core_memories();
                                     loop {
-                                        println!("{:#?}", game);
+                                        println!("{game:#?}");
                                         let auto_split_status = client.update().unwrap();
                                         if auto_split_status.start {
                                             timer
@@ -1184,7 +1184,7 @@ pub fn app_init(
                                     client.core_info();
                                     client.core_memories();
                                     loop {
-                                        println!("{:#?}", game);
+                                        println!("{game:#?}");
                                         let auto_split_status = client.update().unwrap();
                                         if auto_split_status.start {
                                             timer
@@ -1261,7 +1261,7 @@ pub fn app_init(
             // if count == 2 {
             // x = p.last().unwrap().pid().as_u32();
             // }
-            println!("{:?}", x);
+            println!("{x:?}");
 
             let arch = process_memory::Architecture::from_native();
             let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(

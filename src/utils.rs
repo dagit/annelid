@@ -25,7 +25,7 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("{}", e);
+            println!("{e}");
         }
     }
 }

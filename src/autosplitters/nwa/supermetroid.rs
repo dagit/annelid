@@ -38,42 +38,42 @@ impl SupermetroidAutoSplitter {
         let cmd = "MY_NAME_IS";
         let args = Some("Annelid");
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_info(&mut self) {
         let cmd = "EMULATOR_INFO";
         let args = Some("0");
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_game_info(&mut self) {
         let cmd = "GAME_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn emu_status(&mut self) {
         let cmd = "EMULATION_STATUS";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn core_info(&mut self) {
         let cmd = "CORE_CURRENT_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn core_memories(&mut self) {
         let cmd = "CORE_MEMORIES";
         let args = None;
         let summary = self.client.execute_command(cmd, args);
-        println!("{:#?}", summary);
+        println!("{summary:#?}");
     }
 
     pub fn update(&mut self) -> Result<NWASummary> {
@@ -87,7 +87,7 @@ impl SupermetroidAutoSplitter {
             match summary {
                 nwa::EmulatorReply::Binary(summary) => self.state = *summary.first().unwrap(),
                 nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
-                _ => println!("{:?}", summary),
+                _ => println!("{summary:?}"),
             }
             println!("{:#?}", self.state);
         }
@@ -98,7 +98,7 @@ impl SupermetroidAutoSplitter {
             let cmd = "CORE_READ";
             let args = Some("WRAM;$079B;2");
             let summary = self.client.execute_command(cmd, args).unwrap();
-            println!("{:#?}", summary);
+            println!("{summary:#?}");
 
             match summary {
                 nwa::EmulatorReply::Binary(summary) => {
@@ -107,7 +107,7 @@ impl SupermetroidAutoSplitter {
                         ((*summary.last().unwrap() as u16) << 8) | *summary.first().unwrap() as u16
                 }
                 nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
-                _ => println!("{:?}", summary),
+                _ => println!("{summary:?}"),
             }
             println!("{:#?}", self.room_id);
         }
