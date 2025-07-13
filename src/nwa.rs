@@ -51,14 +51,14 @@ impl NWASyncClient {
         let co = TcpStream::connect_timeout(&addr[0], Duration::from_millis(1000))?;
         Ok(NWASyncClient {
             connection: co,
-            port: port,
+            port,
             addr: addr[0],
         })
     }
 
     pub fn get_reply(&mut self) -> Result<EmulatorReply, std::io::Error> {
         let mut read_stream = BufReader::new(self.connection.try_clone().unwrap());
-        let mut first_byte = [0 as u8; 1];
+        let mut first_byte = [0_u8; 1];
         if read_stream.read(&mut first_byte)? == 0 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::ConnectionAborted,
@@ -76,7 +76,7 @@ impl NWASyncClient {
 
                 let rep = read_stream.read_until(b'\n', &mut line)?;
                 //println!("{:?}", String::from_utf8(line.clone()));
-                if line[0] == b'\n' && map.len() == 0 {
+                if line[0] == b'\n' && map.is_empty() {
                     return Ok(EmulatorReply::Ascii(AsciiReply::Ok));
                 }
                 if line[0] == b'\n' {
@@ -85,8 +85,8 @@ impl NWASyncClient {
                 if rep == 0 {
                     break;
                 }
-                let mut key = [0 as u8; 100];
-                let mut value = [0 as u8; 1024];
+                let mut key = [0_u8; 100];
+                let mut value = [0_u8; 1024];
                 let mut cpt = 0;
                 while line[cpt] != b':' && line[cpt] != b'\n' {
                     key[cpt] = line[cpt];
@@ -95,10 +95,7 @@ impl NWASyncClient {
                 let end_key = cpt;
                 // Should have stopped on :
                 if line[cpt] == b'\n' {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Mal formed reply",
-                    ));
+                    return Err(std::io::Error::other("Mal formed reply"));
                 }
                 cpt += 1;
                 let offset = cpt;
@@ -138,7 +135,7 @@ impl NWASyncClient {
         if first_byte == 0 {
             let mut header = vec![0; 4];
             let r_size = read_stream.read(&mut header)?;
-            println!("");
+            println!();
             //println!("Reading {:}", r_size);
             //println!("Header : {:?}", header);
             let header = header;
@@ -155,10 +152,7 @@ impl NWASyncClient {
             //println!("Size : {:}", size);
             return Ok(EmulatorReply::Binary(data));
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Invalid reply",
-        ))
+        Err(std::io::Error::other("Invalid reply"))
     }
 
     pub fn execute_command(
@@ -166,7 +160,7 @@ impl NWASyncClient {
         cmd: &str,
         argString: Option<&str>,
     ) -> Result<EmulatorReply, std::io::Error> {
-        if argString == None {
+        if argString.is_none() {
             self.connection.write(format!("{}\n", cmd).as_bytes())?;
         } else {
             self.connection
@@ -176,7 +170,7 @@ impl NWASyncClient {
     }
 
     pub fn execute_raw_command(&mut self, cmd: &str, argString: Option<&str>) {
-        if argString == None {
+        if argString.is_none() {
             self.connection.write(format!("{}\n", cmd).as_bytes());
         } else {
             self.connection
@@ -200,7 +194,7 @@ impl NWASyncClient {
         if let Ok(usize) = self.connection.peek(&mut buf) {
             return true;
         }
-        return false;
+        false
     }
 
     pub fn close(&mut self) {
@@ -208,7 +202,7 @@ impl NWASyncClient {
     }
     pub fn reconnected(&mut self) -> Result<bool, std::io::Error> {
         self.connection = TcpStream::connect_timeout(&self.addr, Duration::from_millis(1000))?;
-        return Ok(true);
+        Ok(true)
     }
 }
 

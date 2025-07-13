@@ -9,20 +9,11 @@ use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::alloc::System;
-use std::any::Any;
-use std::arch::x86_64::_CMP_ORD_S;
-use std::ffi::OsStr;
 use std::net::Ipv4Addr;
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::os::linux;
-use std::process;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
-use tungstenite::http::uri::Port;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -1114,7 +1105,7 @@ pub fn app_init(
                 .unwrap();
         } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::NWA) {
             //NWA stuff here
-            let game = app.game.clone();
+            let game = app.game;
             let _nwa_polling_thread =
                 ThreadBuilder::default()
                     .name("NWA Polling Thread".to_owned())
@@ -1142,7 +1133,7 @@ pub fn app_init(
                                     loop {
                                         println!("{:#?}", game);
                                         let autoSplitStatus = client.update().unwrap();
-                                        if autoSplitStatus.start == true {
+                                        if autoSplitStatus.start {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1151,7 +1142,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                                         }
-                                        if autoSplitStatus.reset == true {
+                                        if autoSplitStatus.reset {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1160,7 +1151,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                                         }
-                                        if autoSplitStatus.split == true {
+                                        if autoSplitStatus.split {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1195,7 +1186,7 @@ pub fn app_init(
                                     loop {
                                         println!("{:#?}", game);
                                         let autoSplitStatus = client.update().unwrap();
-                                        if autoSplitStatus.start == true {
+                                        if autoSplitStatus.start {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1204,7 +1195,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                                         }
-                                        if autoSplitStatus.reset == true {
+                                        if autoSplitStatus.reset {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1213,7 +1204,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                                         }
-                                        if autoSplitStatus.split == true {
+                                        if autoSplitStatus.split {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1259,7 +1250,7 @@ pub fn app_init(
             use process_memory::*;
             // use sysinfo::*;
             // let mut x = 0_u64;
-            let mut x = sysinfo::Pid::from(17696).as_u32();
+            let x = sysinfo::Pid::from(17696).as_u32();
             // let s = System::new_all();
             // for (pid, process) in s.processes() {
             // println!("{} {:?}", pid, process.name());
