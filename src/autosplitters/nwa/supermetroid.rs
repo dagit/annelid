@@ -137,11 +137,11 @@ impl SupermetroidAutoSplitter {
 
         // TODO: add the rest of the splits
     }
-    
+
     pub fn set_address(&mut self, address: Ipv4Addr) {
         self.address = address;
     }
-    
+
     pub fn set_port(&mut self, port: u32) {
         self.port = port;
     }

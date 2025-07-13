@@ -174,7 +174,8 @@ impl NWASyncClient {
             let _ = self.connection.write_all(format!("{}\n", cmd).as_bytes());
         } else {
             // TODO: handle the Err
-            let _ = self.connection
+            let _ = self
+                .connection
                 .write_all(format!("{} {}\n", cmd, arg_string.unwrap()).as_bytes());
         }
     }
