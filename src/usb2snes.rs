@@ -298,8 +298,8 @@ impl SyncClient {
         let mut args = Vec::with_capacity(pairs.len() * 2);
         let mut total_size = 0;
         for &(address, size) in pairs.iter() {
-            args.push(Cow::Owned(format!("{:x}", address)));
-            args.push(Cow::Owned(format!("{:x}", size)));
+            args.push(Cow::Owned(format!("{address:x}")));
+            args.push(Cow::Owned(format!("{size:x}")));
             total_size += size;
         }
         self.send_command_with_space(Command::GetAddress, Some(Space::SNES), &args)?;
