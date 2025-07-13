@@ -761,31 +761,31 @@ impl LiveSplitCoreRenderer {
         if self.show_edit_settings_dialog.load(Ordering::Relaxed) {
             let show_deferred_viewport = self.show_edit_settings_dialog.clone();
             let local_change_binding = self.change_binding.clone();
-            let hStart = self.app_config.read().unwrap().hot_key_start.unwrap();
-            let hReset = self.app_config.read().unwrap().hot_key_reset.unwrap();
-            let hUndo = self.app_config.read().unwrap().hot_key_undo.unwrap();
-            let hSkip = self.app_config.read().unwrap().hot_key_skip.unwrap();
-            let hPause = self.app_config.read().unwrap().hot_key_pause.unwrap();
-            let hSwitchP = self
+            let h_start = self.app_config.read().unwrap().hot_key_start.unwrap();
+            let h_reset = self.app_config.read().unwrap().hot_key_reset.unwrap();
+            let h_undo = self.app_config.read().unwrap().hot_key_undo.unwrap();
+            let h_skip = self.app_config.read().unwrap().hot_key_skip.unwrap();
+            let h_pause = self.app_config.read().unwrap().hot_key_pause.unwrap();
+            let h_switch_p = self
                 .app_config
                 .read()
                 .unwrap()
                 .hot_key_comparison_prev
                 .unwrap();
-            let hSwitchN = self
+            let h_switch_n = self
                 .app_config
                 .read()
                 .unwrap()
                 .hot_key_comparison_next
                 .unwrap();
-            let hToggleG = self
+            let h_toggle_g = self
                 .app_config
                 .read()
                 .unwrap()
                 .hot_key_toggle_global_hotkeys
                 .unwrap();
-            let hSelector = self.hotkey_selector.clone();
-            let globalHotkeys = self.app_config.clone();
+            let h_selector = self.hotkey_selector.clone();
+            let global_hotkeys = self.app_config.clone();
 
             ctx.show_viewport_deferred(
                 egui::ViewportId::from_hash_of("deferred_viewport"),
@@ -800,60 +800,60 @@ impl LiveSplitCoreRenderer {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.label("Hotkeys");
                         ui.label("Start / Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hStart));
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_start));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(1);
+                            h_selector.write().unwrap().replace(1);
                         }
                         ui.label("Reset");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hReset));
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_reset));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(2);
+                            h_selector.write().unwrap().replace(2);
                         }
                         ui.label("Undo Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hUndo));
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_undo));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(3);
+                            h_selector.write().unwrap().replace(3);
                         }
                         ui.label("Skip Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hSkip));
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_skip));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(4);
+                            h_selector.write().unwrap().replace(4);
                         }
                         ui.label("Pause");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(hPause));
+                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_pause));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(5);
+                            h_selector.write().unwrap().replace(5);
                         }
                         ui.label("Switch Comparison (Previous)");
                         let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchP));
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_switch_p));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(6);
+                            h_selector.write().unwrap().replace(6);
                         }
                         ui.label("Switch Comparison (Next)");
                         let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(hSwitchN));
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_switch_n));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(7);
+                            h_selector.write().unwrap().replace(7);
                         }
                         ui.label("Toggle Global Hotkeys");
                         let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(hToggleG));
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_toggle_g));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
-                            hSelector.write().unwrap().replace(8);
+                            h_selector.write().unwrap().replace(8);
                         }
-                        let mut value = globalHotkeys.read().unwrap().global_hotkeys.unwrap();
+                        let mut value = global_hotkeys.read().unwrap().global_hotkeys.unwrap();
                         let response = ui.checkbox(&mut value, "Global Hotkeys");
                         if response.clicked() {
-                            globalHotkeys.write().unwrap().global_hotkeys.replace(value);
+                            global_hotkeys.write().unwrap().global_hotkeys.replace(value);
                         }
                     });
 
@@ -890,7 +890,7 @@ impl LiveSplitCoreRenderer {
     }
 
     fn update_keybinding(&self, ctx: &egui::Context) {
-        let hSelector = self.hotkey_selector.clone();
+        let h_selector = self.hotkey_selector.clone();
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("change_binding"),
             egui::ViewportBuilder::default()
@@ -925,7 +925,7 @@ impl LiveSplitCoreRenderer {
                                 key_code: keys,
                                 modifiers: modif,
                             };
-                            match hSelector.read().unwrap().unwrap() {
+                            match h_selector.read().unwrap().unwrap() {
                                 1 => {
                                     self.app_config.write().unwrap().hot_key_start =
                                         Some(new_hotkey)
