@@ -1246,11 +1246,12 @@ pub fn app_init(
         {
             // TODO: process isn't consistently gotten
             // TODO: reading crashes with either bad address as root or permission denied as user
+            // This is also linux only
 
-            use process_memory::*;
+            // use process_memory::*;
             // use sysinfo::*;
             // let mut x = 0_u64;
-            let x = sysinfo::Pid::from(17696).as_u32();
+            // let x = sysinfo::Pid::from(17696).as_u32();
             // let s = System::new_all();
             // for (pid, process) in s.processes() {
             // println!("{} {:?}", pid, process.name());
@@ -1261,23 +1262,23 @@ pub fn app_init(
             // if count == 2 {
             // x = p.last().unwrap().pid().as_u32();
             // }
-            println!("{x:?}");
+            // println!("{x:?}");
 
-            let arch = process_memory::Architecture::from_native();
-            let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(
-                x.try_into().unwrap(),
-                arch,
-            ))
-            .unwrap();
-            let mut member = DataMember::<i32>::new_offset(process_handle, vec![0x10]);
-            member.set_offset(vec![0x10]);
+            // let arch = process_memory::Architecture::from_native();
+            // let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(
+                // x.try_into().unwrap(),
+                // arch,
+            // ))
+            // .unwrap();
+            // let mut member = DataMember::<i32>::new_offset(process_handle, vec![0x10]);
+            // member.set_offset(vec![0x10]);
 
             // The memory offset can now be correctly calculated:
             // called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
-            println!(
-                "Target memory location: {}",
-                member.clone().get_offset().unwrap()
-            );
+            // println!(
+                // "Target memory location: {}",
+                // member.clone().get_offset().unwrap()
+            // );
             // The memory offset can now be used to retrieve and modify values:
             // println!("Current value: {}", unsafe { member.read().unwrap() });
         }
