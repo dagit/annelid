@@ -1,6 +1,6 @@
 use clap::Parser;
-use serde_derive::{Deserialize, Serialize};
 use livesplit_hotkey::{Hotkey, KeyCode, Modifiers};
+use serde_derive::{Deserialize, Serialize};
 
 use crate::utils::*;
 // use crate::hotkey::*;
@@ -107,8 +107,7 @@ impl AppConfig {
             .ok_or("Unable to load computer configuration directory");
         println!("project_dirs = {:#?}", project_dirs);
 
-        let config_dir =
-            project_dirs.unwrap(); // get preferences directory
+        let config_dir = project_dirs.unwrap(); // get preferences directory
         println!("project_dirs = {:#?}", config_dir.preference_dir());
 
         messagebox_on_error(|| {
@@ -136,8 +135,7 @@ impl AppConfig {
             .ok_or("Unable to load computer configuration directory");
         println!("project_dirs = {:#?}", project_dirs);
 
-        let config_dir =
-            project_dirs.unwrap(); // get preferences directory
+        let config_dir = project_dirs.unwrap(); // get preferences directory
         println!("project_dirs = {:#?}", config_dir.preference_dir());
 
         messagebox_on_error(|| {
@@ -154,8 +152,9 @@ impl AppConfig {
                         Err(e) => Err(from_de_error(e)),
                     }
 
-                // }).unwrap;
-                }).unwrap_or(Self::new());
+                    // }).unwrap;
+                })
+                .unwrap_or_default();
             self = saved_config;
             Ok(())
         });
