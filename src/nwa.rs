@@ -111,14 +111,13 @@ impl NWASyncClient {
             }
             if map.contains_key("error") {
                 if let Some(reason) = map.get("reason") {
-                    let mkind: ErrorKind;
-                    match map.get("error").unwrap().as_str() {
-                        "protocol_error" => mkind = ErrorKind::ProtocolError,
-                        "invalid_command" => mkind = ErrorKind::InvalidCommand,
-                        "invalid_argument" => mkind = ErrorKind::InvalidArgument,
-                        "not_allowed" => mkind = ErrorKind::NotAllowed,
-                        _ => mkind = ErrorKind::InvalidError,
-                    }
+                    let mkind: ErrorKind = match map.get("error").unwrap().as_str() {
+                        "protocol_error" => ErrorKind::ProtocolError,
+                        "invalid_command" => ErrorKind::InvalidCommand,
+                        "invalid_argument" => ErrorKind::InvalidArgument,
+                        "not_allowed" => ErrorKind::NotAllowed,
+                        _ => ErrorKind::InvalidError,
+                    };
                     return Ok(EmulatorReply::Error(NWAError {
                         kind: mkind,
                         reason: reason.to_string(),
@@ -148,7 +147,7 @@ impl NWASyncClient {
             let msize = size as usize;
             let mut data: Vec<u8> = vec![0; msize];
             //println!("Size : {:}", size);
-            read_stream.read(&mut data)?;
+            read_stream.read_exact(&mut data)?;
             //println!("Size : {:}", size);
             return Ok(EmulatorReply::Binary(data));
         }
@@ -161,20 +160,20 @@ impl NWASyncClient {
         argString: Option<&str>,
     ) -> Result<EmulatorReply, std::io::Error> {
         if argString.is_none() {
-            self.connection.write(format!("{}\n", cmd).as_bytes())?;
+            self.connection.write_all(format!("{}\n", cmd).as_bytes())?;
         } else {
             self.connection
-                .write(format!("{} {}\n", cmd, argString.unwrap()).as_bytes())?;
+                .write_all(format!("{} {}\n", cmd, argString.unwrap()).as_bytes())?;
         }
         self.get_reply()
     }
 
     pub fn execute_raw_command(&mut self, cmd: &str, argString: Option<&str>) {
         if argString.is_none() {
-            self.connection.write(format!("{}\n", cmd).as_bytes());
+            self.connection.write_all(format!("{}\n", cmd).as_bytes());
         } else {
             self.connection
-                .write(format!("{} {}\n", cmd, argString.unwrap()).as_bytes());
+                .write_all(format!("{} {}\n", cmd, argString.unwrap()).as_bytes());
         }
     }
 
@@ -191,7 +190,7 @@ impl NWASyncClient {
     }
     pub fn is_connected(&mut self) -> bool {
         let mut buf = vec![0; 0];
-        if let Ok(usize) = self.connection.peek(&mut buf) {
+        if let Ok(_usize) = self.connection.peek(&mut buf) {
             return true;
         }
         false
