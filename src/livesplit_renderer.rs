@@ -800,13 +800,15 @@ impl LiveSplitCoreRenderer {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.label("Hotkeys");
                         ui.label("Start / Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_start));
+                        let response =
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_start));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
                             h_selector.write().unwrap().replace(1);
                         }
                         ui.label("Reset");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_reset));
+                        let response =
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_reset));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
                             h_selector.write().unwrap().replace(2);
@@ -824,7 +826,8 @@ impl LiveSplitCoreRenderer {
                             h_selector.write().unwrap().replace(4);
                         }
                         ui.label("Pause");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_pause));
+                        let response =
+                            ui.button(LiveSplitCoreRenderer::button_text_update(h_pause));
                         if response.clicked() {
                             local_change_binding.store(true, Ordering::Relaxed);
                             h_selector.write().unwrap().replace(5);
@@ -853,7 +856,11 @@ impl LiveSplitCoreRenderer {
                         let mut value = global_hotkeys.read().unwrap().global_hotkeys.unwrap();
                         let response = ui.checkbox(&mut value, "Global Hotkeys");
                         if response.clicked() {
-                            global_hotkeys.write().unwrap().global_hotkeys.replace(value);
+                            global_hotkeys
+                                .write()
+                                .unwrap()
+                                .global_hotkeys
+                                .replace(value);
                         }
                     });
 
