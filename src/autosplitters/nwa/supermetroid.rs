@@ -83,10 +83,10 @@ impl SupermetroidAutoSplitter {
             let cmd = "CORE_READ";
             let args = Some("WRAM;$0998;1");
             let summary = self.client.execute_command(cmd, args).unwrap();
-            println!("{:#?}", summary);
+            println!("{summary:#?}");
             match summary {
                 nwa::EmulatorReply::Binary(summary) => self.state = *summary.first().unwrap(),
-                nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
+                nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
                 _ => println!("{summary:?}"),
             }
             println!("{:#?}", self.state);
@@ -106,7 +106,7 @@ impl SupermetroidAutoSplitter {
                     // Have to reassemble the half word roomID 
                         ((*summary.last().unwrap() as u16) << 8) | *summary.first().unwrap() as u16
                 }
-                nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
+                nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
                 _ => println!("{summary:?}"),
             }
             println!("{:#?}", self.room_id);

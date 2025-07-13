@@ -8,11 +8,11 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("about to show messagebox due to: {}", e);
+            println!("about to show messagebox due to: {e}");
             MessageDialog::new()
                 .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_description(format!("{}", e))
+                .set_description(format!("{e}"))
                 .show();
         }
     }
