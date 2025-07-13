@@ -10,8 +10,8 @@ pub enum Action {
 }
 
 pub struct SupermetroidAutoSplitter {
-    address: Ipv4Addr,
-    port: u32,
+    // address: Ipv4Addr,
+    // port: u32,
     prior_state: u8,
     state: u8,
     prior_room_id: u16,
@@ -23,8 +23,8 @@ pub struct SupermetroidAutoSplitter {
 impl SupermetroidAutoSplitter {
     pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
         SupermetroidAutoSplitter {
-            address,
-            port,
+            // address,
+            // port,
             prior_state: 0_u8,
             state: 0_u8,
             prior_room_id: 0_u16,
@@ -138,13 +138,13 @@ impl SupermetroidAutoSplitter {
         // TODO: add the rest of the splits
     }
 
-    pub fn set_address(&mut self, address: Ipv4Addr) {
-        self.address = address;
-    }
+    // pub fn set_address(&mut self, address: Ipv4Addr) {
+        // self.address = address;
+    // }
 
-    pub fn set_port(&mut self, port: u32) {
-        self.port = port;
-    }
+    // pub fn set_port(&mut self, port: u32) {
+        // self.port = port;
+    // }
 }
 
 // let cmd = "CORE_INFO";

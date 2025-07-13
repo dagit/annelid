@@ -10,8 +10,8 @@ pub enum Action {
 }
 
 pub struct BattletoadsAutoSplitter {
-    address: Ipv4Addr,
-    port: u32,
+    // address: Ipv4Addr,
+    // port: u32,
     prior_level: u8,
     level: u8,
     reset_timer_on_game_reset: bool,
@@ -21,8 +21,8 @@ pub struct BattletoadsAutoSplitter {
 impl BattletoadsAutoSplitter {
     pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
         BattletoadsAutoSplitter {
-            address,
-            port,
+            // address,
+            // port,
             prior_level: 0_u8,
             level: 0_u8,
             reset_timer_on_game_reset,
@@ -116,13 +116,13 @@ impl BattletoadsAutoSplitter {
         false
     }
 
-    pub fn set_address(&mut self, address: Ipv4Addr) {
-        self.address = address;
-    }
+    // pub fn set_address(&mut self, address: Ipv4Addr) {
+    //     self.address = address;
+    // }
 
-    pub fn set_port(&mut self, port: u32) {
-        self.port = port;
-    }
+    // pub fn set_port(&mut self, port: u32) {
+    //     self.port = port;
+    // }
 }
 
 // let cmd = "CORE_INFO";
