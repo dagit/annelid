@@ -157,23 +157,23 @@ impl NWASyncClient {
     pub fn execute_command(
         &mut self,
         cmd: &str,
-        argString: Option<&str>,
+        arg_string: Option<&str>,
     ) -> Result<EmulatorReply, std::io::Error> {
-        if argString.is_none() {
+        if arg_string.is_none() {
             self.connection.write_all(format!("{}\n", cmd).as_bytes())?;
         } else {
             self.connection
-                .write_all(format!("{} {}\n", cmd, argString.unwrap()).as_bytes())?;
+                .write_all(format!("{} {}\n", cmd, arg_string.unwrap()).as_bytes())?;
         }
         self.get_reply()
     }
 
-    pub fn execute_raw_command(&mut self, cmd: &str, argString: Option<&str>) {
-        if argString.is_none() {
+    pub fn execute_raw_command(&mut self, cmd: &str, arg_string: Option<&str>) {
+        if arg_string.is_none() {
             self.connection.write_all(format!("{}\n", cmd).as_bytes());
         } else {
             self.connection
-                .write_all(format!("{} {}\n", cmd, argString.unwrap()).as_bytes());
+                .write_all(format!("{} {}\n", cmd, arg_string.unwrap()).as_bytes());
         }
     }
 
@@ -185,8 +185,8 @@ impl NWASyncClient {
         buf[2] = ((size >> 16) & 0xFF) as u8;
         buf[3] = ((size >> 8) & 0xFF) as u8;
         buf[4] = (size & 0xFF) as u8;
-        self.connection.write(&buf);
-        self.connection.write(&data);
+        self.connection.write_all(&buf);
+        self.connection.write_all(&data);
     }
     pub fn is_connected(&mut self) -> bool {
         let mut buf = vec![0; 0];

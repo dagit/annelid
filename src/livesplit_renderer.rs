@@ -627,13 +627,13 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
-    pub fn AutoSplitterSettingsEditor(&mut self, ctx: &egui::Context) {
+    pub fn auto_splitter_settings_editor(&mut self, ctx: &egui::Context) {
         if self
             .show_edit_autosplitter_settings_dialog
             .load(Ordering::Relaxed)
         {
             let show_deferred_viewport = self.show_edit_autosplitter_settings_dialog.clone();
-            let aSettings = self.settings.clone();
+            let a_settings = self.settings.clone();
 
             ctx.show_viewport_deferred(
                 egui::ViewportId::from_hash_of("deferred_viewport"),
@@ -655,7 +655,7 @@ impl LiveSplitCoreRenderer {
                             .vscroll(true)
                             .show(ctx, |ui| {
                                 ctx.move_to_top(ui.layer_id());
-                                let settings = aSettings.clone();
+                                let settings = a_settings.clone();
                                 let mut roots = settings.write().roots();
                                 show_children(&mut settings.write(), ui, ctx, &mut roots);
                             });
@@ -878,7 +878,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 }
             });
 
-        self.AutoSplitterSettingsEditor(ctx);
+        self.auto_splitter_settings_editor(ctx);
 
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
@@ -993,7 +993,7 @@ pub fn app_init(
 
     // This thread deals with polling the SNES at a fixed rate.
     if app_config.read().unwrap().use_autosplitter == Some(true) {
-        if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::QUSB2SNES) {
+        if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::QUSB2SNES) {
             //QUSB2SNES stuff here
             let settings = app.settings.clone();
             let _snes_polling_thread = ThreadBuilder::default()
@@ -1103,7 +1103,7 @@ pub fn app_init(
                 })
                 //TODO: fix this unwrap
                 .unwrap();
-        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::NWA) {
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::NWA) {
             //NWA stuff here
             let game = app.game;
             let _nwa_polling_thread =
@@ -1132,8 +1132,8 @@ pub fn app_init(
                                     client.core_memories();
                                     loop {
                                         println!("{:#?}", game);
-                                        let autoSplitStatus = client.update().unwrap();
-                                        if autoSplitStatus.start {
+                                        let auto_split_status = client.update().unwrap();
+                                        if auto_split_status.start {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1142,7 +1142,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                                         }
-                                        if autoSplitStatus.reset {
+                                        if auto_split_status.reset {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1151,7 +1151,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                                         }
-                                        if autoSplitStatus.split {
+                                        if auto_split_status.split {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1231,7 +1231,7 @@ pub fn app_init(
                     })
                     //TODO: fix this unwrap
                     .unwrap();
-        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::ASL) {
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::ASL) {
             //TODO: unable to configure runtime
 
             // let test = livesplit_auto_splitting::Runtime::new(module, timer, settings_store);
@@ -1242,7 +1242,7 @@ pub fn app_init(
             // let module = livesplit_auto_splitting::Runtime::
             // livesplit_auto_splitting::Runtime::new(module, timer, settings_store)
             // let x = livesplit_auto_splitting::Runtime::new(module, timer.write().unwrap().deref(), settings_store);
-        } else if app_config.read().unwrap().autosplitterType == Some(autosplitters::AType::CUSTOM)
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::CUSTOM)
         {
             // TODO: process isn't consistently gotten
             // TODO: reading crashes with either bad address as root or permission denied as user
