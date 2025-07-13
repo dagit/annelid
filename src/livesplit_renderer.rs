@@ -3,9 +3,16 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
+use egui::load::BytesLoader;
+use egui::load::ImageLoader;
+use egui::ImageButton;
+use egui::ImageData;
+use egui::ImageSource;
+use egui::TextureHandle;
 use livesplit_core::{settings, timing, Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use serde::de::value;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -279,7 +286,7 @@ impl LiveSplitCoreRenderer {
             .write()
             .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))? =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
-                    self.gameName
+        self.gameName
             .write()
             .unwrap()
             .replace(self.timer.read().unwrap().run().game_name().to_string());
@@ -304,7 +311,7 @@ impl LiveSplitCoreRenderer {
             );
             i += 1;
         }
-                Ok(())
+        Ok(())
     }
 
     pub fn load_autosplitter(&mut self, f: &std::fs::File) -> Result<()> {
@@ -617,9 +624,9 @@ impl LiveSplitCoreRenderer {
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
-                    }
-                })?;
-            }
+                }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_undo {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -629,8 +636,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.undo_split().ok())
                         .map_err(|e| println!("undo lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_skip {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -640,8 +647,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.skip_split().ok())
                         .map_err(|e| println!("skip split lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_pause {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -651,8 +658,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.toggle_pause().ok())
                         .map_err(|e| println!("toggle pause lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_comparison_next {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -662,8 +669,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_next_comparison())
                         .map_err(|e| println!("next comparison lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
         if let Some(hk) = cfg.hot_key_comparison_prev {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -673,8 +680,8 @@ impl LiveSplitCoreRenderer {
                         .map(|mut g| g.switch_to_previous_comparison())
                         .map_err(|e| println!("prev comparison lock failed: {e}"));
                 }
-                })?;
-            }
+            })?;
+        }
 
         println!("registered");
         Ok(())
@@ -735,6 +742,67 @@ impl LiveSplitCoreRenderer {
                         let otherResponse = ui.button("Other");
                         if otherResponse.clicked() {}
 
+                        for (key, value) in &*editSegments.write().unwrap() {
+                            // let test = value.2.real_time.unwrap().to_duration().to_string();
+                            // if ui.button(format!("{}: {}", key, value.0)).clicked(){
+                            // println!("Button clicked for key: {}, value: {}", key, value.0);
+                            // }
+                                                        println!("Button clicked for key: {}, value: {:#?}", key, value.2.game_time.unwrap());
+
+                            if ui.button(format!("{}: {}", key, value.1)).clicked() {
+                                println!("Button clicked for key: {}, value: {}", key, value.1);
+                            }
+                            if value.2.game_time == None {
+                                if ui.button(format!("{}: {}", key, "")).clicked() {
+                                    println!("Button clicked for key: {}, value: Blank", key);
+                                }
+                            } else {
+                                // let splitTime = value.2.game_time.unwrap().to_duration().whole_days().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_hours().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_minutes().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_seconds().to_string() + ".".to_string() + value.2.game_time.unwrap().to_duration().whole_nanoseconds().to_string();
+                                let splitTime = value.2.game_time.unwrap().to_seconds_and_subsec_nanoseconds();
+                                if ui
+                                    .button(format!(
+                                        "{}: {}",
+                                        key,
+                                        splitTime.0
+                                    ))
+                                    .clicked()
+                                {
+                                    println!(
+                                        "Button clicked for key: {}, value: {}",
+                                        key,
+                                        splitTime.0
+                                    );
+                                }
+                            }
+                            // if ui
+                            //     .button(format!(
+                            //         "{}: {}",
+                            //         key,
+                            //         value.3.real_time.unwrap().to_duration().to_string()
+                            //     ))
+                            //     .clicked()
+                            // {
+                            //     println!(
+                            //         "Button clicked for key: {}, value: {}",
+                            //         key,
+                            //         value.3.real_time.unwrap().to_duration().to_string()
+                            //     );
+                            // }
+                            // if ui
+                            //     .button(format!(
+                            //         "{}: {}",
+                            //         key,
+                            //         value.4.real_time.unwrap().to_duration().to_string()
+                            //     ))
+                            //     .clicked()
+                            // {
+                            //     println!(
+                            //         "Button clicked for key: {}, value: {}",
+                            //         key,
+                            //         value.4.real_time.unwrap().to_duration().to_string()
+                            //     );
+                            // }
+                        }
                         use egui_extras::{Column, TableBuilder};
                         TableBuilder::new(ui)
                             .column(Column::auto().resizable(true))
@@ -769,12 +837,15 @@ impl LiveSplitCoreRenderer {
                                 // let test = editSegments.write().unwrap().get_mut(&1).unwrap().1.clone();
                                 // let mut _test = value.1.as_mut();
                                 body.row(30.0, |mut row| {
+                                    // for  (mut i,mut value) in *editSegments.write().unwrap() {
+
                                     row.col(|ui| {
+                                        // ui.add(ImageButton::new(&value.0));
                                         // ui.button("", editSegments.write().unwrap().get(i).as_mut().unwrap().0);
                                         // egui::widgets::Button::image(editSegments.write().unwrap().get(i).as_mut().unwrap().0.data());
-                                        ui.button("Select Image");
                                     });
                                     row.col(|ui| {
+                                        // ui.text_edit_singleline(&mut value.1);
                                         // let str = editSegments.write().unwrap().get(i).as_mut().unwrap().1;
                                         // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().1);
                                         // ui.text_edit_singleline( value.1);
@@ -789,6 +860,7 @@ impl LiveSplitCoreRenderer {
                                     row.col(|ui| {
                                         // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().4.real_time.unwrap().to_duration().to_string());
                                     });
+                                    // }
                                 });
                                 // i += 1;
                                 // }
@@ -1129,30 +1201,30 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
-                    client.set_name("annelid")?;
-                    println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?.to_vec();
-                    if devices.len() != 1 {
-                        if devices.is_empty() {
+                        client.set_name("annelid")?;
+                        println!("Server version is {:?}", client.app_version()?);
+                        let mut devices = client.list_device()?.to_vec();
+                        if devices.len() != 1 {
+                            if devices.is_empty() {
                                 Err(anyhow!("No devices present"))?;
-                        } else {
+                            } else {
                                 Err(anyhow!("You need to select a device: {:#?}", devices))?;
+                            }
                         }
-                    }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                    println!("Using device: {}", device);
-                    client.attach(&device)?;
-                    println!("Connected.");
-                    println!("{:#?}", client.info()?);
+                        println!("Using device: {}", device);
+                        client.attach(&device)?;
+                        println!("Connected.");
+                        println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                    loop {
+                        loop {
                             let summary = autosplitter.update(&mut client)?;
-                        if summary.start {
+                            if summary.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1160,8 +1232,8 @@ pub fn app_init(
                                     })?
                                     .start()
                                     .ok();
-                        }
-                        if summary.reset
+                            }
+                            if summary.reset
                                 && app_config
                                     .read()
                                     .map_err(|e| {
@@ -1169,7 +1241,7 @@ pub fn app_init(
                                     })?
                                     .reset_timer_on_game_reset
                                     == Some(true)
-                        {
+                            {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1177,16 +1249,16 @@ pub fn app_init(
                                     })?
                                     .reset(true)
                                     .ok();
-                        }
-                        if summary.split {
+                            }
+                            if summary.split {
                                 if let Some(t) = autosplitter.gametime_to_seconds() {
-                            timer
-                                .write()
+                                    timer
+                                        .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .set_game_time(t)
-                                .ok();
+                                        .ok();
                                 }
                                 timer
                                     .write()
@@ -1195,15 +1267,15 @@ pub fn app_init(
                                     })?
                                     .split()
                                     .ok();
-                        }
-                        {
+                            }
+                            {
                                 *latency.write() =
                                     (summary.latency_average, summary.latency_stddev);
-                        }
-                        // If the timer gets reset, we need to make a fresh snes state
-                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                            }
+                            // If the timer gets reset, we need to make a fresh snes state
+                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
-                            //Reset the snes
+                                //Reset the snes
                                 if app_config
                                     .read()
                                     .map_err(|e| {
@@ -1212,15 +1284,15 @@ pub fn app_init(
                                     .reset_game_on_timer_reset
                                     == Some(true)
                                 {
-                                client.reset()?;
+                                    client.reset()?;
+                                }
                             }
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            (1000.0 / polling_rate) as u64,
-                        ));
-                    }
-                });
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
             })
             //TODO: fix this unwrap
