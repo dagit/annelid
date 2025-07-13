@@ -4,72 +4,72 @@ use anyhow::Result;
 use std::net::Ipv4Addr;
 
 pub enum Action {
-    start,
-    reset,
-    split,
+    Start,
+    Reset,
+    Split,
 }
 
-pub struct supermetroidAutoSplitter {
+pub struct SupermetroidAutoSplitter {
     address: Ipv4Addr,
     port: u32,
-    priorState: u8,
+    prior_state: u8,
     state: u8,
-    priorRoomID: u16,
-    roomID: u16,
+    prior_room_id: u16,
+    room_id: u16,
     reset_timer_on_game_reset: bool,
     client: nwa::NWASyncClient,
 }
 
-impl supermetroidAutoSplitter {
+impl SupermetroidAutoSplitter {
     pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
-        supermetroidAutoSplitter {
+        SupermetroidAutoSplitter {
             address,
             port,
-            priorState: 0_u8,
+            prior_state: 0_u8,
             state: 0_u8,
-            priorRoomID: 0_u16,
-            roomID: 0_u16,
+            prior_room_id: 0_u16,
+            room_id: 0_u16,
             reset_timer_on_game_reset,
             client: nwa::NWASyncClient::connect(&address.to_string(), port).unwrap(), // TODO: Need to handle error
         }
     }
 
-    pub fn clientID(&mut self) {
+    pub fn client_id(&mut self) {
         let cmd = "MY_NAME_IS";
         let args = Some("Annelid");
         let summary = self.client.execute_command(cmd, args).unwrap();
         println!("{:#?}", summary);
     }
 
-    pub fn emuInfo(&mut self) {
+    pub fn emu_info(&mut self) {
         let cmd = "EMULATOR_INFO";
         let args = Some("0");
         let summary = self.client.execute_command(cmd, args).unwrap();
         println!("{:#?}", summary);
     }
 
-    pub fn emuGameInfo(&mut self) {
+    pub fn emu_game_info(&mut self) {
         let cmd = "GAME_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
         println!("{:#?}", summary);
     }
 
-    pub fn emuStatus(&mut self) {
+    pub fn emu_status(&mut self) {
         let cmd = "EMULATION_STATUS";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
         println!("{:#?}", summary);
     }
 
-    pub fn coreInfo(&mut self) {
+    pub fn core_info(&mut self) {
         let cmd = "CORE_CURRENT_INFO";
         let args = None;
         let summary = self.client.execute_command(cmd, args).unwrap();
         println!("{:#?}", summary);
     }
 
-    pub fn coreMemories(&mut self) {
+    pub fn core_memories(&mut self) {
         let cmd = "CORE_MEMORIES";
         let args = None;
         let summary = self.client.execute_command(cmd, args);
@@ -79,7 +79,7 @@ impl supermetroidAutoSplitter {
     pub fn update(&mut self) -> Result<NWASummary> {
         // read memory for the game state
         {
-            self.priorState = self.state;
+            self.prior_state = self.state;
             let cmd = "CORE_READ";
             let args = Some("WRAM;$0998;1");
             let summary = self.client.execute_command(cmd, args).unwrap();
@@ -94,7 +94,7 @@ impl supermetroidAutoSplitter {
 
         // read memory for room
         {
-            self.priorRoomID = self.roomID;
+            self.prior_room_id = self.room_id;
             let cmd = "CORE_READ";
             let args = Some("WRAM;$079B;2");
             let summary = self.client.execute_command(cmd, args).unwrap();
@@ -102,14 +102,14 @@ impl supermetroidAutoSplitter {
 
             match summary {
                 nwa::EmulatorReply::Binary(summary) => {
-                    self.roomID =
+                    self.room_id =
                     // Have to reassemble the half word roomID 
                         ((*summary.last().unwrap() as u16) << 8) | *summary.first().unwrap() as u16
                 }
                 nwa::EmulatorReply::Error(summary) => println!("{:?}", summary),
                 _ => println!("{:?}", summary),
             }
-            println!("{:#?}", self.roomID);
+            println!("{:#?}", self.room_id);
         }
 
         // TODO: add the other memory reads
@@ -125,15 +125,15 @@ impl supermetroidAutoSplitter {
     }
 
     fn start(&mut self) -> bool {
-        self.state == 0x1F && self.priorState == 0x1E
+        self.state == 0x1F && self.prior_state == 0x1E
     }
 
     fn reset(&mut self) -> bool {
-        self.roomID == 0 && self.priorRoomID != 0 && self.reset_timer_on_game_reset
+        self.room_id == 0 && self.prior_room_id != 0 && self.reset_timer_on_game_reset
     }
 
     fn split(&mut self) -> bool {
-        self.roomID == 0xDF45 && self.priorState == 0x8 && self.state == 0x20
+        self.room_id == 0xDF45 && self.prior_state == 0x8 && self.state == 0x20
 
         // TODO: add the rest of the splits
     }

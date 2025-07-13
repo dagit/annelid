@@ -1115,7 +1115,7 @@ pub fn app_init(
                             // TODO: make this generic as well based on user input or add game selector
                             match game {
                                 Game::Battletoads => {
-                                    let mut client = nwa::battletoads::battletoadsAutoSplitter::new(
+                                    let mut client = nwa::battletoads::BattletoadsAutoSplitter::new(
                                         Ipv4Addr::new(0, 0, 0, 0),
                                         48879,
                                         app_config
@@ -1124,12 +1124,12 @@ pub fn app_init(
                                             .reset_timer_on_game_reset
                                             .unwrap(),
                                     );
-                                    client.emuInfo();
-                                    client.emuGameInfo();
-                                    client.emuStatus();
-                                    client.clientID();
-                                    client.coreInfo();
-                                    client.coreMemories();
+                                    client.emu_info();
+                                    client.emu_game_info();
+                                    client.emu_status();
+                                    client.client_id();
+                                    client.core_info();
+                                    client.core_memories();
                                     loop {
                                         println!("{:#?}", game);
                                         let autoSplitStatus = client.update().unwrap();
@@ -1168,7 +1168,7 @@ pub fn app_init(
                                 }
                                 Game::SuperMetroid => {
                                     let mut client =
-                                        nwa::supermetroid::supermetroidAutoSplitter::new(
+                                        nwa::supermetroid::SupermetroidAutoSplitter::new(
                                             Ipv4Addr::new(0, 0, 0, 0),
                                             48879,
                                             app_config
@@ -1177,16 +1177,16 @@ pub fn app_init(
                                                 .reset_timer_on_game_reset
                                                 .unwrap(),
                                         );
-                                    client.emuInfo();
-                                    client.emuGameInfo();
-                                    client.emuStatus();
-                                    client.clientID();
-                                    client.coreInfo();
-                                    client.coreMemories();
+                                    client.emu_info();
+                                    client.emu_game_info();
+                                    client.emu_status();
+                                    client.client_id();
+                                    client.core_info();
+                                    client.core_memories();
                                     loop {
                                         println!("{:#?}", game);
-                                        let autoSplitStatus = client.update().unwrap();
-                                        if autoSplitStatus.start {
+                                        let auto_split_status = client.update().unwrap();
+                                        if auto_split_status.start {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1195,7 +1195,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                                         }
-                                        if autoSplitStatus.reset {
+                                        if auto_split_status.reset {
                                             timer
                                     .write()
                                     .map_err(|e| {
@@ -1204,7 +1204,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                                         }
-                                        if autoSplitStatus.split {
+                                        if auto_split_status.split {
                                             timer
                                     .write()
                                     .map_err(|e| {
