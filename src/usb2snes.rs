@@ -127,7 +127,7 @@ impl SyncClient {
         args: &[Cow<str>],
     ) -> Result<()> {
         if self.devel {
-            println!("Send command : {:?}", command);
+            println!("Send command : {command:?}");
         }
         let nspace = space.map(|sp| sp.to_string());
         let query = USB2SnesQuery {
@@ -139,7 +139,7 @@ impl SyncClient {
         let json = serde_json::to_string(&query)?;
         if self.devel {
             let json = serde_json::to_string_pretty(&query)?;
-            println!("{}", json);
+            println!("{json}");
         }
         let message = Message::text(json);
         Ok(self.client.send(message)?)
@@ -156,7 +156,7 @@ impl SyncClient {
         };
         if self.devel {
             println!("Reply:");
-            println!("{}", textreply);
+            println!("{textreply}");
         }
         Ok(serde_json::from_str(&textreply)?)
     }
@@ -274,8 +274,8 @@ impl SyncClient {
             Command::GetAddress,
             Some(Space::SNES),
             &[
-                Cow::Owned(format!("{:x}", address)),
-                Cow::Owned(format!("{:x}", size)),
+                Cow::Owned(format!("{address:x}")),
+                Cow::Owned(format!("{size:x}")),
             ],
         )?;
         let mut data: Vec<u8> = Vec::with_capacity(size);

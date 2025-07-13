@@ -128,7 +128,7 @@ where
         .strip_prefix("0x")
         .or_else(|| s.strip_prefix("0X"))
         .unwrap_or(s);
-    u32::from_str_radix(s, 16).map_err(|e| de::Error::custom(format!("invalid hex: {}", e)))
+    u32::from_str_radix(s, 16).map_err(|e| de::Error::custom(format!("invalid hex: {e}")))
 }
 
 fn string_to_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -139,6 +139,6 @@ where
     match s.trim() {
         "1" => Ok(true),
         "0" => Ok(false),
-        _ => Err(de::Error::custom(format!("invalid boolean string: {}", s))),
+        _ => Err(de::Error::custom(format!("invalid boolean string: {s}"))),
     }
 }
