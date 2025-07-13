@@ -645,7 +645,7 @@ impl LiveSplitCoreRenderer {
                         class == egui::ViewportClass::Deferred,
                         "This egui backend doesn't support multiple viewports"
                     );
-                    egui::CentralPanel::default().show(ctx, |ui| {
+                    egui::CentralPanel::default().show(ctx, |_ui| {
                         let settings_editor = egui::containers::Window::new("Settings Editor");
                         settings_editor
                             .open(&mut show_deferred_viewport.load(Ordering::Relaxed))
