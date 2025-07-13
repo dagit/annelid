@@ -1266,8 +1266,8 @@ pub fn app_init(
 
             // let arch = process_memory::Architecture::from_native();
             // let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(
-                // x.try_into().unwrap(),
-                // arch,
+            // x.try_into().unwrap(),
+            // arch,
             // ))
             // .unwrap();
             // let mut member = DataMember::<i32>::new_offset(process_handle, vec![0x10]);
@@ -1276,8 +1276,8 @@ pub fn app_init(
             // The memory offset can now be correctly calculated:
             // called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
             // println!(
-                // "Target memory location: {}",
-                // member.clone().get_offset().unwrap()
+            // "Target memory location: {}",
+            // member.clone().get_offset().unwrap()
             // );
             // The memory offset can now be used to retrieve and modify values:
             // println!("Current value: {}", unsafe { member.read().unwrap() });
