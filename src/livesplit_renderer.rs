@@ -732,23 +732,25 @@ impl LiveSplitCoreRenderer {
                                 });
                             })
                             .body(|mut body| {
-                                let last_runID = run.attempt_history().last().unwrap().index();
-                                println!("Index: {}\n", last_runID);
-                                let mut segIndex = 0;
-                                let mut segMax = run.segments().len();
-                                while segIndex < segMax {
+                                let last_run_id = run.attempt_history().last().unwrap().index();
+                                println!("Index: {}\n", last_run_id);
+                                let mut seg_index = 0;
+                                let mut seg_max = run.segments().len();
+                                while seg_index < seg_max {
                                     body.row(60.0, |mut row| {
                                         row.col(|ui| {
-                                            if segIndex != 0 {
-                                                let moveUpResponse = ui.button("Up");
-                                                if moveUpResponse.clicked() {
-                                                    run.segments_mut().swap(segIndex, segIndex - 1);
+                                            if seg_index != 0 {
+                                                let move_up_response = ui.button("Up");
+                                                if move_up_response.clicked() {
+                                                    run.segments_mut()
+                                                        .swap(seg_index, seg_index - 1);
                                                 }
                                             }
-                                            if segIndex != segMax - 1 {
-                                                let moveDownResponse = ui.button("Down");
-                                                if moveDownResponse.clicked() {
-                                                    run.segments_mut().swap(segIndex, segIndex + 1);
+                                            if seg_index != seg_max - 1 {
+                                                let move_down_response = ui.button("Down");
+                                                if move_down_response.clicked() {
+                                                    run.segments_mut()
+                                                        .swap(seg_index, seg_index + 1);
                                                 }
                                             }
                                         });
@@ -764,9 +766,9 @@ impl LiveSplitCoreRenderer {
                                         });
 
                                         row.col(|ui| {
-                                            println!("Name: {}\n", run.segment(segIndex).name());
+                                            println!("Name: {}\n", run.segment(seg_index).name());
                                             let response = ui.text_edit_singleline(
-                                                &mut run.segment(segIndex).name().to_string(),
+                                                &mut run.segment(seg_index).name().to_string(),
                                             );
                                             if response.changed() {
                                                 // run.segment_mut(segIndex).set_name("2345");
@@ -774,11 +776,11 @@ impl LiveSplitCoreRenderer {
                                         });
 
                                         row.col(|ui| {
-                                            let splitTime = run
-                                                .segment_mut(segIndex)
+                                            let split_time = run
+                                                .segment_mut(seg_index)
                                                 .split_time_mut()
                                                 .real_time;
-                                            if splitTime.is_none() {
+                                            if split_time.is_none() {
                                                 let response =
                                                     ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Split Time: \n");
@@ -787,7 +789,7 @@ impl LiveSplitCoreRenderer {
                                                 }
                                             } else {
                                                 let response = ui.text_edit_singleline(
-                                                    &mut splitTime
+                                                    &mut split_time
                                                         .unwrap()
                                                         .to_duration()
                                                         .whole_seconds()
@@ -795,7 +797,7 @@ impl LiveSplitCoreRenderer {
                                                 );
                                                 println!(
                                                     "Split Time: {}\n",
-                                                    splitTime
+                                                    split_time
                                                         .unwrap()
                                                         .to_duration()
                                                         .whole_seconds()
@@ -808,9 +810,9 @@ impl LiveSplitCoreRenderer {
 
                                         row.col(|ui| {
                                             let old = run
-                                                .segment_mut(segIndex)
+                                                .segment_mut(seg_index)
                                                 .segment_history_mut()
-                                                .get(last_runID);
+                                                .get(last_run_id);
                                             if old.is_none() {
                                                 ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Last Split Time: \n");
@@ -837,7 +839,7 @@ impl LiveSplitCoreRenderer {
 
                                         row.col(|ui| {
                                             let best = run
-                                                .segment_mut(segIndex)
+                                                .segment_mut(seg_index)
                                                 .best_segment_time_mut()
                                                 .real_time;
                                             if best.is_none() {
@@ -859,35 +861,35 @@ impl LiveSplitCoreRenderer {
                                         });
 
                                         row.col(|ui| {
-                                            let insertAboveResponse = ui.button("Insert Above");
-                                            if insertAboveResponse.clicked() {
-                                                let newSeg = Segment::new("");
-                                                run.segments_mut().insert(segIndex, newSeg);
-                                                segMax += 1;
+                                            let insert_above_response = ui.button("Insert Above");
+                                            if insert_above_response.clicked() {
+                                                let new_seg = Segment::new("");
+                                                run.segments_mut().insert(seg_index, new_seg);
+                                                seg_max += 1;
                                             }
-                                            let insertBelowResponse = ui.button("Insert Below");
-                                            if insertBelowResponse.clicked() {
-                                                let newSeg = Segment::new("");
-                                                run.segments_mut().insert(segIndex + 1, newSeg);
-                                                segMax += 1;
+                                            let insert_below_response = ui.button("Insert Below");
+                                            if insert_below_response.clicked() {
+                                                let new_seg = Segment::new("");
+                                                run.segments_mut().insert(seg_index + 1, new_seg);
+                                                seg_max += 1;
                                             }
-                                            let removeResponse = ui.button("Remove Segment");
-                                            if removeResponse.clicked() {
-                                                run.segments_mut().remove(segIndex);
-                                                segMax -= 1;
+                                            let remove_response = ui.button("Remove Segment");
+                                            if remove_response.clicked() {
+                                                run.segments_mut().remove(seg_index);
+                                                seg_max -= 1;
                                             }
                                         });
                                     });
-                                    segIndex += 1;
+                                    seg_index += 1;
                                 }
                             });
 
-                        let okResponse = ui.button("OK");
-                        if okResponse.clicked() {
+                        let ok_response = ui.button("OK");
+                        if ok_response.clicked() {
                             // TODO: write modified values to run
                         }
-                        let cancelResponse = ui.button("Cancel");
-                        if cancelResponse.clicked() {
+                        let cancel_response = ui.button("Cancel");
+                        if cancel_response.clicked() {
                             // TODO: reset changes
                             show_deferred_viewport.store(false, Ordering::Relaxed);
                         }
