@@ -627,7 +627,7 @@ impl LiveSplitCoreRenderer {
                 egui::ViewportId::from_hash_of("deferred_viewport"),
                 egui::ViewportBuilder::default()
                     .with_title("Splits Editor")
-                    .with_inner_size([200.0, 500.0]),
+                    .with_inner_size([750.0, 1000.0]),
                 move |ctx, class| {
                     assert!(
                         class == egui::ViewportClass::Deferred,
