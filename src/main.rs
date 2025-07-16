@@ -16,7 +16,6 @@ use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::{Layout, Run, Segment, Timer};
 use parking_lot::RwLock;
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
@@ -69,22 +68,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .expect("Run with at least one segment provided") // error message
         .into_shared(); // makes timer sharable across threads
 
-    let mut segmentsMap = HashMap::new();
-    segmentsMap.insert(
-        0,
-        (
-            timer.read().unwrap().run().segment(0).icon().clone(),
-            timer.read().unwrap().run().segment(0).name().to_string(),
-            timer.read().unwrap().run().segment(0).split_time(),
-            timer
-                .read()
-                .unwrap()
-                .run()
-                .segment(0)
-                .personal_best_split_time(),
-            timer.read().unwrap().run().segment(0).best_segment_time(),
-        ),
-    );
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
         viewport: egui::viewport::ViewportBuilder {
@@ -100,8 +83,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     use std::sync::mpsc::sync_channel;
     let (sync_sender, sync_receiver) = sync_channel(1); // create thread
 
-    let mut app =
-        LiveSplitCoreRenderer::new(timer, layout, settings, sync_sender, config, segmentsMap); // create livesplit-core renderer object
+    let mut app = LiveSplitCoreRenderer::new(timer, layout, settings, sync_sender, config); // create livesplit-core renderer object
 
     eframe::run_native(
         "Annelid",
