@@ -655,41 +655,41 @@ impl LiveSplitCoreRenderer {
                         // if AddComparisonResponse.clicked() {}
                         // let importComparisonResponse = ui.button("Import Comparison");
                         // if importComparisonResponse.clicked() {}
-                        let clearHistory = ui.button("Clear History");
+                        let clear_history = ui.button("Clear History");
 
-                        let clearTimes = ui.button("Clear Times");
-                        if clearTimes.clicked() {
-                            let mut segIndex = 0;
-                            let segMax = run.segments().len();
+                        let clear_times = ui.button("Clear Times");
+                        if clear_times.clicked() {
+                            let mut seg_index = 0;
+                            let seg_max = run.segments().len();
                             if timer.current_phase() == TimerPhase::NotRunning {
-                                let last_runID = run.attempt_history().last().unwrap().index();
+                                let last_run_id = run.attempt_history().last().unwrap().index();
 
-                                while segIndex < segMax {
+                                while seg_index < seg_max {
                                     let test = run
-                                        .segment_mut(segIndex)
+                                        .segment_mut(seg_index)
                                         .segment_history_mut()
-                                        .get(last_runID);
+                                        .get(last_run_id);
                                     if test.is_some() {
-                                        run.segment_mut(segIndex)
+                                        run.segment_mut(seg_index)
                                             .segment_history_mut()
-                                            .remove(last_runID);
+                                            .remove(last_run_id);
                                     }
-                                    segIndex += 1;
+                                    seg_index += 1;
                                 }
                             }
                             if timer.current_phase() == TimerPhase::Ended {
-                                while segIndex < segMax {
-                                    run.segment_mut(segIndex).clear_split_info();
-                                    segIndex += 1;
+                                while seg_index < seg_max {
+                                    run.segment_mut(seg_index).clear_split_info();
+                                    seg_index += 1;
                                 }
                             }
                         }
 
-                        let clearSumOfBests = ui.button("Clear Sum Of Bests");
-                        if clearSumOfBests.clicked() {
+                        let clear_sum_of_bests = ui.button("Clear Sum Of Bests");
+                        if clear_sum_of_bests.clicked() {
                             let mut segIndex = 0;
-                            let segMax = run.segments().len();
-                            while segIndex < segMax {
+                            let seg_max = run.segments().len();
+                            while segIndex < seg_max {
                                 // No means to clear the PB times
 
                                 // run.segment_mut(segIndex).best_segment_time_mut();
@@ -893,7 +893,7 @@ impl LiveSplitCoreRenderer {
                             // TODO: reset changes
                             show_deferred_viewport.store(false, Ordering::Relaxed);
                         }
-                        if clearHistory.clicked() {
+                        if clear_history.clicked() {
                             run.clear_history();
                             run.set_attempt_count(0);
                         }
