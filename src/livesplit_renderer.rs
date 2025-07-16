@@ -642,7 +642,7 @@ impl LiveSplitCoreRenderer {
                         // if response.changed() {}
                         ui.label("Timer offset:");
                         ui.text_edit_singleline(
-                            &mut run.offset().to_duration().whole_seconds().to_string(),
+                            &mut run.offset().to_duration().whole_nanoseconds().to_string(),
                         );
                         ui.label("Attempts:");
                         ui.text_edit_singleline(&mut run.attempt_count().to_string());
@@ -658,45 +658,8 @@ impl LiveSplitCoreRenderer {
                         let clear_history = ui.button("Clear History");
 
                         let clear_times = ui.button("Clear Times");
-                        if clear_times.clicked() {
-                            let mut seg_index = 0;
-                            let seg_max = run.segments().len();
-                            if timer.current_phase() == TimerPhase::NotRunning {
-                                let last_run_id = run.attempt_history().last().unwrap().index();
-
-                                while seg_index < seg_max {
-                                    let test = run
-                                        .segment_mut(seg_index)
-                                        .segment_history_mut()
-                                        .get(last_run_id);
-                                    if test.is_some() {
-                                        run.segment_mut(seg_index)
-                                            .segment_history_mut()
-                                            .remove(last_run_id);
-                                    }
-                                    seg_index += 1;
-                                }
-                            }
-                            if timer.current_phase() == TimerPhase::Ended {
-                                while seg_index < seg_max {
-                                    run.segment_mut(seg_index).clear_split_info();
-                                    seg_index += 1;
-                                }
-                            }
-                        }
 
                         let clear_sum_of_bests = ui.button("Clear Sum Of Bests");
-                        if clear_sum_of_bests.clicked() {
-                            let mut seg_index = 0;
-                            let seg_max = run.segments().len();
-                            while seg_index < seg_max {
-                                // No means to clear the PB times
-
-                                // run.segment_mut(segIndex).best_segment_time_mut();
-                                // run.segment_mut(segIndex).personal_best_split_time_mut();
-                                seg_index += 1;
-                            }
-                        }
 
                         use egui_extras::{Column, TableBuilder};
                         TableBuilder::new(ui)
@@ -775,6 +738,7 @@ impl LiveSplitCoreRenderer {
                                             }
                                         });
 
+                                        // split time is only available for current runs ...
                                         row.col(|ui| {
                                             let split_time = run
                                                 .segment_mut(seg_index)
@@ -792,7 +756,7 @@ impl LiveSplitCoreRenderer {
                                                     &mut split_time
                                                         .unwrap()
                                                         .to_duration()
-                                                        .whole_seconds()
+                                                        .whole_nanoseconds()
                                                         .to_string(),
                                                 );
                                                 println!(
@@ -800,7 +764,7 @@ impl LiveSplitCoreRenderer {
                                                     split_time
                                                         .unwrap()
                                                         .to_duration()
-                                                        .whole_seconds()
+                                                        .whole_nanoseconds()
                                                 );
                                                 if response.changed() {
                                                     // let _length = splitTime.insert();
@@ -809,36 +773,74 @@ impl LiveSplitCoreRenderer {
                                         });
 
                                         row.col(|ui| {
-                                            let old = run
-                                                .segment_mut(seg_index)
-                                                .segment_history_mut()
-                                                .get(last_run_id);
-                                            if run
-                                                .segment_mut(seg_index)
-                                                .segment_history_mut()
-                                                .get(last_run_id)
-                                                .is_none()
-                                            {
-                                                ui.text_edit_singleline(&mut "".to_string());
-                                                println!("Last Split Time: \n");
-                                            } else {
-                                                ui.text_edit_singleline(
-                                                    &mut old
-                                                        .unwrap()
-                                                        .real_time
-                                                        .unwrap()
-                                                        .to_duration()
-                                                        .whole_seconds()
-                                                        .to_string(),
-                                                );
-                                                println!(
-                                                    "Last Split Time: {}\n",
-                                                    old.unwrap()
-                                                        .real_time
-                                                        .unwrap()
-                                                        .to_duration()
-                                                        .whole_seconds()
-                                                );
+                                            if timer.current_phase() == TimerPhase::NotRunning {
+                                                let seg_time = run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id);
+                                                if run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id)
+                                                    .is_none()
+                                                {
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                    println!("Last Split Time: \n");
+                                                } else {
+                                                    ui.text_edit_singleline(
+                                                        &mut seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                            .to_string(),
+                                                    );
+                                                    println!(
+                                                        "Last Split Time: {}\n",
+                                                        seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                    );
+                                                }
+                                            }
+
+                                            if timer.current_phase() == TimerPhase::Ended {
+                                                let seg_time = run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id);
+                                                if run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id)
+                                                    .is_none()
+                                                {
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                    println!("Last Split Time: \n");
+                                                } else {
+                                                    ui.text_edit_singleline(
+                                                        &mut seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                            .to_string(),
+                                                    );
+                                                    println!(
+                                                        "Last Split Time: {}\n",
+                                                        seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                    );
+                                                }
                                             }
                                         });
 
@@ -860,12 +862,12 @@ impl LiveSplitCoreRenderer {
                                                     &mut best
                                                         .unwrap()
                                                         .to_duration()
-                                                        .whole_seconds()
+                                                        .whole_nanoseconds()
                                                         .to_string(),
                                                 );
                                                 println!(
                                                     "Best Split Time: {}\n",
-                                                    best.unwrap().to_duration().whole_seconds()
+                                                    best.unwrap().to_duration().whole_nanoseconds()
                                                 );
                                             }
                                         });
@@ -903,6 +905,46 @@ impl LiveSplitCoreRenderer {
                             // TODO: reset changes
                             show_deferred_viewport.store(false, Ordering::Relaxed);
                         }
+
+                        if clear_sum_of_bests.clicked() {
+                            let mut seg_index = 0;
+                            let seg_max = run.segments().len();
+                            while seg_index < seg_max {
+                                // No means to clear the PB times
+
+                                // run.segment_mut(segIndex).best_segment_time_mut();
+                                // run.segment_mut(segIndex).personal_best_split_time_mut();
+                                seg_index += 1;
+                            }
+                        }
+
+                        if clear_times.clicked() {
+                            let mut seg_index = 0;
+                            let seg_max = run.segments().len();
+                            if timer.current_phase() == TimerPhase::NotRunning {
+                                let last_run_id = run.attempt_history().last().unwrap().index();
+
+                                while seg_index < seg_max {
+                                    let test = run
+                                        .segment_mut(seg_index)
+                                        .segment_history_mut()
+                                        .get(last_run_id);
+                                    if test.is_some() {
+                                        run.segment_mut(seg_index)
+                                            .segment_history_mut()
+                                            .remove(last_run_id);
+                                    }
+                                    seg_index += 1;
+                                }
+                            }
+                            if timer.current_phase() == TimerPhase::Ended {
+                                while seg_index < seg_max {
+                                    run.segment_mut(seg_index).clear_split_info();
+                                    seg_index += 1;
+                                }
+                            }
+                        }
+
                         if clear_history.clicked() {
                             run.clear_history();
                             run.set_attempt_count(0);
