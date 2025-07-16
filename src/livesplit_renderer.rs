@@ -3,22 +3,15 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
-use egui::load::BytesLoader;
-use egui::load::ImageLoader;
-use egui::ImageButton;
-use egui::ImageData;
-use egui::ImageSource;
-use egui::TextureHandle;
-use livesplit_core::{settings, timing, Layout, SharedTimer, Timer};
+use livesplit_core::Segment;
+use livesplit_core::TimerPhase;
+use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use serde::de::value;
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
-use tungstenite::http::response;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -46,24 +39,6 @@ pub struct LiveSplitCoreRenderer {
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
     show_edit_splits_dialog: std::sync::Arc<AtomicBool>,
-    gameName: std::sync::Arc<std::sync::RwLock<Option<String>>>,
-    gameCategory: std::sync::Arc<std::sync::RwLock<Option<String>>>,
-    timerOffset: std::sync::Arc<std::sync::RwLock<Option<String>>>,
-    attempts: std::sync::Arc<std::sync::RwLock<Option<String>>>,
-    segments: std::sync::Arc<
-        std::sync::RwLock<
-            HashMap<
-                u32,
-                (
-                    settings::Image,
-                    String,
-                    timing::Time,
-                    timing::Time,
-                    timing::Time,
-                ),
-            >,
-        >,
-    >,
 }
 
 fn show_children(
@@ -106,16 +81,6 @@ impl LiveSplitCoreRenderer {
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
         config: AppConfig,
-        segmentsMap: HashMap<
-            u32,
-            (
-                settings::Image,
-                String,
-                timing::Time,
-                timing::Time,
-                timing::Time,
-            ),
-        >,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -134,15 +99,6 @@ impl LiveSplitCoreRenderer {
             global_hotkey_hook: None,
             load_errors: vec![],
             show_edit_splits_dialog: std::sync::Arc::new(AtomicBool::new(false)),
-            gameName: std::sync::Arc::new(std::sync::RwLock::new(Some(
-                "Enter Game Name".to_string(),
-            ))),
-            gameCategory: std::sync::Arc::new(std::sync::RwLock::new(Some(
-                "Enter Game Category".to_string(),
-            ))),
-            timerOffset: std::sync::Arc::new(std::sync::RwLock::new(Some("0.00".to_string()))),
-            attempts: std::sync::Arc::new(std::sync::RwLock::new(Some("0.00".to_string()))),
-            segments: std::sync::Arc::new(std::sync::RwLock::new(segmentsMap)),
         }
     }
 
@@ -286,31 +242,6 @@ impl LiveSplitCoreRenderer {
             .write()
             .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))? =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
-        self.gameName
-            .write()
-            .unwrap()
-            .replace(self.timer.read().unwrap().run().game_name().to_string());
-        self.gameCategory
-            .write()
-            .unwrap()
-            .replace(self.timer.read().unwrap().run().category_name().to_string());
-
-        self.segments.write().unwrap().clear();
-        let mut i = 0;
-
-        for count in self.timer.read().unwrap().run().segments() {
-            self.segments.write().unwrap().insert(
-                i,
-                (
-                    count.icon().clone(),
-                    count.name().to_string(),
-                    count.split_time(),
-                    count.personal_best_split_time(),
-                    count.best_segment_time(),
-                ),
-            );
-            i += 1;
-        }
         Ok(())
     }
 
@@ -690,12 +621,7 @@ impl LiveSplitCoreRenderer {
     pub fn open_splits_edit_dialog(&mut self, ctx: &egui::Context) {
         if self.show_edit_splits_dialog.load(Ordering::Relaxed) {
             let show_deferred_viewport = self.show_edit_splits_dialog.clone();
-            let mut editTimer = self.timer.clone();
-            let editGameName = self.gameName.clone();
-            let editGameCategory = self.gameCategory.clone();
-            let offset = self.timerOffset.clone();
-            let aCount = self.attempts.clone();
-            let editSegments = self.segments.clone();
+            let timer = self.timer.write().unwrap().clone();
 
             ctx.show_viewport_deferred(
                 egui::ViewportId::from_hash_of("deferred_viewport"),
@@ -708,109 +634,84 @@ impl LiveSplitCoreRenderer {
                         "This egui backend doesn't support multiple viewports"
                     );
                     egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = timer.run().clone();
                         ui.label("Game Name:");
-                        let test = editGameName.write().unwrap().as_mut().unwrap();
-                        ui.text_edit_singleline(editGameName.write().unwrap().as_mut().unwrap());
+                        ui.text_edit_singleline(&mut run.game_name().to_string());
                         ui.label("Run Category:");
-                        let response = ui.text_edit_singleline(
-                            editGameCategory.write().unwrap().as_mut().unwrap(),
-                        );
-                        if response.changed() {}
+                        ui.text_edit_singleline(&mut run.category_name().to_string());
+                        // if response.changed() {}
                         ui.label("Timer offset:");
-                        ui.text_edit_singleline(offset.write().unwrap().as_mut().unwrap());
+                        ui.text_edit_singleline(
+                            &mut run.offset().to_duration().whole_seconds().to_string(),
+                        );
                         ui.label("Attempts:");
-                        ui.text_edit_singleline(aCount.write().unwrap().as_mut().unwrap());
+                        ui.text_edit_singleline(&mut run.attempt_count().to_string());
 
                         // things in livesplit here
                         // Autosplitter name, activator, settings
                         // Split specific layout check box, selector, browser
 
-                        let insertAboveResponse = ui.button("Insert Above");
-                        if insertAboveResponse.clicked() {}
-                        let insertBelowResponse = ui.button("Insert Below");
-                        if insertBelowResponse.clicked() {}
-                        let removeResponse = ui.button("Remove Segment");
-                        if removeResponse.clicked() {}
-                        let moveUpResponse = ui.button("Move Up");
-                        if moveUpResponse.clicked() {}
-                        let moveDownResponse = ui.button("Move Down");
-                        if moveDownResponse.clicked() {}
-                        let AddComparisonResponse = ui.button("Add Comparison");
-                        if AddComparisonResponse.clicked() {}
-                        let importComparisonResponse = ui.button("Import Comparison");
-                        if importComparisonResponse.clicked() {}
-                        let otherResponse = ui.button("Other");
-                        if otherResponse.clicked() {}
+                        // let AddComparisonResponse = ui.button("Add Comparison");
+                        // if AddComparisonResponse.clicked() {}
+                        // let importComparisonResponse = ui.button("Import Comparison");
+                        // if importComparisonResponse.clicked() {}
+                        let clearHistory = ui.button("Clear History");
 
-                        for (key, value) in &*editSegments.write().unwrap() {
-                            // let test = value.2.real_time.unwrap().to_duration().to_string();
-                            // if ui.button(format!("{}: {}", key, value.0)).clicked(){
-                            // println!("Button clicked for key: {}, value: {}", key, value.0);
-                            // }
-                                                        println!("Button clicked for key: {}, value: {:#?}", key, value.2.game_time.unwrap());
+                        let clearTimes = ui.button("Clear Times");
+                        if clearTimes.clicked() {
+                            let mut segIndex = 0;
+                            let mut segMax = run.segments().len();
+                            if timer.current_phase() == TimerPhase::NotRunning {
+                                let last_runID = run.attempt_history().last().unwrap().index();
 
-                            if ui.button(format!("{}: {}", key, value.1)).clicked() {
-                                println!("Button clicked for key: {}, value: {}", key, value.1);
-                            }
-                            if value.2.game_time == None {
-                                if ui.button(format!("{}: {}", key, "")).clicked() {
-                                    println!("Button clicked for key: {}, value: Blank", key);
-                                }
-                            } else {
-                                // let splitTime = value.2.game_time.unwrap().to_duration().whole_days().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_hours().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_minutes().to_string() + ":".to_string() + value.2.game_time.unwrap().to_duration().whole_seconds().to_string() + ".".to_string() + value.2.game_time.unwrap().to_duration().whole_nanoseconds().to_string();
-                                let splitTime = value.2.game_time.unwrap().to_seconds_and_subsec_nanoseconds();
-                                if ui
-                                    .button(format!(
-                                        "{}: {}",
-                                        key,
-                                        splitTime.0
-                                    ))
-                                    .clicked()
-                                {
-                                    println!(
-                                        "Button clicked for key: {}, value: {}",
-                                        key,
-                                        splitTime.0
-                                    );
+                                while segIndex < segMax {
+                                    let test = run
+                                        .segment_mut(segIndex)
+                                        .segment_history_mut()
+                                        .get(last_runID);
+                                    if !test.is_none() {
+                                        run.segment_mut(segIndex)
+                                            .segment_history_mut()
+                                            .remove(last_runID);
+                                    }
+                                    segIndex += 1;
                                 }
                             }
-                            // if ui
-                            //     .button(format!(
-                            //         "{}: {}",
-                            //         key,
-                            //         value.3.real_time.unwrap().to_duration().to_string()
-                            //     ))
-                            //     .clicked()
-                            // {
-                            //     println!(
-                            //         "Button clicked for key: {}, value: {}",
-                            //         key,
-                            //         value.3.real_time.unwrap().to_duration().to_string()
-                            //     );
-                            // }
-                            // if ui
-                            //     .button(format!(
-                            //         "{}: {}",
-                            //         key,
-                            //         value.4.real_time.unwrap().to_duration().to_string()
-                            //     ))
-                            //     .clicked()
-                            // {
-                            //     println!(
-                            //         "Button clicked for key: {}, value: {}",
-                            //         key,
-                            //         value.4.real_time.unwrap().to_duration().to_string()
-                            //     );
-                            // }
+                            if timer.current_phase() == TimerPhase::Ended {
+                                while segIndex < segMax {
+                                    run.segment_mut(segIndex).clear_split_info();
+                                    segIndex += 1;
+                                }
+                            }
                         }
+
+                        let clearSumOfBests = ui.button("Clear Sum Of Bests");
+                        if clearSumOfBests.clicked() {
+                            let mut segIndex = 0;
+                            let mut segMax = run.segments().len();
+                            while segIndex < segMax {
+                                // No means to clear the PB times
+
+                                // run.segment_mut(segIndex).best_segment_time_mut();
+                                // run.segment_mut(segIndex).personal_best_split_time_mut();
+                                segIndex += 1;
+                            }
+                        }
+
                         use egui_extras::{Column, TableBuilder};
                         TableBuilder::new(ui)
+                            .striped(true)
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
                             .column(Column::auto().resizable(true))
                             .column(Column::auto().resizable(true))
                             .column(Column::auto().resizable(true))
                             .column(Column::auto().resizable(true))
                             .column(Column::remainder())
                             .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.heading("Move Split");
+                                });
                                 header.col(|ui| {
                                     ui.heading("Icon");
                                 });
@@ -826,54 +727,173 @@ impl LiveSplitCoreRenderer {
                                 header.col(|ui| {
                                     ui.heading("Best Segment Time");
                                 });
+                                header.col(|ui| {
+                                    ui.heading("Add/Remove Split");
+                                });
                             })
                             .body(|mut body| {
-                                //TODO: figure out how to get data out of temp variables for editting and into text edits
+                                let last_runID = run.attempt_history().last().unwrap().index();
+                                println!("Index: {}\n", last_runID);
+                                let mut segIndex = 0;
+                                let mut segMax = run.segments().len();
+                                while segIndex < segMax {
+                                    body.row(60.0, |mut row| {
+                                        row.col(|ui| {
+                                            if segIndex != 0 {
+                                                let moveUpResponse = ui.button("Up");
+                                                if moveUpResponse.clicked() {
+                                                    run.segments_mut().swap(segIndex, segIndex - 1);
+                                                }
+                                            }
+                                            if segIndex != segMax - 1 {
+                                                let moveDownResponse = ui.button("Down");
+                                                if moveDownResponse.clicked() {
+                                                    run.segments_mut().swap(segIndex, segIndex + 1);
+                                                }
+                                            }
+                                        });
 
-                                // let mut i = 0;
-                                // let test = editSegments.write().unwrap().get(i).unwrap().2.real_time.unwrap().to_duration().to_string().as_mut();
-                                // for  (i,value) in &*editSegments.write().unwrap() {
+                                        row.col(|ui| {
+                                            println!("Image:");
+                                            // TODO: Figure out how to convert livesplit image to egui image to load into ImageButton
+                                            // let test = value.icon();
+                                            // let image = ColorImage::from_rgba_unmultiplied([16 as usize,3252 as usize],test);
+                                            // let texture = ctx.load_texture("test image", image, Default::default());
+                                            // ui.image(&texture);
+                                            // ui.add(ImageButton::new(egui::Image::new(&texture)));
+                                        });
 
-                                // let test = editSegments.write().unwrap().get_mut(&1).unwrap().1.clone();
-                                // let mut _test = value.1.as_mut();
-                                body.row(30.0, |mut row| {
-                                    // for  (mut i,mut value) in *editSegments.write().unwrap() {
+                                        row.col(|ui| {
+                                            println!("Name: {}\n", run.segment(segIndex).name());
+                                            let response = ui.text_edit_singleline(
+                                                &mut run.segment(segIndex).name().to_string(),
+                                            );
+                                            if response.changed() {
+                                                // run.segment_mut(segIndex).set_name("2345");
+                                            }
+                                        });
 
-                                    row.col(|ui| {
-                                        // ui.add(ImageButton::new(&value.0));
-                                        // ui.button("", editSegments.write().unwrap().get(i).as_mut().unwrap().0);
-                                        // egui::widgets::Button::image(editSegments.write().unwrap().get(i).as_mut().unwrap().0.data());
+                                        row.col(|ui| {
+                                            let mut splitTime = run
+                                                .segment_mut(segIndex)
+                                                .split_time_mut()
+                                                .real_time;
+                                            if splitTime.is_none() {
+                                                let response =
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                println!("Split Time: {}\n", "");
+                                                if response.changed() {
+                                                    // let _length = splitTime.insert();
+                                                }
+                                            } else {
+                                                let response = ui.text_edit_singleline(
+                                                    &mut splitTime
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_seconds()
+                                                        .to_string(),
+                                                );
+                                                println!(
+                                                    "Split Time: {}\n",
+                                                    splitTime
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_seconds()
+                                                );
+                                                if response.changed() {
+                                                    // let _length = splitTime.insert();
+                                                }
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            let old = run
+                                                .segment_mut(segIndex)
+                                                .segment_history_mut()
+                                                .get(last_runID);
+                                            if old.is_none() {
+                                                ui.text_edit_singleline(&mut "".to_string());
+                                                println!("Last Split Time: {}\n", "");
+                                            } else {
+                                                ui.text_edit_singleline(
+                                                    &mut old
+                                                        .unwrap()
+                                                        .real_time
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_seconds()
+                                                        .to_string(),
+                                                );
+                                                println!(
+                                                    "Last Split Time: {}\n",
+                                                    old.unwrap()
+                                                        .real_time
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_seconds()
+                                                );
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            let best = run
+                                                .segment_mut(segIndex)
+                                                .best_segment_time_mut()
+                                                .real_time;
+                                            if best.is_none() {
+                                                ui.text_edit_singleline(&mut "".to_string());
+                                                println!("Best Split Time: {}\n", "");
+                                            } else {
+                                                ui.text_edit_singleline(
+                                                    &mut best
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_seconds()
+                                                        .to_string(),
+                                                );
+                                                println!(
+                                                    "Best Split Time: {}\n",
+                                                    best.unwrap().to_duration().whole_seconds()
+                                                );
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            let insertAboveResponse = ui.button("Insert Above");
+                                            if insertAboveResponse.clicked() {
+                                                let newSeg = Segment::new("");
+                                                run.segments_mut().insert(segIndex, newSeg);
+                                                segMax += 1;
+                                            }
+                                            let insertBelowResponse = ui.button("Insert Below");
+                                            if insertBelowResponse.clicked() {
+                                                let newSeg = Segment::new("");
+                                                run.segments_mut().insert(segIndex + 1, newSeg);
+                                                segMax += 1;
+                                            }
+                                            let removeResponse = ui.button("Remove Segment");
+                                            if removeResponse.clicked() {
+                                                run.segments_mut().remove(segIndex);
+                                                segMax -= 1;
+                                            }
+                                        });
                                     });
-                                    row.col(|ui| {
-                                        // ui.text_edit_singleline(&mut value.1);
-                                        // let str = editSegments.write().unwrap().get(i).as_mut().unwrap().1;
-                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().1);
-                                        // ui.text_edit_singleline( value.1);
-                                    });
-                                    row.col(|ui| {
-                                        // let test = editSegments.write().unwrap().get(i).unwrap().2.real_time.unwrap().to_duration().to_string();
-                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().2.real_time.unwrap().to_duration().to_string());
-                                    });
-                                    row.col(|ui| {
-                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().3.real_time.unwrap().to_duration().to_string());
-                                    });
-                                    row.col(|ui| {
-                                        // ui.text_edit_singleline(&mut editSegments.write().unwrap().get_mut(&i).unwrap().4.real_time.unwrap().to_duration().to_string());
-                                    });
-                                    // }
-                                });
-                                // i += 1;
-                                // }
+                                    segIndex += 1;
+                                }
                             });
 
                         let okResponse = ui.button("OK");
                         if okResponse.clicked() {
-                            // TODO: write modified values to timer
+                            // TODO: write modified values to run
                         }
                         let cancelResponse = ui.button("Cancel");
                         if cancelResponse.clicked() {
-                            // TODO: reset temporary variables
+                            // TODO: reset changes
                             show_deferred_viewport.store(false, Ordering::Relaxed);
+                        }
+                        if clearHistory.clicked() {
+                            run.clear_history();
+                            run.set_attempt_count(0);
                         }
                     });
 
