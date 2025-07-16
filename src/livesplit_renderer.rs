@@ -660,7 +660,7 @@ impl LiveSplitCoreRenderer {
                         let clearTimes = ui.button("Clear Times");
                         if clearTimes.clicked() {
                             let mut segIndex = 0;
-                            let mut segMax = run.segments().len();
+                            let segMax = run.segments().len();
                             if timer.current_phase() == TimerPhase::NotRunning {
                                 let last_runID = run.attempt_history().last().unwrap().index();
 
@@ -669,7 +669,7 @@ impl LiveSplitCoreRenderer {
                                         .segment_mut(segIndex)
                                         .segment_history_mut()
                                         .get(last_runID);
-                                    if !test.is_none() {
+                                    if test.is_some() {
                                         run.segment_mut(segIndex)
                                             .segment_history_mut()
                                             .remove(last_runID);
@@ -688,7 +688,7 @@ impl LiveSplitCoreRenderer {
                         let clearSumOfBests = ui.button("Clear Sum Of Bests");
                         if clearSumOfBests.clicked() {
                             let mut segIndex = 0;
-                            let mut segMax = run.segments().len();
+                            let segMax = run.segments().len();
                             while segIndex < segMax {
                                 // No means to clear the PB times
 
@@ -753,7 +753,7 @@ impl LiveSplitCoreRenderer {
                                             }
                                         });
 
-                                        row.col(|ui| {
+                                        row.col(|_ui| {
                                             println!("Image:");
                                             // TODO: Figure out how to convert livesplit image to egui image to load into ImageButton
                                             // let test = value.icon();
@@ -774,14 +774,14 @@ impl LiveSplitCoreRenderer {
                                         });
 
                                         row.col(|ui| {
-                                            let mut splitTime = run
+                                            let splitTime = run
                                                 .segment_mut(segIndex)
                                                 .split_time_mut()
                                                 .real_time;
                                             if splitTime.is_none() {
                                                 let response =
                                                     ui.text_edit_singleline(&mut "".to_string());
-                                                println!("Split Time: {}\n", "");
+                                                println!("Split Time: \n");
                                                 if response.changed() {
                                                     // let _length = splitTime.insert();
                                                 }
@@ -813,7 +813,7 @@ impl LiveSplitCoreRenderer {
                                                 .get(last_runID);
                                             if old.is_none() {
                                                 ui.text_edit_singleline(&mut "".to_string());
-                                                println!("Last Split Time: {}\n", "");
+                                                println!("Last Split Time: \n");
                                             } else {
                                                 ui.text_edit_singleline(
                                                     &mut old
@@ -842,7 +842,7 @@ impl LiveSplitCoreRenderer {
                                                 .real_time;
                                             if best.is_none() {
                                                 ui.text_edit_singleline(&mut "".to_string());
-                                                println!("Best Split Time: {}\n", "");
+                                                println!("Best Split Time: \n");
                                             } else {
                                                 ui.text_edit_singleline(
                                                     &mut best

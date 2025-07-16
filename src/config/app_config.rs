@@ -148,7 +148,7 @@ impl AppConfig {
 
                     // }).unwrap;
                 })
-                .unwrap_or(Self::new());
+                .unwrap_or_default();
             self = saved_config;
             Ok(())
         });
