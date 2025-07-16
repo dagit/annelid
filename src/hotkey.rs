@@ -1,3 +1,4 @@
+use core::fmt;
 use std::ops::BitOr;
 
 use serde_derive::{Deserialize, Serialize};
@@ -292,4 +293,31 @@ pub fn to_livesplit_modifiers(modifiers: &::egui::Modifiers) -> livesplit_hotkey
         mods.insert(Modifiers::META)
     };
     mods
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HotkeyAction {
+    Start,
+    Reset,
+    Undo,
+    Skip,
+    Pause,
+    ComparisonPrevious,
+    ComparisonNext,
+    ToggleGlobalHotkeys,
+}
+
+impl fmt::Display for HotkeyAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HotkeyAction::Start => write!(f, "Start / Split"),
+            HotkeyAction::Reset => write!(f, "Reset"),
+            HotkeyAction::Undo => write!(f, "Undo Split"),
+            HotkeyAction::Skip => write!(f, "Skip Split"),
+            HotkeyAction::Pause => write!(f, "Pause"),
+            HotkeyAction::ComparisonPrevious => write!(f, "Switch Comparison (Previous)"),
+            HotkeyAction::ComparisonNext => write!(f, "Switch Comparison (Next)"),
+            HotkeyAction::ToggleGlobalHotkeys => write!(f, "Toggle Global Hotkeys"),
+        }
+    }
 }
