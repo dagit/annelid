@@ -687,14 +687,14 @@ impl LiveSplitCoreRenderer {
 
                         let clear_sum_of_bests = ui.button("Clear Sum Of Bests");
                         if clear_sum_of_bests.clicked() {
-                            let mut segIndex = 0;
+                            let mut seg_index = 0;
                             let seg_max = run.segments().len();
-                            while segIndex < seg_max {
+                            while seg_index < seg_max {
                                 // No means to clear the PB times
 
                                 // run.segment_mut(segIndex).best_segment_time_mut();
                                 // run.segment_mut(segIndex).personal_best_split_time_mut();
-                                segIndex += 1;
+                                seg_index += 1;
                             }
                         }
 
