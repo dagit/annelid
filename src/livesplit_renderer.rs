@@ -845,7 +845,10 @@ impl LiveSplitCoreRenderer {
                                                 .segment_mut(seg_index)
                                                 .best_segment_time_mut()
                                                 .real_time;
-                                            if best.is_none() {
+                                            if run
+                                                .segment_mut(seg_index)
+                                                .best_segment_time_mut()
+                                                .real_time.is_none() {
                                                 ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Best Split Time: \n");
                                             } else {
