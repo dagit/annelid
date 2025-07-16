@@ -816,7 +816,9 @@ impl LiveSplitCoreRenderer {
                                             if run
                                                 .segment_mut(seg_index)
                                                 .segment_history_mut()
-                                                .get(last_run_id).is_none() {
+                                                .get(last_run_id)
+                                                .is_none()
+                                            {
                                                 ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Last Split Time: \n");
                                             } else {
@@ -848,7 +850,9 @@ impl LiveSplitCoreRenderer {
                                             if run
                                                 .segment_mut(seg_index)
                                                 .best_segment_time_mut()
-                                                .real_time.is_none() {
+                                                .real_time
+                                                .is_none()
+                                            {
                                                 ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Best Split Time: \n");
                                             } else {
