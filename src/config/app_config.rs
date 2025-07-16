@@ -99,7 +99,7 @@ impl AppConfig {
         use std::io::Write;
         let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
             .ok_or("Unable to load computer configuration directory");
-        println!("project_dirs = {:#?}", project_dirs);
+        println!("project_dirs = {project_dirs:#?}");
 
         let config_dir = project_dirs.unwrap(); // get preferences directory
         println!("project_dirs = {:#?}", config_dir.preference_dir());
@@ -110,7 +110,7 @@ impl AppConfig {
             let mut config_path = config_dir.preference_dir().to_path_buf();
             config_path.push("settings.toml");
 
-            println!("Saving to {:#?}", config_path);
+            println!("Saving to {config_path:#?}");
             let f = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -127,7 +127,7 @@ impl AppConfig {
     pub fn load_app_config(mut self) -> Self {
         let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
             .ok_or("Unable to load computer configuration directory");
-        println!("project_dirs = {:#?}", project_dirs);
+        println!("project_dirs = {project_dirs:#?}");
 
         let config_dir = project_dirs.unwrap(); // get preferences directory
         println!("project_dirs = {:#?}", config_dir.preference_dir());
@@ -136,7 +136,7 @@ impl AppConfig {
             use std::io::Read;
             let mut config_path = config_dir.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
+            println!("Loading from {config_path:#?}");
             let saved_config: AppConfig = std::fs::File::open(config_path)
                 .and_then(|mut f| {
                     let mut buffer = String::new();
