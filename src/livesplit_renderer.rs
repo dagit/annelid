@@ -813,7 +813,10 @@ impl LiveSplitCoreRenderer {
                                                 .segment_mut(seg_index)
                                                 .segment_history_mut()
                                                 .get(last_run_id);
-                                            if old.is_none() {
+                                            if run
+                                                .segment_mut(seg_index)
+                                                .segment_history_mut()
+                                                .get(last_run_id).is_none() {
                                                 ui.text_edit_singleline(&mut "".to_string());
                                                 println!("Last Split Time: \n");
                                             } else {
