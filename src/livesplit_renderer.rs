@@ -1,16 +1,17 @@
-use crate::autosplitters::supermetroid::Settings;
-use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
-use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::{
+    supermetroid::{Settings, SuperMetroidAutoSplitter},
+    AutoSplitter,
+};
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
-use egui::Key;
-use egui::Modifiers;
+use egui::{Key, Modifiers};
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::{Hook, Hotkey};
 use parking_lot::RwLock;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -33,14 +34,14 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub app_config: Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
-    show_edit_settings_dialog: std::sync::Arc<AtomicBool>,
-    change_binding: std::sync::Arc<AtomicBool>,
-    hotkey_selector: std::sync::Arc<std::sync::RwLock<Option<i32>>>,
+    show_edit_settings_dialog: Arc<AtomicBool>,
+    change_binding: Arc<AtomicBool>,
+    hotkey_selector: Arc<std::sync::RwLock<Option<HotkeyAction>>>,
 }
 
 fn show_children(
@@ -95,18 +96,18 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
+            app_config: Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
-            show_edit_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
-            change_binding: std::sync::Arc::new(AtomicBool::new(false)),
-            hotkey_selector: std::sync::Arc::new(std::sync::RwLock::new(None)),
+            show_edit_settings_dialog: Arc::new(AtomicBool::new(false)),
+            change_binding: Arc::new(AtomicBool::new(false)),
+            hotkey_selector: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
+    pub fn confirm_save(&mut self, gl: &Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -571,7 +572,7 @@ impl LiveSplitCoreRenderer {
                         .map_err(|e| println!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
-                        .map(|g| g.use_autosplitter == Some(true))
+                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
                         .unwrap_or(false)
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
@@ -798,69 +799,38 @@ impl LiveSplitCoreRenderer {
                         "This egui backend doesn't support multiple viewports"
                     );
                     egui::CentralPanel::default().show(ctx, |ui| {
+                        let action_map = [
+                            (HotkeyAction::Start, h_start),
+                            (HotkeyAction::Reset, h_reset),
+                            (HotkeyAction::Undo, h_undo),
+                            (HotkeyAction::Skip, h_skip),
+                            (HotkeyAction::Pause, h_pause),
+                            (HotkeyAction::ComparisonPrevious, h_switch_p),
+                            (HotkeyAction::ComparisonNext, h_switch_n),
+                            (HotkeyAction::ToggleGlobalHotkeys, h_toggle_g),
+                        ];
                         ui.label("Hotkeys");
-                        ui.label("Start / Split");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_start));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(1);
+                        for (action, hk) in action_map {
+                            ui.label(action.to_string());
+                            let response = ui.button(LiveSplitCoreRenderer::button_text_update(hk));
+                            if response.clicked() {
+                                local_change_binding.store(true, Ordering::Relaxed);
+                                h_selector.write().unwrap().replace(action);
+                            }
                         }
-                        ui.label("Reset");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_reset));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(2);
-                        }
-                        ui.label("Undo Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_undo));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(3);
-                        }
-                        ui.label("Skip Split");
-                        let response = ui.button(LiveSplitCoreRenderer::button_text_update(h_skip));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(4);
-                        }
-                        ui.label("Pause");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_pause));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(5);
-                        }
-                        ui.label("Switch Comparison (Previous)");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_switch_p));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(6);
-                        }
-                        ui.label("Switch Comparison (Next)");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_switch_n));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(7);
-                        }
-                        ui.label("Toggle Global Hotkeys");
-                        let response =
-                            ui.button(LiveSplitCoreRenderer::button_text_update(h_toggle_g));
-                        if response.clicked() {
-                            local_change_binding.store(true, Ordering::Relaxed);
-                            h_selector.write().unwrap().replace(8);
-                        }
-                        let mut value = global_hotkeys.read().unwrap().global_hotkeys.unwrap();
+                        let mut value = global_hotkeys
+                            .read()
+                            .unwrap()
+                            .global_hotkeys
+                            .unwrap_or(YesOrNo::Yes)
+                            .into();
                         let response = ui.checkbox(&mut value, "Global Hotkeys");
                         if response.clicked() {
                             global_hotkeys
                                 .write()
                                 .unwrap()
                                 .global_hotkeys
-                                .replace(value);
+                                .replace(value.into());
                         }
                     });
 
@@ -933,39 +903,38 @@ impl LiveSplitCoreRenderer {
                                 modifiers: modif,
                             };
                             match h_selector.read().unwrap().unwrap() {
-                                1 => {
+                                HotkeyAction::Start => {
                                     self.app_config.write().unwrap().hot_key_start =
                                         Some(new_hotkey)
                                 }
-                                2 => {
+                                HotkeyAction::Reset => {
                                     self.app_config.write().unwrap().hot_key_reset =
                                         Some(new_hotkey)
                                 }
-                                3 => {
+                                HotkeyAction::Undo => {
                                     self.app_config.write().unwrap().hot_key_undo = Some(new_hotkey)
                                 }
-                                4 => {
+                                HotkeyAction::Skip => {
                                     self.app_config.write().unwrap().hot_key_skip = Some(new_hotkey)
                                 }
-                                5 => {
+                                HotkeyAction::Pause => {
                                     self.app_config.write().unwrap().hot_key_pause =
                                         Some(new_hotkey)
                                 }
-                                6 => {
+                                HotkeyAction::ComparisonPrevious => {
                                     self.app_config.write().unwrap().hot_key_comparison_prev =
                                         Some(new_hotkey)
                                 }
-                                7 => {
+                                HotkeyAction::ComparisonNext => {
                                     self.app_config.write().unwrap().hot_key_comparison_next =
                                         Some(new_hotkey)
                                 }
-                                8 => {
+                                HotkeyAction::ToggleGlobalHotkeys => {
                                     self.app_config
                                         .write()
                                         .unwrap()
                                         .hot_key_toggle_global_hotkeys = Some(new_hotkey)
                                 }
-                                _ => return,
                             }
                             self.change_binding.store(false, Ordering::Relaxed);
                         } else {
@@ -1124,7 +1093,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true).ok();
-                        if self.app_config.read().unwrap().use_autosplitter == Some(true) {
+                        if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
@@ -1190,7 +1159,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             let config = self.app_config.read().unwrap();
 
             // let test = config.global_hotkeys;
-            if config.global_hotkeys != Some(true) {
+            if config.global_hotkeys != Some(YesOrNo::Yes) {
                 ctx.input_mut(|input| {
                     if let Some(hot_key) = config.hot_key_start {
                         if input.consume_key(
@@ -1208,7 +1177,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         ) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().reset(true).ok();
-                            if config.use_autosplitter == Some(true) {
+                            if config.use_autosplitter == Some(YesOrNo::Yes) {
                                 self.thread_chan
                                     .try_send(ThreadEvent::TimerReset)
                                     .unwrap_or(());
@@ -1276,7 +1245,7 @@ pub fn app_init(
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
     // app.load_app_config();
-    if app.app_config.read().unwrap().global_hotkeys == Some(true) {
+    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
@@ -1313,7 +1282,7 @@ pub fn app_init(
     let settings = app.settings.clone();
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(true) {
+    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
         let _snes_polling_thread = ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
@@ -1360,7 +1329,7 @@ pub fn app_init(
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_timer_on_game_reset
-                                    == Some(true)
+                                    == Some(YesOrNo::Yes)
                             {
                                 timer
                                     .write()
@@ -1402,7 +1371,7 @@ pub fn app_init(
                                         anyhow!("failed to acquire read lock on config: {e}")
                                     })?
                                     .reset_game_on_timer_reset
-                                    == Some(true)
+                                    == Some(YesOrNo::Yes)
                                 {
                                     client.reset()?;
                                 }
