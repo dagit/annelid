@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::utils::*;
 // use crate::hotkey::*;
 
-#[derive(Default, Deserialize, Serialize, Parser, Debug, Clone)]
+#[derive(Deserialize, Serialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct AppConfig {
     #[clap(name = "load-splits", short = 's', long, value_parser)]
@@ -162,8 +162,8 @@ impl AppConfig {
     }
 }
 
-// impl Default for AppConfig {
-//     fn default() -> Self {
-//         AppConfig::new()
-//     }
-// }
+impl Default for AppConfig {
+    fn default() -> Self {
+        AppConfig::new()
+    }
+}
