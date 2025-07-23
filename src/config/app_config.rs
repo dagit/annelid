@@ -48,7 +48,6 @@ pub enum YesOrNo {
     No,
 }
 
-
 impl From<bool> for YesOrNo {
     fn from(b: bool) -> Self {
         match b {
