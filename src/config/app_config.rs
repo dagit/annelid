@@ -2,8 +2,9 @@ use clap::Parser;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::hotkey::*;
+use crate::utils::*;
 
-#[derive(Deserialize, Serialize, Parser, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct AppConfig {
     #[clap(name = "load-splits", short = 's', long, value_parser)]
@@ -47,11 +48,29 @@ pub enum YesOrNo {
     No,
 }
 
+impl From<bool> for YesOrNo {
+    fn from(b: bool) -> Self {
+        match b {
+            true => YesOrNo::Yes,
+            false => YesOrNo::No,
+        }
+    }
+}
+
+impl From<YesOrNo> for bool {
+    fn from(yes: YesOrNo) -> Self {
+        match yes {
+            YesOrNo::Yes => true,
+            YesOrNo::No => false,
+        }
+    }
+}
+
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
 pub const DEFAULT_POLLING_RATE: f32 = 20.0;
 
 impl AppConfig {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let modifiers = ::egui::Modifiers::default();
         AppConfig {
             recent_splits: None,
@@ -93,10 +112,70 @@ impl AppConfig {
             global_hotkeys: Some(YesOrNo::Yes),
         }
     }
-}
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        AppConfig::new()
+    pub fn save_app_config(&self) {
+        use std::io::Write;
+        let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
+            .ok_or("Unable to load computer configuration directory");
+        println!("project_dirs = {project_dirs:#?}");
+
+        let config_dir = project_dirs.unwrap(); // get preferences directory
+        println!("project_dirs = {:#?}", config_dir.preference_dir());
+
+        messagebox_on_error(|| {
+            std::fs::create_dir_all(config_dir.preference_dir()).expect("Created config dir"); // create preferences directory
+
+            let mut config_path = config_dir.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+
+            println!("Saving to {config_path:#?}");
+            let f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(config_path)?;
+            let mut writer = std::io::BufWriter::new(f);
+            let toml = toml::to_string_pretty(&self)?;
+            writer.write_all(toml.as_bytes())?;
+            writer.flush()?;
+            Ok(())
+        });
+    }
+
+    pub fn load_app_config(mut self) -> Self {
+        let project_dirs = directories::ProjectDirs::from("", "", "annelid") // get directories
+            .ok_or("Unable to load computer configuration directory");
+        println!("project_dirs = {project_dirs:#?}");
+
+        let config_dir = project_dirs.unwrap(); // get preferences directory
+        println!("project_dirs = {:#?}", config_dir.preference_dir());
+
+        messagebox_on_error(|| {
+            use std::io::Read;
+            let mut config_path = config_dir.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+            println!("Loading from {config_path:#?}");
+            let saved_config: AppConfig = std::fs::File::open(config_path)
+                .and_then(|mut f| {
+                    let mut buffer = String::new();
+                    f.read_to_string(&mut buffer)?;
+                    match toml::from_str(&buffer) {
+                        Ok(app_config) => Ok(app_config),
+                        Err(e) => Err(from_de_error(e)),
+                    }
+
+                    // }).unwrap;
+                })
+                .unwrap_or_default();
+            self = saved_config;
+            Ok(())
+        });
+        self
     }
 }
+
+// impl Default for AppConfig {
+//     fn default() -> Self {
+//         AppConfig::new()
+//     }
+// }

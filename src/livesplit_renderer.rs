@@ -1,12 +1,18 @@
-use crate::autosplitters::supermetroid::Settings;
-use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
-use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::{
+    supermetroid::{Settings, SuperMetroidAutoSplitter},
+    AutoSplitter,
+};
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
+use livesplit_core::Segment;
+use livesplit_core::TimerPhase;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -29,12 +35,12 @@ pub struct LiveSplitCoreRenderer {
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    project_dirs: directories::ProjectDirs,
-    pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub app_config: Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
+    show_edit_splits_dialog: Arc<AtomicBool>,
 }
 
 fn show_children(
@@ -76,8 +82,7 @@ impl LiveSplitCoreRenderer {
         layout: Layout,
         settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        project_dirs: directories::ProjectDirs,
-        cli_config: AppConfig,
+        config: AppConfig,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -90,16 +95,16 @@ impl LiveSplitCoreRenderer {
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            app_config: Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            show_edit_splits_dialog: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
+    pub fn confirm_save(&mut self, gl: &Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -144,87 +149,6 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
-            use std::io::Write;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
-            let f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(config_path)?;
-            let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
-            writer.write_all(toml.as_bytes())?;
-            writer.flush()?;
-            Ok(())
-        });
-    }
-
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
-            use std::io::Read;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
-            let saved_config: AppConfig = std::fs::File::open(config_path)
-                .and_then(|mut f| {
-                    let mut buffer = String::new();
-                    f.read_to_string(&mut buffer)?;
-                    match toml::from_str(&buffer) {
-                        Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e)),
-                    }
-                })
-                .unwrap_or_default();
-            // Let the CLI options take precedent if any provided
-            // TODO: this logic is bad, I really need to know if the CLI
-            // stuff was present and whether the stuff was present in the config
-            // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
-            let mut new_app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                new_app_config.recent_layout = cli_config.recent_layout;
-            }
-            if cli_config.recent_splits.is_some() {
-                new_app_config.recent_splits = cli_config.recent_splits;
-            }
-            if cli_config.recent_autosplitter.is_some() {
-                new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-            }
-            if cli_config.use_autosplitter.is_some() {
-                new_app_config.use_autosplitter = cli_config.use_autosplitter;
-            }
-            if cli_config.frame_rate.is_some() {
-                new_app_config.frame_rate = cli_config.frame_rate;
-            }
-            if cli_config.polling_rate.is_some() {
-                new_app_config.polling_rate = cli_config.polling_rate;
-            }
-            if cli_config.reset_timer_on_game_reset.is_some() {
-                new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-            }
-            if cli_config.reset_game_on_timer_reset.is_some() {
-                new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-            }
-            if cli_config.global_hotkeys.is_some() {
-                new_app_config.global_hotkeys = cli_config.global_hotkeys;
-            }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
-            Ok(())
-        });
-    }
-
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
         use anyhow::Context;
         let mut queue = vec![];
@@ -238,25 +162,25 @@ impl LiveSplitCoreRenderer {
                 .clone();
             if let Some(layout) = config.recent_layout {
                 let f = std::fs::File::open(&layout)
-                    .with_context(|| format!("Failed to open layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to open layout file \"{layout}\""))?;
                 self.load_layout(&f, ctx)
-                    .with_context(|| format!("Failed to load layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to load layout file \"{layout}\""))?;
             }
             if let Some(splits) = config.recent_splits {
                 let f = std::fs::File::open(&splits)
-                    .with_context(|| format!("Failed to open splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to open splits file \"{splits}\""))?;
                 let path = std::path::Path::new(&splits)
                     .parent()
                     .ok_or(anyhow!("failed to find parent directory"))?;
                 self.load_splits(&f, path.to_path_buf())
-                    .with_context(|| format!("Failed to load splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to load splits file \"{splits}\""))?;
             }
             if let Some(autosplitter) = config.recent_autosplitter {
                 let f = std::fs::File::open(&autosplitter).with_context(|| {
-                    format!("Failed to open autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to open autosplitter config \"{autosplitter}\"")
                 })?;
                 self.load_autosplitter(&f).with_context(|| {
-                    format!("Failed to load autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to load autosplitter config \"{autosplitter}\"")
                 })?;
             }
             Ok(())
@@ -695,6 +619,348 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
+
+    pub fn open_splits_edit_dialog(&mut self, ctx: &egui::Context) {
+        if self.show_edit_splits_dialog.load(Ordering::Relaxed) {
+            let show_deferred_viewport = self.show_edit_splits_dialog.clone();
+            let timer = self.timer.write().unwrap().clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("Splits Editor")
+                    .with_inner_size([750.0, 1000.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = timer.run().clone();
+                        ui.label("Game Name:");
+                        ui.text_edit_singleline(&mut run.game_name().to_string());
+                        ui.label("Run Category:");
+                        ui.text_edit_singleline(&mut run.category_name().to_string());
+                        // if response.changed() {}
+                        ui.label("Timer offset:");
+                        ui.text_edit_singleline(
+                            &mut run.offset().to_duration().whole_nanoseconds().to_string(),
+                        );
+                        ui.label("Attempts:");
+                        ui.text_edit_singleline(&mut run.attempt_count().to_string());
+
+                        // things in livesplit here
+                        // Autosplitter name, activator, settings
+                        // Split specific layout check box, selector, browser
+
+                        // let AddComparisonResponse = ui.button("Add Comparison");
+                        // if AddComparisonResponse.clicked() {}
+                        // let importComparisonResponse = ui.button("Import Comparison");
+                        // if importComparisonResponse.clicked() {}
+                        let clear_history = ui.button("Clear History");
+
+                        let clear_times = ui.button("Clear Times");
+
+                        let clear_sum_of_bests = ui.button("Clear Sum Of Bests");
+
+                        use egui_extras::{Column, TableBuilder};
+                        TableBuilder::new(ui)
+                            .striped(true)
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::auto().resizable(true))
+                            .column(Column::remainder())
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.heading("Move Split");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Icon");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Segment Name");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Split Time");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Segment Time");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Best Segment Time");
+                                });
+                                header.col(|ui| {
+                                    ui.heading("Add/Remove Split");
+                                });
+                            })
+                            .body(|mut body| {
+                                let last_run_id = run.attempt_history().last().unwrap().index();
+                                println!("Index: {last_run_id}\n");
+                                let mut seg_index = 0;
+                                let mut seg_max = run.segments().len();
+                                while seg_index < seg_max {
+                                    body.row(60.0, |mut row| {
+                                        row.col(|ui| {
+                                            if seg_index != 0 {
+                                                let move_up_response = ui.button("Up");
+                                                if move_up_response.clicked() {
+                                                    run.segments_mut()
+                                                        .swap(seg_index, seg_index - 1);
+                                                }
+                                            }
+                                            if seg_index != seg_max - 1 {
+                                                let move_down_response = ui.button("Down");
+                                                if move_down_response.clicked() {
+                                                    run.segments_mut()
+                                                        .swap(seg_index, seg_index + 1);
+                                                }
+                                            }
+                                        });
+
+                                        row.col(|_ui| {
+                                            println!("Image:");
+                                            // TODO: Figure out how to convert livesplit image to egui image to load into ImageButton
+                                            // let test = value.icon();
+                                            // let image = ColorImage::from_rgba_unmultiplied([16 as usize,3252 as usize],test);
+                                            // let texture = ctx.load_texture("test image", image, Default::default());
+                                            // ui.image(&texture);
+                                            // ui.add(ImageButton::new(egui::Image::new(&texture)));
+                                        });
+
+                                        row.col(|ui| {
+                                            println!("Name: {}\n", run.segment(seg_index).name());
+                                            let response = ui.text_edit_singleline(
+                                                &mut run.segment(seg_index).name().to_string(),
+                                            );
+                                            if response.changed() {
+                                                // run.segment_mut(segIndex).set_name("2345");
+                                            }
+                                        });
+
+                                        // split time is only available for current runs ...
+                                        row.col(|ui| {
+                                            let split_time = run
+                                                .segment_mut(seg_index)
+                                                .split_time_mut()
+                                                .real_time;
+                                            if split_time.is_none() {
+                                                let response =
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                println!("Split Time: \n");
+                                                if response.changed() {
+                                                    // let _length = splitTime.insert();
+                                                }
+                                            } else {
+                                                let response = ui.text_edit_singleline(
+                                                    &mut split_time
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_nanoseconds()
+                                                        .to_string(),
+                                                );
+                                                println!(
+                                                    "Split Time: {}\n",
+                                                    split_time
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_nanoseconds()
+                                                );
+                                                if response.changed() {
+                                                    // let _length = splitTime.insert();
+                                                }
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            if timer.current_phase() == TimerPhase::NotRunning {
+                                                let seg_time = run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id);
+                                                if run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id)
+                                                    .is_none()
+                                                {
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                    println!("Last Split Time: \n");
+                                                } else {
+                                                    ui.text_edit_singleline(
+                                                        &mut seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                            .to_string(),
+                                                    );
+                                                    println!(
+                                                        "Last Split Time: {}\n",
+                                                        seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                    );
+                                                }
+                                            }
+
+                                            if timer.current_phase() == TimerPhase::Ended {
+                                                let seg_time = run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id);
+                                                if run
+                                                    .segment_mut(seg_index)
+                                                    .segment_history_mut()
+                                                    .get(last_run_id)
+                                                    .is_none()
+                                                {
+                                                    ui.text_edit_singleline(&mut "".to_string());
+                                                    println!("Last Split Time: \n");
+                                                } else {
+                                                    ui.text_edit_singleline(
+                                                        &mut seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                            .to_string(),
+                                                    );
+                                                    println!(
+                                                        "Last Split Time: {}\n",
+                                                        seg_time
+                                                            .unwrap()
+                                                            .real_time
+                                                            .unwrap()
+                                                            .to_duration()
+                                                            .whole_nanoseconds()
+                                                    );
+                                                }
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            let best = run
+                                                .segment_mut(seg_index)
+                                                .best_segment_time_mut()
+                                                .real_time;
+                                            if run
+                                                .segment_mut(seg_index)
+                                                .best_segment_time_mut()
+                                                .real_time
+                                                .is_none()
+                                            {
+                                                ui.text_edit_singleline(&mut "".to_string());
+                                                println!("Best Split Time: \n");
+                                            } else {
+                                                ui.text_edit_singleline(
+                                                    &mut best
+                                                        .unwrap()
+                                                        .to_duration()
+                                                        .whole_nanoseconds()
+                                                        .to_string(),
+                                                );
+                                                println!(
+                                                    "Best Split Time: {}\n",
+                                                    best.unwrap().to_duration().whole_nanoseconds()
+                                                );
+                                            }
+                                        });
+
+                                        row.col(|ui| {
+                                            let insert_above_response = ui.button("Insert Above");
+                                            if insert_above_response.clicked() {
+                                                let new_seg = Segment::new("");
+                                                run.segments_mut().insert(seg_index, new_seg);
+                                                seg_max += 1;
+                                            }
+                                            let insert_below_response = ui.button("Insert Below");
+                                            if insert_below_response.clicked() {
+                                                let new_seg = Segment::new("");
+                                                run.segments_mut().insert(seg_index + 1, new_seg);
+                                                seg_max += 1;
+                                            }
+                                            let remove_response = ui.button("Remove Segment");
+                                            if remove_response.clicked() {
+                                                run.segments_mut().remove(seg_index);
+                                                seg_max -= 1;
+                                            }
+                                        });
+                                    });
+                                    seg_index += 1;
+                                }
+                            });
+
+                        let ok_response = ui.button("OK");
+                        if ok_response.clicked() {
+                            // TODO: write modified values to run
+                        }
+                        let cancel_response = ui.button("Cancel");
+                        if cancel_response.clicked() {
+                            // TODO: reset changes
+                            show_deferred_viewport.store(false, Ordering::Relaxed);
+                        }
+
+                        if clear_sum_of_bests.clicked() {
+                            let mut seg_index = 0;
+                            let seg_max = run.segments().len();
+                            while seg_index < seg_max {
+                                // No means to clear the PB times
+
+                                // run.segment_mut(segIndex).best_segment_time_mut();
+                                // run.segment_mut(segIndex).personal_best_split_time_mut();
+                                seg_index += 1;
+                            }
+                        }
+
+                        if clear_times.clicked() {
+                            let mut seg_index = 0;
+                            let seg_max = run.segments().len();
+                            if timer.current_phase() == TimerPhase::NotRunning {
+                                let last_run_id = run.attempt_history().last().unwrap().index();
+
+                                while seg_index < seg_max {
+                                    let test = run
+                                        .segment_mut(seg_index)
+                                        .segment_history_mut()
+                                        .get(last_run_id);
+                                    if test.is_some() {
+                                        run.segment_mut(seg_index)
+                                            .segment_history_mut()
+                                            .remove(last_run_id);
+                                    }
+                                    seg_index += 1;
+                                }
+                            }
+                            if timer.current_phase() == TimerPhase::Ended {
+                                while seg_index < seg_max {
+                                    run.segment_mut(seg_index).clear_split_info();
+                                    seg_index += 1;
+                                }
+                            }
+                        }
+
+                        if clear_history.clicked() {
+                            run.clear_history();
+                            run.set_attempt_count(0);
+                        }
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+        }
+    }
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
@@ -721,7 +987,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 self.is_exiting = true;
                 self.confirm_save(frame.gl().expect("No GL context"))
                     .unwrap();
-                self.save_app_config();
+                self.app_config.read().unwrap().save_app_config(); // aquire read lock then save app config
             }
         });
         if self.can_exit {
@@ -786,7 +1052,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         Some(d) => d.to_str().unwrap_or("").to_owned(),
                     },
                 };
-                ui.menu_button("LiveSplit Save/Load", |ui| {
+                ui.menu_button("LiveSplit Save/Load/Edit", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
                         self.open_layout_dialog(&document_dir, ctx).unwrap();
@@ -794,6 +1060,12 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
                         self.open_splits_dialog(&document_dir).unwrap();
+                    }
+                    if ui.button("Edit Splits").clicked() {
+                        ui.close_menu();
+                        let show_deferred_viewport = true;
+                        self.show_edit_splits_dialog
+                            .store(show_deferred_viewport, Ordering::Relaxed);
                     }
                     if ui.button("Save Splits as...").clicked() {
                         ui.close_menu();
@@ -870,6 +1142,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
+
+        self.open_splits_edit_dialog(ctx);
+
         settings_editor
             .open(&mut self.show_settings_editor)
             .resizable(true)
@@ -956,7 +1231,7 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
+    // app.load_app_config();
     if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
@@ -1017,7 +1292,7 @@ pub fn app_init(
                             }
                         }
                         let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {}", device);
+                        println!("Using device: {device}");
                         client.attach(&device)?;
                         println!("Connected.");
                         println!("{:#?}", client.info()?);

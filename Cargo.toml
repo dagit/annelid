@@ -17,6 +17,7 @@ livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
 epaint = "0.31"
 eframe = { version = "0.31", features = ["glow"] }
 egui = { version = "0.31", features = ["serde"] }
+egui_extras = { version = "0.31.1", features = ["all_loaders"] }
 egui_glow = "0.31"
 
 lazy_static = "1"
