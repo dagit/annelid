@@ -1,0 +1,18 @@
+0x000D = count of levels beaten
+0x0010 = level ID
+
+; enum level_names
+intro:		 = 0
+ragnarok_canyon: = 1
+wookie_hole:	 = 2
+TurboTunnel:	 = 3
+arctic_caverns:	 = 4
+revolution:	 = 5
+volkmire_inferno: = 6
+intruder_excluder: = 7
+karnath_lair:	 = 8
+rat_race:	 = 9
+clinger_winger:	 = $A
+terra_tubes:	 = $B
+SurfCity:	 = $C
+armageddon:	 = $D

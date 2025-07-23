@@ -16,6 +16,7 @@ use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
 use livesplit_core::{Layout, Run, Segment, Timer};
 use parking_lot::RwLock;
+use std::env;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -54,44 +55,35 @@ fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let cli_config = AppConfig::parse();
-    let settings = Settings::new();
-    let settings = Arc::new(RwLock::new(settings));
-    let mut run = Run::default();
-    run.push_segment(Segment::new(""));
+    let mut config = AppConfig::load_app_config(AppConfig::new()); // load saved config into default object
+    AppConfig::update_from(&mut config, env::args()); // reads command line options into app config object
 
-    let timer = Timer::new(run)
-        .expect("Run with at least one segment provided")
-        .into_shared();
+    let settings = Settings::new(); // setttings for SM autosplitter
+    let settings = Arc::new(RwLock::new(settings)); // creates a RW pointer to the autosplitter settings
+
+    let mut run = Run::default(); // creates a default livesplit run object
+    run.push_segment(Segment::new("")); // push blank segment to run
+
+    let timer = Timer::new(run) // create timer object
+        .expect("Run with at least one segment provided") // error message
+        .into_shared(); // makes timer sharable across threads
+
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
         viewport: egui::viewport::ViewportBuilder {
             ..Default::default()
         },
         ..eframe::NativeOptions::default()
-    };
-    let layout_settings = Layout::default_layout().settings();
-    //customize_layout(&mut layout_settings);
-    let layout = Layout::from_settings(layout_settings);
+    }; // create egui display options
+
+    let layout_settings = Layout::default_layout().settings(); // create default layout settings
+                                                               //customize_layout(&mut layout_settings);
+    let layout = Layout::from_settings(layout_settings); // create default layout
 
     use std::sync::mpsc::sync_channel;
-    let (sync_sender, sync_receiver) = sync_channel(1);
+    let (sync_sender, sync_receiver) = sync_channel(1); // create thread
 
-    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
-        .ok_or("Unable to computer configuration directory")?;
-    println!("project_dirs = {:#?}", project_dirs);
-
-    let preference_dir = project_dirs.preference_dir();
-    std::fs::create_dir_all(preference_dir)?;
-
-    let mut app = LiveSplitCoreRenderer::new(
-        timer,
-        layout,
-        settings,
-        sync_sender,
-        project_dirs,
-        cli_config,
-    );
+    let mut app = LiveSplitCoreRenderer::new(timer, layout, settings, sync_sender, config); // create livesplit-core renderer object
 
     eframe::run_native(
         "Annelid",
@@ -99,7 +91,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         Box::new(move |cc| {
             livesplit_renderer::app_init(&mut app, sync_receiver, cc);
             Ok(Box::new(app))
-        }),
+        }), // initialize livesplitrender and load into egui render box
     )?;
     Ok(())
 }
