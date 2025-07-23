@@ -104,7 +104,10 @@ impl BattletoadsAutoSplitter {
     }
 
     fn reset(&mut self) -> bool {
-        if self.level == 0 && self.prior_level != 0 && self.reset_timer_on_game_reset == YesOrNo::Yes {
+        if self.level == 0
+            && self.prior_level != 0
+            && self.reset_timer_on_game_reset == YesOrNo::Yes
+        {
             return true;
         }
         false

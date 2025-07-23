@@ -130,7 +130,9 @@ impl SupermetroidAutoSplitter {
     }
 
     fn reset(&mut self) -> bool {
-        self.room_id == 0 && self.prior_room_id != 0 && self.reset_timer_on_game_reset == YesOrNo::Yes
+        self.room_id == 0
+            && self.prior_room_id != 0
+            && self.reset_timer_on_game_reset == YesOrNo::Yes
     }
 
     fn split(&mut self) -> bool {

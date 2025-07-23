@@ -1,18 +1,21 @@
 use crate::autosplitters;
 use crate::autosplitters::nwa;
-use crate::autosplitters::{supermetroid::{Settings, SuperMetroidAutoSplitter}, AutoSplitter};
 use crate::autosplitters::Game;
+use crate::autosplitters::{
+    supermetroid::{Settings, SuperMetroidAutoSplitter},
+    AutoSplitter,
+};
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use egui::{Key, Modifiers};
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use std::net::Ipv4Addr;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::net::Ipv4Addr;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -93,9 +96,7 @@ impl LiveSplitCoreRenderer {
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
             // show_settings_editor: false,
-            settings: Arc::new(
-                RwLock::new(autosplitters::supermetroid::Settings::new()),
-            ),
+            settings: Arc::new(RwLock::new(autosplitters::supermetroid::Settings::new())),
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,

@@ -1,5 +1,5 @@
-use std::ops::BitOr;
 use core::fmt;
+use std::ops::BitOr;
 
 use serde_derive::{Deserialize, Serialize};
 
