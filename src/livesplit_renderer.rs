@@ -7,7 +7,6 @@ use crate::autosplitters::{
 };
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
-use egui::{Key, Modifiers};
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
