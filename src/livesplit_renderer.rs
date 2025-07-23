@@ -4,7 +4,6 @@ use crate::autosplitters::{
 };
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
-use egui::{Key, Modifiers};
 use livesplit_core::Segment;
 use livesplit_core::TimerPhase;
 use livesplit_core::{Layout, SharedTimer, Timer};
