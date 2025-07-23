@@ -15,17 +15,17 @@ pub struct AppConfig {
     #[clap(name = "load-autosplitter", short = 'a', long, value_parser)]
     pub recent_autosplitter: Option<String>,
     #[clap(name = "use-autosplitter", long, action)]
-    pub use_autosplitter: Option<bool>,
+    pub use_autosplitter: Option<YesOrNo>,
     #[clap(name = "polling-rate", long, short = 'p', value_parser)]
     pub polling_rate: Option<f32>,
     #[clap(name = "frame-rate", long, short = 'f', value_parser)]
     pub frame_rate: Option<f32>,
     #[clap(name = "reset-timer-on-game-reset", long, value_parser)]
-    pub reset_timer_on_game_reset: Option<bool>,
+    pub reset_timer_on_game_reset: Option<YesOrNo>,
     #[clap(name = "reset-game-on-timer-reset", long, value_parser)]
-    pub reset_game_on_timer_reset: Option<bool>,
+    pub reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
-    pub global_hotkeys: Option<bool>,
+    pub global_hotkeys: Option<YesOrNo>,
     #[clap(skip)]
     pub hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -44,12 +44,30 @@ pub struct AppConfig {
     pub autosplitter_type: Option<autosplitters::AType>,
 }
 
-// #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
-// pub enum YesOrNo {
-//     #[default]
-//     Yes,
-//     No,
-// }
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum YesOrNo {
+    #[default]
+    Yes,
+    No,
+}
+
+impl From<bool> for YesOrNo {
+    fn from(b: bool) -> Self {
+        match b {
+            true => YesOrNo::Yes,
+            false => YesOrNo::No,
+        }
+    }
+}
+
+impl From<YesOrNo> for bool {
+    fn from(yes: YesOrNo) -> Self {
+        match yes {
+            YesOrNo::Yes => true,
+            YesOrNo::No => false,
+        }
+    }
+}
 
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
 pub const DEFAULT_POLLING_RATE: f32 = 20.0;
@@ -89,12 +107,12 @@ impl AppConfig {
                 key: egui::Key::Num4,
                 modifiers,
             }),
-            use_autosplitter: Some(false),
+            use_autosplitter: Some(YesOrNo::Yes),
             frame_rate: Some(DEFAULT_FRAME_RATE),
             polling_rate: Some(DEFAULT_POLLING_RATE),
-            reset_timer_on_game_reset: Some(false),
-            reset_game_on_timer_reset: Some(false),
-            global_hotkeys: Some(true),
+            reset_timer_on_game_reset: Some(YesOrNo::No),
+            reset_game_on_timer_reset: Some(YesOrNo::No),
+            global_hotkeys: Some(YesOrNo::Yes),
             autosplitter_type: Some(autosplitters::AType::QUSB2SNES),
         }
     }

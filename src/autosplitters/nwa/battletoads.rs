@@ -1,4 +1,5 @@
 use crate::autosplitters::NWASummary;
+use crate::config::app_config::YesOrNo;
 use crate::nwa;
 use anyhow::Result;
 use std::net::Ipv4Addr;
@@ -14,12 +15,12 @@ pub struct BattletoadsAutoSplitter {
     // port: u32,
     prior_level: u8,
     level: u8,
-    reset_timer_on_game_reset: bool,
+    reset_timer_on_game_reset: YesOrNo,
     client: nwa::NWASyncClient,
 }
 
 impl BattletoadsAutoSplitter {
-    pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
+    pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: YesOrNo) -> Self {
         BattletoadsAutoSplitter {
             // address,
             // port,
@@ -103,7 +104,7 @@ impl BattletoadsAutoSplitter {
     }
 
     fn reset(&mut self) -> bool {
-        if self.level == 0 && self.prior_level != 0 && self.reset_timer_on_game_reset {
+        if self.level == 0 && self.prior_level != 0 && self.reset_timer_on_game_reset == YesOrNo::Yes {
             return true;
         }
         false

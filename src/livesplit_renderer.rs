@@ -1,18 +1,18 @@
 use crate::autosplitters;
 use crate::autosplitters::nwa;
-use crate::autosplitters::supermetroid::Settings;
-use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
-use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::{supermetroid::{Settings, SuperMetroidAutoSplitter}, AutoSplitter};
 use crate::autosplitters::Game;
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
+use egui::{Key, Modifiers};
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::net::Ipv4Addr;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -30,17 +30,16 @@ pub struct LiveSplitCoreRenderer {
     layout_state: Option<livesplit_core::layout::LayoutState>,
     image_cache: livesplit_core::settings::ImageCache,
     timer: SharedTimer,
-    // show_settings_editor: bool,
-    settings: std::sync::Arc<RwLock<autosplitters::supermetroid::Settings>>,
+    settings: Arc<RwLock<autosplitters::supermetroid::Settings>>,
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub app_config: Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
-    show_edit_autosplitter_settings_dialog: std::sync::Arc<AtomicBool>,
+    show_edit_autosplitter_settings_dialog: Arc<AtomicBool>,
     game: Game,
     // address: Ipv4Addr,
     // port: u32,
@@ -94,25 +93,25 @@ impl LiveSplitCoreRenderer {
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
             // show_settings_editor: false,
-            settings: std::sync::Arc::new(
+            settings: Arc::new(
                 RwLock::new(autosplitters::supermetroid::Settings::new()),
             ),
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(config)),
+            app_config: Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
-            show_edit_autosplitter_settings_dialog: std::sync::Arc::new(AtomicBool::new(false)),
+            show_edit_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
             game: Game::Battletoads,
             // address: Ipv4Addr::new(0, 0, 0, 0),
             // port: 48879,
         }
     }
 
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
+    pub fn confirm_save(&mut self, gl: &Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -560,7 +559,7 @@ impl LiveSplitCoreRenderer {
                         .map_err(|e| println!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
-                        .map(|g| g.use_autosplitter == Some(true))
+                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
                         .unwrap_or(false)
                     {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
@@ -812,7 +811,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Reset").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().reset(true).ok();
-                        if self.app_config.read().unwrap().use_autosplitter == Some(true) {
+                        if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
@@ -890,7 +889,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         });
         {
             let config = self.app_config.read().unwrap();
-            if config.global_hotkeys != Some(true) {
+            if config.global_hotkeys != Some(YesOrNo::Yes) {
                 ctx.input_mut(|input| {
                     if let Some(hot_key) = config.hot_key_start {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
@@ -902,7 +901,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         if input.consume_key(hot_key.modifiers, hot_key.key) {
                             // TODO: fix this unwrap
                             self.timer.write().unwrap().reset(true).ok();
-                            if config.use_autosplitter == Some(true) {
+                            if config.use_autosplitter == Some(YesOrNo::Yes) {
                                 self.thread_chan
                                     .try_send(ThreadEvent::TimerReset)
                                     .unwrap_or(());
@@ -955,7 +954,7 @@ pub fn app_init(
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
     // app.load_app_config();
-    if app.app_config.read().unwrap().global_hotkeys == Some(true) {
+    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
@@ -992,7 +991,7 @@ pub fn app_init(
     let app_config = app.app_config.clone();
 
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(true) {
+    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
         if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::QUSB2SNES) {
             //QUSB2SNES stuff here
             let settings = app.settings.clone();
@@ -1044,7 +1043,7 @@ pub fn app_init(
                                             anyhow!("failed to acquire read lock on config: {e}")
                                         })?
                                         .reset_timer_on_game_reset
-                                        == Some(true)
+                                        == Some(YesOrNo::Yes)
                                 {
                                     timer
                                         .write()
@@ -1088,7 +1087,7 @@ pub fn app_init(
                                             anyhow!("failed to acquire read lock on config: {e}")
                                         })?
                                         .reset_game_on_timer_reset
-                                        == Some(true)
+                                        == Some(YesOrNo::Yes)
                                     {
                                         client.reset()?;
                                     }

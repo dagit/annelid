@@ -1,4 +1,5 @@
 use crate::autosplitters::NWASummary;
+use crate::config::app_config::YesOrNo;
 use crate::nwa;
 use anyhow::Result;
 use std::net::Ipv4Addr;
@@ -16,12 +17,12 @@ pub struct SupermetroidAutoSplitter {
     state: u8,
     prior_room_id: u16,
     room_id: u16,
-    reset_timer_on_game_reset: bool,
+    reset_timer_on_game_reset: YesOrNo,
     client: nwa::NWASyncClient,
 }
 
 impl SupermetroidAutoSplitter {
-    pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: bool) -> Self {
+    pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: YesOrNo) -> Self {
         SupermetroidAutoSplitter {
             // address,
             // port,
@@ -129,7 +130,7 @@ impl SupermetroidAutoSplitter {
     }
 
     fn reset(&mut self) -> bool {
-        self.room_id == 0 && self.prior_room_id != 0 && self.reset_timer_on_game_reset
+        self.room_id == 0 && self.prior_room_id != 0 && self.reset_timer_on_game_reset == YesOrNo::Yes
     }
 
     fn split(&mut self) -> bool {
