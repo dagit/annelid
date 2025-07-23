@@ -13,6 +13,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
