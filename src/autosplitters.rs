@@ -12,13 +12,6 @@ pub enum AType {
     CUSTOM,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Game {
-    Battletoads,
-    SuperMetroid,
-    // None,
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct NWASummary {
     pub start: bool,
