@@ -12,6 +12,11 @@ pub enum Game {
     // None,
 }
 
+pub fn fill_drop_down(ui: &mut egui::Ui, game: &mut Game) {
+    ui.selectable_value(game, Game::Battletoads, "Battletoads");
+    ui.selectable_value(game, Game::SuperMetroid, "Super Metroid");
+}
+
 pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>) -> Box<dyn Splitter> {
     match game {
         Game::Battletoads => Box::new(battletoads::BattletoadsAutoSplitter {

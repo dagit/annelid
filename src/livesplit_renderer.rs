@@ -1,6 +1,6 @@
 use crate::autosplitters::{
     self,
-    nwa::{nwaobject, Game},
+    nwa::{fill_drop_down, nwaobject, Game},
     supermetroid::{Settings, SuperMetroidAutoSplitter},
     AutoSplitter,
 };
@@ -732,10 +732,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         );
         self.glow_canvas
             .paint_layer(ctx, egui::LayerId::background(), viewport);
-        // //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);
-        // let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit".into())
-            // .enabled(!self.show_settings_editor)
             .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.screen_rect.width()));
@@ -819,24 +816,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                             // port
                         }
                         // TODO: Fix this. It's not updating the value
-                        egui::ComboBox::from_label("Game")
-                            .selected_text(format!("{:?}", self.game))
+                        egui::ComboBox::from_id_salt("Game")
+                            .selected_text(format!("{:?}", &mut self.game))
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.game,
-                                    Game::Battletoads,
-                                    "Battletoads",
-                                );
-                                // ui.selectable_value(
-                                // &mut self.game,
-                                // Game::SuperMetroid,
-                                // "Super Metroid",
-                                // );
-                            })
-                        // ui.menu_button("Battletoads", |ui| {
-                        // });
-                        // ui.menu_button("Super Metroid", |ui| {
-                        // });
+                                fill_drop_down(ui, &mut self.game);
+                            });
                     });
                     ui.menu_button("QUSB2SNES", |ui| {
                         ui.menu_button("Super Metroid", |ui| {
