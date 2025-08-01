@@ -1,16 +1,14 @@
-use crate::autosplitters;
-use crate::autosplitters::nwa;
-use crate::autosplitters::Game;
 use crate::autosplitters::{
+    self,
+    nwa::nwaobject,
     supermetroid::{Settings, SuperMetroidAutoSplitter},
-    AutoSplitter,
+    AutoSplitter, Game,
 };
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::net::Ipv4Addr;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -43,8 +41,6 @@ pub struct LiveSplitCoreRenderer {
     load_errors: Vec<anyhow::Error>,
     show_edit_autosplitter_settings_dialog: Arc<AtomicBool>,
     game: Game,
-    // address: Ipv4Addr,
-    // port: u32,
 }
 
 fn show_children(
@@ -84,7 +80,6 @@ impl LiveSplitCoreRenderer {
     pub fn new(
         timer: SharedTimer,
         layout: Layout,
-        // settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
         config: AppConfig,
     ) -> Self {
@@ -94,7 +89,6 @@ impl LiveSplitCoreRenderer {
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
-            // show_settings_editor: false,
             settings: Arc::new(RwLock::new(autosplitters::supermetroid::Settings::new())),
             can_exit: false,
             is_exiting: false,
@@ -106,8 +100,6 @@ impl LiveSplitCoreRenderer {
             load_errors: vec![],
             show_edit_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
             game: Game::Battletoads,
-            // address: Ipv4Addr::new(0, 0, 0, 0),
-            // port: 48879,
         }
     }
 
@@ -835,11 +827,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                                     Game::Battletoads,
                                     "Battletoads",
                                 );
-                                ui.selectable_value(
-                                    &mut self.game,
-                                    Game::SuperMetroid,
-                                    "Super Metroid",
-                                );
+                                // ui.selectable_value(
+                                // &mut self.game,
+                                // Game::SuperMetroid,
+                                // "Super Metroid",
+                                // );
                             })
                         // ui.menu_button("Battletoads", |ui| {
                         // });
@@ -1105,131 +1097,58 @@ pub fn app_init(
         } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::NWA) {
             //NWA stuff here
             let game = app.game;
-            let _nwa_polling_thread =
-                ThreadBuilder::default()
-                    .name("NWA Polling Thread".to_owned())
-                    .spawn(move |_| loop {
-                        print_on_error(|| -> anyhow::Result<()> {
-                            // let client: battletoadsAutoSplitter = autosplitters::AutoSplitterSelector("Battletoads", true).unwrap();
-                            // TODO: make this generic as well based on user input or add game selector
-                            match game {
-                                Game::Battletoads => {
-                                    let mut client = nwa::battletoads::BattletoadsAutoSplitter::new(
-                                        Ipv4Addr::new(0, 0, 0, 0),
-                                        48879,
-                                        app_config
-                                            .read()
-                                            .unwrap()
-                                            .reset_timer_on_game_reset
-                                            .unwrap(),
-                                    );
-                                    client.emu_info();
-                                    client.emu_game_info();
-                                    client.emu_status();
-                                    client.client_id();
-                                    client.core_info();
-                                    client.core_memories();
-                                    loop {
-                                        println!("{game:#?}");
-                                        let auto_split_status = client.update().unwrap();
-                                        if auto_split_status.start {
-                                            timer
+            let _nwa_polling_thread = ThreadBuilder::default()
+                .name("NWA Polling Thread".to_owned())
+                .spawn(move |_| loop {
+                    let mut client = nwaobject(game, app_config.clone());
+
+                    print_on_error(|| -> anyhow::Result<()> {
+                        client.emu_info();
+                        client.emu_game_info();
+                        client.emu_status();
+                        client.client_id();
+                        client.core_info();
+                        client.core_memories();
+                        loop {
+                            // println!("{game:#?}");
+                            let auto_split_status = client.update().unwrap();
+                            if auto_split_status.start {
+                                timer
                                     .write()
                                     .map_err(|e| {
                                         anyhow!("failed to acquire write lock on timer: {e}")
                                     })?
                                     .start()
                                     .ok();
-                                        }
-                                        if auto_split_status.reset {
-                                            timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .reset(true)
-                                    .ok();
-                                        }
-                                        if auto_split_status.split {
-                                            timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .split()
-                                    .ok();
-                                        }
-
-                                        std::thread::sleep(std::time::Duration::from_millis(
-                                            (1000.0 / polling_rate) as u64,
-                                        ));
-                                    }
-                                }
-                                Game::SuperMetroid => {
-                                    let mut client =
-                                        nwa::supermetroid::SupermetroidAutoSplitter::new(
-                                            Ipv4Addr::new(0, 0, 0, 0),
-                                            48879,
-                                            app_config
-                                                .read()
-                                                .unwrap()
-                                                .reset_timer_on_game_reset
-                                                .unwrap(),
-                                        );
-                                    client.emu_info();
-                                    client.emu_game_info();
-                                    client.emu_status();
-                                    client.client_id();
-                                    client.core_info();
-                                    client.core_memories();
-                                    loop {
-                                        println!("{game:#?}");
-                                        let auto_split_status = client.update().unwrap();
-                                        if auto_split_status.start {
-                                            timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .start()
-                                    .ok();
-                                        }
-                                        if auto_split_status.reset {
-                                            timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .reset(true)
-                                    .ok();
-                                        }
-                                        if auto_split_status.split {
-                                            timer
-                                    .write()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire write lock on timer: {e}")
-                                    })?
-                                    .split()
-                                    .ok();
-                                        }
-
-                                        std::thread::sleep(std::time::Duration::from_millis(
-                                            (1000.0 / polling_rate) as u64,
-                                        ));
-                                    }
-                                }
-                                _ => todo!(),
                             }
-                            // if app.game == Game::Battletoads {
+                            if auto_split_status.reset {
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .reset(true)
+                                    .ok();
+                            }
+                            if auto_split_status.split {
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .split()
+                                    .ok();
+                            }
 
-                            // } else if app.game == Game::SuperMetroid {
-
-                            // }
-                        });
-                        std::thread::sleep(std::time::Duration::from_millis(1000));
-                    })
-                    //TODO: fix this unwrap
-                    .unwrap();
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
+                        }
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                })
+                //TODO: fix this unwrap
+                .unwrap();
         } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::ASL) {
             //TODO: unable to configure runtime
 
