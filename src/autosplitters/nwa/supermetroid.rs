@@ -1,96 +1,75 @@
+use crate::autosplitters::nwa::Splitter;
 use crate::autosplitters::NWASummary;
 use crate::config::app_config::YesOrNo;
 use crate::nwa;
 use anyhow::Result;
-use std::net::Ipv4Addr;
-
-pub enum Action {
-    Start,
-    Reset,
-    Split,
-}
 
 pub struct SupermetroidAutoSplitter {
-    // address: Ipv4Addr,
-    // port: u32,
-    prior_state: u8,
-    state: u8,
-    prior_room_id: u16,
-    room_id: u16,
-    reset_timer_on_game_reset: YesOrNo,
-    client: nwa::NWASyncClient,
+    pub prior_state: u8,
+    pub state: u8,
+    pub prior_room_id: u16,
+    pub room_id: u16,
+    pub reset_timer_on_game_reset: YesOrNo,
+    pub client: nwa::NWASyncClient,
 }
 
-impl SupermetroidAutoSplitter {
-    pub fn new(address: Ipv4Addr, port: u32, reset_timer_on_game_reset: YesOrNo) -> Self {
-        SupermetroidAutoSplitter {
-            // address,
-            // port,
-            prior_state: 0_u8,
-            state: 0_u8,
-            prior_room_id: 0_u16,
-            room_id: 0_u16,
-            reset_timer_on_game_reset,
-            client: nwa::NWASyncClient::connect(&address.to_string(), port).unwrap(), // TODO: Need to handle error
-        }
-    }
-
-    pub fn client_id(&mut self) {
+impl Splitter for SupermetroidAutoSplitter {
+    fn client_id(&mut self) {
         let cmd = "MY_NAME_IS";
         let args = Some("Annelid");
-        let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
     }
 
-    pub fn emu_info(&mut self) {
+    fn emu_info(&mut self) {
         let cmd = "EMULATOR_INFO";
         let args = Some("0");
-        let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
     }
 
-    pub fn emu_game_info(&mut self) {
+    fn emu_game_info(&mut self) {
         let cmd = "GAME_INFO";
         let args = None;
-        let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
     }
 
-    pub fn emu_status(&mut self) {
+    fn emu_status(&mut self) {
         let cmd = "EMULATION_STATUS";
         let args = None;
-        let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
     }
 
-    pub fn core_info(&mut self) {
+    fn core_info(&mut self) {
         let cmd = "CORE_CURRENT_INFO";
         let args = None;
-        let summary = self.client.execute_command(cmd, args).unwrap();
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
     }
 
-    pub fn core_memories(&mut self) {
+    fn core_memories(&mut self) {
         let cmd = "CORE_MEMORIES";
         let args = None;
-        let summary = self.client.execute_command(cmd, args);
-        println!("{summary:#?}");
+        self.client.execute_command(cmd, args);
+        // println!("{summary:#?}");
     }
 
-    pub fn update(&mut self) -> Result<NWASummary> {
+    fn update(&mut self) -> Result<NWASummary> {
         // read memory for the game state
         {
             self.prior_state = self.state;
             let cmd = "CORE_READ";
             let args = Some("WRAM;$0998;1");
             let summary = self.client.execute_command(cmd, args).unwrap();
-            println!("{summary:#?}");
+            // println!("{summary:#?}");
             match summary {
                 nwa::EmulatorReply::Binary(summary) => self.state = *summary.first().unwrap(),
                 nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
                 _ => println!("{summary:?}"),
             }
-            println!("{:#?}", self.state);
+            // println!("{:#?}", self.state);
         }
 
         // read memory for room
@@ -99,7 +78,7 @@ impl SupermetroidAutoSplitter {
             let cmd = "CORE_READ";
             let args = Some("WRAM;$079B;2");
             let summary = self.client.execute_command(cmd, args).unwrap();
-            println!("{summary:#?}");
+            // println!("{summary:#?}");
 
             match summary {
                 nwa::EmulatorReply::Binary(summary) => {
@@ -110,7 +89,7 @@ impl SupermetroidAutoSplitter {
                 nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
                 _ => println!("{summary:?}"),
             }
-            println!("{:#?}", self.room_id);
+            // println!("{:#?}", self.room_id);
         }
 
         // TODO: add the other memory reads
@@ -140,14 +119,6 @@ impl SupermetroidAutoSplitter {
 
         // TODO: add the rest of the splits
     }
-
-    // pub fn set_address(&mut self, address: Ipv4Addr) {
-    // self.address = address;
-    // }
-
-    // pub fn set_port(&mut self, port: u32) {
-    // self.port = port;
-    // }
 }
 
 // let cmd = "CORE_INFO";
