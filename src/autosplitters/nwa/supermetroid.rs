@@ -52,7 +52,7 @@ impl Splitter for SupermetroidAutoSplitter {
     fn core_memories(&mut self) {
         let cmd = "CORE_MEMORIES";
         let args = None;
-        self.client.execute_command(cmd, args);
+        let _ = self.client.execute_command(cmd, args);
         // println!("{summary:#?}");
     }
 
