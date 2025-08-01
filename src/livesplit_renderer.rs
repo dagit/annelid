@@ -1,8 +1,8 @@
 use crate::autosplitters::{
     self,
-    nwa::nwaobject,
+    nwa::{nwaobject, Game},
     supermetroid::{Settings, SuperMetroidAutoSplitter},
-    AutoSplitter, Game,
+    AutoSplitter,
 };
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
