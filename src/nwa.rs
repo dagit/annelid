@@ -134,7 +134,7 @@ impl NWASyncClient {
         if first_byte == 0 {
             let mut header = vec![0; 4];
             let _r_size = read_stream.read(&mut header)?;
-            println!();
+            // println!();
             //println!("Reading {:}", r_size);
             //println!("Header : {:?}", header);
             let header = header;
