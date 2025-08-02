@@ -818,6 +818,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                         // TODO: Fix this. It's not updating the value
                         egui::ComboBox::from_id_salt("Game")
                             .selected_text(format!("{:?}", &mut self.game))
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                             .show_ui(ui, |ui| {
                                 fill_drop_down(ui, &mut self.game);
                             });
