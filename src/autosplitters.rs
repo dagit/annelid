@@ -1,8 +1,23 @@
 pub mod json;
+pub mod nwa;
 pub mod supermetroid;
-
 use anyhow::Result;
 use livesplit_core::TimeSpan;
+
+#[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum AType {
+    QUSB2SNES,
+    NWA,
+    ASL,
+    CUSTOM,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct NWASummary {
+    pub start: bool,
+    pub reset: bool,
+    pub split: bool,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct SNESSummary {

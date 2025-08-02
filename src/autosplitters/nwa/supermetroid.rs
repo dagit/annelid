@@ -1,0 +1,137 @@
+use crate::autosplitters::nwa::Splitter;
+use crate::autosplitters::NWASummary;
+use crate::config::app_config::YesOrNo;
+use crate::nwa;
+use anyhow::Result;
+
+pub struct SupermetroidAutoSplitter {
+    pub prior_state: u8,
+    pub state: u8,
+    pub prior_room_id: u16,
+    pub room_id: u16,
+    pub reset_timer_on_game_reset: YesOrNo,
+    pub client: nwa::NWASyncClient,
+}
+
+impl Splitter for SupermetroidAutoSplitter {
+    fn client_id(&mut self) {
+        let cmd = "MY_NAME_IS";
+        let args = Some("Annelid");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
+    }
+
+    fn emu_info(&mut self) {
+        let cmd = "EMULATOR_INFO";
+        let args = Some("0");
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
+    }
+
+    fn emu_game_info(&mut self) {
+        let cmd = "GAME_INFO";
+        let args = None;
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
+    }
+
+    fn emu_status(&mut self) {
+        let cmd = "EMULATION_STATUS";
+        let args = None;
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
+    }
+
+    fn core_info(&mut self) {
+        let cmd = "CORE_CURRENT_INFO";
+        let args = None;
+        self.client.execute_command(cmd, args).unwrap();
+        // println!("{summary:#?}");
+    }
+
+    fn core_memories(&mut self) {
+        let cmd = "CORE_MEMORIES";
+        let args = None;
+        let _ = self.client.execute_command(cmd, args);
+        // println!("{summary:#?}");
+    }
+
+    fn update(&mut self) -> Result<NWASummary> {
+        // read memory for the game state
+        {
+            self.prior_state = self.state;
+            let cmd = "CORE_READ";
+            let args = Some("WRAM;$0998;1");
+            let summary = self.client.execute_command(cmd, args).unwrap();
+            // println!("{summary:#?}");
+            match summary {
+                nwa::EmulatorReply::Binary(summary) => self.state = *summary.first().unwrap(),
+                nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
+                _ => println!("{summary:?}"),
+            }
+            // println!("{:#?}", self.state);
+        }
+
+        // read memory for room
+        {
+            self.prior_room_id = self.room_id;
+            let cmd = "CORE_READ";
+            let args = Some("WRAM;$079B;2");
+            let summary = self.client.execute_command(cmd, args).unwrap();
+            // println!("{summary:#?}");
+
+            match summary {
+                nwa::EmulatorReply::Binary(summary) => {
+                    self.room_id =
+                    // Have to reassemble the half word roomID 
+                        ((*summary.last().unwrap() as u16) << 8) | *summary.first().unwrap() as u16
+                }
+                nwa::EmulatorReply::Error(summary) => println!("{summary:?}"),
+                _ => println!("{summary:?}"),
+            }
+            // println!("{:#?}", self.room_id);
+        }
+
+        // TODO: add the other memory reads
+
+        let start = self.start();
+        let reset = self.reset();
+        let split = self.split();
+        Ok(NWASummary {
+            start,
+            reset,
+            split,
+        })
+    }
+
+    fn start(&mut self) -> bool {
+        self.state == 0x1F && self.prior_state == 0x1E
+    }
+
+    fn reset(&mut self) -> bool {
+        self.room_id == 0
+            && self.prior_room_id != 0
+            && self.reset_timer_on_game_reset == YesOrNo::Yes
+    }
+
+    fn split(&mut self) -> bool {
+        self.room_id == 0xDF45 && self.prior_state == 0x8 && self.state == 0x20
+
+        // TODO: add the rest of the splits
+    }
+}
+
+// let cmd = "CORE_INFO";
+// let args = Some("quickerNES");
+// let summary = client.execute_command(cmd, args);
+// println!("{:#?}",summary);
+
+// let cmd = "CORES_LIST";
+// let args = None;
+// let summary = client.execute_command(cmd, args);
+// println!("{:#?}",summary);
+
+// let cmd = "LIST_BIZHAWK_DOMAINS";
+// let args = None;
+// let summary = client.execute_command(cmd, args);
+// println!("{:#?}",summary);

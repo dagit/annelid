@@ -12,7 +12,10 @@ serde_json = "1"
 tungstenite = "0"
 
 livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
+#livesplit-core = "0.13.0"
 livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
+#livesplit-hotkey = "0.8.0"
+#livesplit-auto-splitting = "0.1.0"
 
 epaint = "0.31"
 eframe = { version = "0.31", features = ["glow"] }
@@ -35,6 +38,9 @@ bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "2"
 anyhow = "1"
+sysinfo = "0.35.2"
+process-memory = "0.5.0"
+read-process-memory = "0.1.6"
 
 # Remember to test with --release
 [profile.dev]
