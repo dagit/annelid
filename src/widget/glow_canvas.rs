@@ -144,7 +144,7 @@ impl GlowCanvas {
                         0,
                         glow::RGBA,
                         glow::UNSIGNED_BYTE,
-                        None,
+                        glow::PixelUnpackData::Slice(None),
                     );
                     debug_assert_eq!(gl.get_error(), 0);
                     buffer[resources.buffer_idx].mapped = true;
@@ -335,8 +335,7 @@ fn gl_debug(source: u32, typ: u32, id: u32, severity: u32, message: &str) {
         || typ == glow::DEBUG_TYPE_PORTABILITY
     {
         println!(
-            "source: {}, type: {}, id: {}, severity: {}: {}",
-            source_name, type_name, id, severity_name, message
+            "source: {source_name}, type: {type_name}, id: {id}, severity: {severity_name}: {message}"
         );
         panic!();
     }

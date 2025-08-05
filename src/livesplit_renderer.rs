@@ -1,5 +1,7 @@
-use crate::autosplitters::supermetroid::{SNESState, Settings};
-use anyhow::{anyhow, Result};
+use crate::autosplitters::supermetroid::Settings;
+use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
+use crate::autosplitters::AutoSplitter;
+use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
@@ -97,7 +99,7 @@ impl LiveSplitCoreRenderer {
         }
     }
 
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) {
+    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -107,8 +109,13 @@ impl LiveSplitCoreRenderer {
                 Some(d) => d.to_str().unwrap_or("").to_owned(),
             },
         };
-        // TODO: fix this unwrap
-        if self.timer.read().unwrap().run().has_been_modified() {
+        if self
+            .timer
+            .read()
+            .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))?
+            .run()
+            .has_been_modified()
+        {
             let save_requested = MessageDialog::new()
                 .set_level(MessageLevel::Warning)
                 .set_title("Save Splits")
@@ -116,7 +123,7 @@ impl LiveSplitCoreRenderer {
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested == MessageDialogResult::Yes {
-                self.save_splits_dialog(&document_dir);
+                self.save_splits_dialog(&document_dir)?;
             }
         }
         if self.settings.read().has_been_modified() {
@@ -129,11 +136,12 @@ impl LiveSplitCoreRenderer {
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested == MessageDialogResult::Yes {
-                self.save_autosplitter_dialog(&document_dir);
+                self.save_autosplitter_dialog(&document_dir)?;
             }
         }
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
+        Ok(())
     }
 
     pub fn save_app_config(&self) {
@@ -141,7 +149,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Write;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Saving to {:#?}", config_path);
+            println!("Saving to {config_path:#?}");
             let f = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -160,7 +168,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Loading from {:#?}", config_path);
+            println!("Loading from {config_path:#?}");
             let saved_config: AppConfig = std::fs::File::open(config_path)
                 .and_then(|mut f| {
                     let mut buffer = String::new();
@@ -175,7 +183,11 @@ impl LiveSplitCoreRenderer {
             // TODO: this logic is bad, I really need to know if the CLI
             // stuff was present and whether the stuff was present in the config
             // but instead I just see two different states that need to be merged.
-            let cli_config = self.app_config.read().unwrap().clone();
+            let cli_config = self
+                .app_config
+                .read()
+                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
+                .clone();
             let mut new_app_config = saved_config;
             if cli_config.recent_layout.is_some() {
                 new_app_config.recent_layout = cli_config.recent_layout;
@@ -204,7 +216,11 @@ impl LiveSplitCoreRenderer {
             if cli_config.global_hotkeys.is_some() {
                 new_app_config.global_hotkeys = cli_config.global_hotkeys;
             }
-            *self.app_config.write().unwrap() = new_app_config;
+            *self
+                .app_config
+                .write()
+                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
+                new_app_config;
             Ok(())
         });
     }
@@ -215,28 +231,32 @@ impl LiveSplitCoreRenderer {
         std::mem::swap(&mut queue, &mut self.load_errors);
         queue_on_error(&mut queue, || {
             // Now that we've converged on a config, try loading what we can
-            let config = self.app_config.read().unwrap().clone();
+            let config = self
+                .app_config
+                .read()
+                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
+                .clone();
             if let Some(layout) = config.recent_layout {
                 let f = std::fs::File::open(&layout)
-                    .with_context(|| format!("Failed to open layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to open layout file \"{layout}\""))?;
                 self.load_layout(&f, ctx)
-                    .with_context(|| format!("Failed to load layout file \"{}\"", layout))?;
+                    .with_context(|| format!("Failed to load layout file \"{layout}\""))?;
             }
             if let Some(splits) = config.recent_splits {
                 let f = std::fs::File::open(&splits)
-                    .with_context(|| format!("Failed to open splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to open splits file \"{splits}\""))?;
                 let path = std::path::Path::new(&splits)
                     .parent()
                     .ok_or(anyhow!("failed to find parent directory"))?;
                 self.load_splits(&f, path.to_path_buf())
-                    .with_context(|| format!("Failed to load splits file \"{}\"", splits))?;
+                    .with_context(|| format!("Failed to load splits file \"{splits}\""))?;
             }
             if let Some(autosplitter) = config.recent_autosplitter {
                 let f = std::fs::File::open(&autosplitter).with_context(|| {
-                    format!("Failed to open autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to open autosplitter config \"{autosplitter}\"")
                 })?;
                 self.load_autosplitter(&f).with_context(|| {
-                    format!("Failed to load autosplitter config \"{}\"", autosplitter)
+                    format!("Failed to load autosplitter config \"{autosplitter}\"")
                 })?;
             }
             Ok(())
@@ -260,7 +280,7 @@ impl LiveSplitCoreRenderer {
                 let mut y = None;
                 let mut width = None;
                 let mut height = None;
-                d.children().for_each(|d| {
+                d.children().try_for_each(|d| {
                     if d.tag_name().name() == "Mode" {
                         mode = d.text();
                     }
@@ -270,10 +290,10 @@ impl LiveSplitCoreRenderer {
                     if d.tag_name().name() == "Y" {
                         y = d.text().and_then(|d| f32::from_str(d).ok());
                     }
-                    if mode.is_some() && d.tag_name().name() == format!("{}Width", mode.unwrap()) {
+                    if mode.is_some() && d.tag_name().name() == format!("{}Width", mode?) {
                         width = d.text().and_then(|d| f32::from_str(d).ok());
                     }
-                    if mode.is_some() && d.tag_name().name() == format!("{}Height", mode.unwrap()) {
+                    if mode.is_some() && d.tag_name().name() == format!("{}Height", mode?) {
                         height = d.text().and_then(|d| f32::from_str(d).ok());
                     }
                     if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height) {
@@ -284,6 +304,7 @@ impl LiveSplitCoreRenderer {
                             egui::Pos2::new(x, y),
                         ));
                     }
+                    Some(())
                 });
             }
         });
@@ -292,10 +313,12 @@ impl LiveSplitCoreRenderer {
 
     pub fn load_splits(&mut self, f: &std::fs::File, path: std::path::PathBuf) -> Result<()> {
         use livesplit_core::run::parser::composite;
-        use std::io::Read;
-        let file_contents: std::result::Result<Vec<_>, _> = f.bytes().collect();
-        // TODO: fix this unwrap
-        *self.timer.write().unwrap() =
+        use std::io::{BufReader, Read};
+        let file_contents: std::result::Result<Vec<_>, _> = BufReader::new(f).bytes().collect();
+        *self
+            .timer
+            .write()
+            .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))? =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
         Ok(())
     }
@@ -305,13 +328,17 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_splits_dialog(&mut self, default_dir: &str) {
-        // TODO: fix this unwrap
-        let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
+    pub fn save_splits_dialog(&mut self, default_dir: &str) -> Result<()> {
+        let mut fname = self
+            .timer
+            .read()
+            .map_err(|e| anyhow!("failed to acquire read lock on timer: {e}"))?
+            .run()
+            .extended_file_name(false);
         let splits = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .clone()
             .unwrap_or_else(|| {
@@ -326,7 +353,7 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -343,23 +370,29 @@ impl LiveSplitCoreRenderer {
             |me, f| {
                 use livesplit_core::run::saver::livesplit::IoWrite;
                 let writer = IoWrite(&f);
-                // TODO: fix this unwrap
                 livesplit_core::run::saver::livesplit::save_timer(
-                    &me.timer.read().unwrap(),
+                    &*me.timer
+                        .read()
+                        .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?,
                     writer,
                 )?;
                 Ok(())
             },
         );
+        Ok(())
     }
 
-    pub fn save_autosplitter_dialog(&mut self, default_dir: &str) {
-        // TODO: fix this unwrap
-        let mut fname = self.timer.read().unwrap().run().extended_file_name(false);
+    pub fn save_autosplitter_dialog(&mut self, default_dir: &str) -> Result<()> {
+        let mut fname = self
+            .timer
+            .read()
+            .map_err(|e| anyhow!("failed to acquire read lock on timer: {e}"))?
+            .run()
+            .extended_file_name(false);
         let autosplitter: String = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .clone()
             .unwrap_or_else(|| {
@@ -374,7 +407,7 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -393,6 +426,7 @@ impl LiveSplitCoreRenderer {
                 Ok(())
             },
         );
+        Ok(())
     }
 
     pub fn save_dialog(
@@ -424,12 +458,12 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    pub fn open_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) {
+    pub fn open_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_layout
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -441,18 +475,21 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
             me.load_layout(&f, ctx)?;
-            me.app_config.write().unwrap().recent_layout =
-                Some(path.into_os_string().into_string().expect("utf8"));
+            me.app_config
+                .write()
+                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
+                .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
+        Ok(())
     }
 
-    pub fn open_splits_dialog(&mut self, default_dir: &str) {
+    pub fn open_splits_dialog(&mut self, default_dir: &str) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -464,18 +501,21 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(&dir, ("LiveSplit Splits", "lss"), |me, f, path| {
             me.load_splits(&f, path.clone())?;
-            me.app_config.write().unwrap().recent_splits =
-                Some(path.into_os_string().into_string().expect("utf8"));
+            me.app_config
+                .write()
+                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
+                .recent_splits = Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
+        Ok(())
     }
 
-    pub fn open_autosplitter_dialog(&mut self, default_dir: &str) {
+    pub fn open_autosplitter_dialog(&mut self, default_dir: &str) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
             .read()
-            .unwrap()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -490,11 +530,14 @@ impl LiveSplitCoreRenderer {
             ("Autosplitter Configuration", "asc"),
             |me, f, path| {
                 me.load_autosplitter(&f)?;
-                me.app_config.write().unwrap().recent_autosplitter =
-                    Some(path.into_os_string().into_string().expect("utf8"));
+                me.app_config
+                    .write()
+                    .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
+                    .recent_autosplitter = Some(path.into_os_string().into_string().expect("utf8"));
                 Ok(())
             },
         );
+        Ok(())
     }
 
     pub fn open_dialog(
@@ -526,150 +569,129 @@ impl LiveSplitCoreRenderer {
         let hook: &Hook = match self.global_hotkey_hook.as_ref() {
             None => {
                 self.global_hotkey_hook = Some(Hook::new()?);
-                self.global_hotkey_hook.as_ref().unwrap()
+                self.global_hotkey_hook.as_ref().unwrap() // We just set it so this will always
+                                                          // succeed.
             }
             Some(h) => h,
         };
-        print!("Registering global hotkeys...");
-        // TODO: this is kind of gross because of the logical duplication
-        // between egui input handling and global hotkey handling
-        // Work is needed to keep them in sync :(
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_start {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().split_or_start().ok();
-            })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
+
+        // This is a bit of a mess but it lets us reduce a lot of duplication.
+        // the idea here is that make_cb gives us a fresh callback each time
+        // we clone it. That way we can register the call back twice,
+        // once for the primary key and once for the alternate key.
+        fn reg<F>(hook: &Hook, hot_key: &HotKey, make_cb: F) -> Result<()>
+        where
+            F: Fn() + Send + 'static + Clone,
+        {
+            // main binding
+            hook.register(hot_key.to_livesplit_hotkey(), make_cb.clone())?;
+            // optional “alt” binding
+            if let Some(alt_code) = to_livesplit_keycode_alternative(&hot_key.key) {
+                let alt = livesplit_hotkey::Hotkey {
+                    key_code: alt_code,
                     modifiers: to_livesplit_modifiers(&hot_key.modifiers),
                 };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().split_or_start().ok();
-                })?;
+                hook.register(alt, make_cb)?;
             }
+            Ok(())
         }
+
+        let cfg = self
+            .app_config
+            .read()
+            .map_err(|e| anyhow!("failed to read config: {e}"))?;
         let timer = self.timer.clone();
-        let app_config = self.app_config.clone();
         let thread_chan = self.thread_chan.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_reset {
-            let app_config_ = app_config.clone();
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().reset(true).ok();
-                if app_config_.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
-                    thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+        let app_cfg = self.app_config.clone();
+
+        print!("Registering global hotkeys...");
+        if let Some(hk) = cfg.hot_key_start {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.split_or_start().ok())
+                        .map_err(|e| println!("split/start lock failed: {e}"));
                 }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                let thread_chan = self.thread_chan.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().reset(true).ok();
-                    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
-                        thread_chan.try_send(ThreadEvent::TimerReset).unwrap_or(());
+        }
+        if let Some(hk) = cfg.hot_key_reset {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                let tc = thread_chan.clone();
+                let app_cfg = app_cfg.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.reset(true).ok())
+                        .map_err(|e| println!("reset lock failed: {e}"));
+                    if app_cfg
+                        .read()
+                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
+                        .unwrap_or(false)
+                    {
+                        tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
-                })?;
-            }
-        }
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_undo {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().undo_split().ok();
+                }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().undo_split().ok();
-                })?;
-            }
         }
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_skip {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().skip_split().ok();
+        if let Some(hk) = cfg.hot_key_undo {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.undo_split().ok())
+                        .map_err(|e| println!("undo lock failed: {e}"));
+                }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().skip_split().ok();
-                })?;
-            }
         }
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_pause {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().toggle_pause().ok();
+        if let Some(hk) = cfg.hot_key_skip {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.skip_split().ok())
+                        .map_err(|e| println!("skip split lock failed: {e}"));
+                }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().toggle_pause().ok();
-                })?;
-            }
         }
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_comparison_next {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().switch_to_next_comparison();
+        if let Some(hk) = cfg.hot_key_pause {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.toggle_pause().ok())
+                        .map_err(|e| println!("toggle pause lock failed: {e}"));
+                }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().switch_to_next_comparison();
-                })?;
-            }
         }
-        let timer = self.timer.clone();
-        if let Some(hot_key) = self.app_config.read().unwrap().hot_key_comparison_prev {
-            hook.register(hot_key.to_livesplit_hotkey(), move || {
-                // TODO: fix this unwrap
-                timer.write().unwrap().switch_to_previous_comparison();
+        if let Some(hk) = cfg.hot_key_comparison_next {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.switch_to_next_comparison())
+                        .map_err(|e| println!("next comparison lock failed: {e}"));
+                }
             })?;
-            if let Some(alt_key) = to_livesplit_keycode_alternative(&hot_key.key) {
-                let alternative = livesplit_hotkey::Hotkey {
-                    key_code: alt_key,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
-                };
-                let timer = self.timer.clone();
-                hook.register(alternative, move || {
-                    // TODO: fix this unwrap
-                    timer.write().unwrap().switch_to_previous_comparison();
-                })?;
-            }
         }
+        if let Some(hk) = cfg.hot_key_comparison_prev {
+            reg(hook, &hk, {
+                let timer = timer.clone();
+                move || {
+                    let _ = timer
+                        .write()
+                        .map(|mut g| g.switch_to_previous_comparison())
+                        .map_err(|e| println!("prev comparison lock failed: {e}"));
+                }
+            })?;
+        }
+
         println!("registered");
         Ok(())
     }
@@ -697,7 +719,8 @@ impl eframe::App for LiveSplitCoreRenderer {
         ctx.input(|i| {
             if i.viewport().close_requested() {
                 self.is_exiting = true;
-                self.confirm_save(frame.gl().expect("No GL context"));
+                self.confirm_save(frame.gl().expect("No GL context"))
+                    .unwrap();
                 self.save_app_config();
             }
         });
@@ -766,15 +789,15 @@ impl eframe::App for LiveSplitCoreRenderer {
                 ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
                         ui.close_menu();
-                        self.open_layout_dialog(&document_dir, ctx);
+                        self.open_layout_dialog(&document_dir, ctx).unwrap();
                     }
                     if ui.button("Import Splits").clicked() {
                         ui.close_menu();
-                        self.open_splits_dialog(&document_dir);
+                        self.open_splits_dialog(&document_dir).unwrap();
                     }
                     if ui.button("Save Splits as...").clicked() {
                         ui.close_menu();
-                        self.save_splits_dialog(&document_dir);
+                        self.save_splits_dialog(&document_dir).unwrap();
                     }
                 });
                 ui.menu_button("Run Control", |ui| {
@@ -830,11 +853,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                     if ui.button("Load Configuration").clicked() {
                         ui.close_menu();
-                        self.open_autosplitter_dialog(&document_dir);
+                        self.open_autosplitter_dialog(&document_dir).unwrap();
                     }
                     if ui.button("Save Configuration").clicked() {
                         ui.close_menu();
-                        self.save_autosplitter_dialog(&document_dir);
+                        self.save_autosplitter_dialog(&document_dir).unwrap();
                     }
                 });
                 ui.separator();
@@ -977,67 +1000,101 @@ pub fn app_init(
             // We could change this thread priority, but we probably
             // should leave it at the default to make sure we get timely
             // polling of SNES state
-            .spawn(move |_| loop {
-                let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                print_on_error(|| -> std::result::Result<(), Box<dyn std::error::Error>> {
-                    let mut client = crate::usb2snes::SyncClient::connect()?;
-                    client.set_name("annelid")?;
-                    println!("Server version is {:?}", client.app_version()?);
-                    let mut devices = client.list_device()?.to_vec();
-                    if devices.len() != 1 {
-                        if devices.is_empty() {
-                            Err("No devices present")?;
-                        } else {
-                            Err(format!("You need to select a device: {:#?}", devices))?;
-                        }
-                    }
-                    let device = devices.pop().ok_or("Device list was empty")?;
-                    println!("Using device: {}", device);
-                    client.attach(&device)?;
-                    println!("Connected.");
-                    println!("{:#?}", client.info()?);
-                    let mut snes = SNESState::new();
-                    loop {
-                        let summary = snes.fetch_all(&mut client, &settings.read())?;
-                        if summary.start {
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().start().ok();
-                        }
-                        if summary.reset
-                            && app_config.read().unwrap().reset_timer_on_game_reset
-                                == Some(YesOrNo::Yes)
-                        {
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().reset(true).ok();
-                        }
-                        if summary.split {
-                            timer
-                                .write()
-                                .unwrap()
-                                .set_game_time(snes.gametime_to_seconds())
-                                .ok();
-                            // TODO: fix this unwrap
-                            timer.write().unwrap().split().ok();
-                        }
-                        {
-                            *latency.write() = (summary.latency_average, summary.latency_stddev);
-                        }
-                        // If the timer gets reset, we need to make a fresh snes state
-                        if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                            snes = SNESState::new();
-                            //Reset the snes
-                            if app_config.read().unwrap().reset_game_on_timer_reset
-                                == Some(YesOrNo::Yes)
-                            {
-                                client.reset()?;
+            .spawn(move |_| {
+                loop {
+                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                    print_on_error(|| -> anyhow::Result<()> {
+                        let mut client = crate::usb2snes::SyncClient::connect()
+                            .context("creating usb2snes connection")?;
+                        client.set_name("annelid")?;
+                        println!("Server version is {:?}", client.app_version()?);
+                        let mut devices = client.list_device()?.to_vec();
+                        if devices.len() != 1 {
+                            if devices.is_empty() {
+                                Err(anyhow!("No devices present"))?;
+                            } else {
+                                Err(anyhow!("You need to select a device: {:#?}", devices))?;
                             }
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            (1000.0 / polling_rate) as u64,
-                        ));
-                    }
-                });
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                        let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
+                        println!("Using device: {device}");
+                        client.attach(&device)?;
+                        println!("Connected.");
+                        println!("{:#?}", client.info()?);
+                        let mut autosplitter: Box<dyn AutoSplitter> =
+                            Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                        loop {
+                            let summary = autosplitter.update(&mut client)?;
+                            if summary.start {
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .start()
+                                    .ok();
+                            }
+                            if summary.reset
+                                && app_config
+                                    .read()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire read lock on config: {e}")
+                                    })?
+                                    .reset_timer_on_game_reset
+                                    == Some(YesOrNo::Yes)
+                            {
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .reset(true)
+                                    .ok();
+                            }
+                            if summary.split {
+                                if let Some(t) = autosplitter.gametime_to_seconds() {
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .set_game_time(t)
+                                        .ok();
+                                }
+                                timer
+                                    .write()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire write lock on timer: {e}")
+                                    })?
+                                    .split()
+                                    .ok();
+                            }
+                            {
+                                *latency.write() =
+                                    (summary.latency_average, summary.latency_stddev);
+                            }
+                            // If the timer gets reset, we need to make a fresh snes state
+                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                autosplitter.reset_game_tracking();
+                                //Reset the snes
+                                if app_config
+                                    .read()
+                                    .map_err(|e| {
+                                        anyhow!("failed to acquire read lock on config: {e}")
+                                    })?
+                                    .reset_game_on_timer_reset
+                                    == Some(YesOrNo::Yes)
+                                {
+                                    client.reset()?;
+                                }
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                (1000.0 / polling_rate) as u64,
+                            ));
+                        }
+                    });
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                }
             })
             //TODO: fix this unwrap
             .unwrap();

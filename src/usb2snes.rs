@@ -21,15 +21,17 @@
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::net::TcpStream;
 use strum_macros::Display;
 use tungstenite::protocol::WebSocket;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::Bytes;
 use tungstenite::Message;
 
 use std::borrow::Cow;
 use std::rc::Rc;
+
+use anyhow::{anyhow, Result};
 
 #[derive(Display, Debug)]
 #[allow(dead_code)]
@@ -100,21 +102,21 @@ pub struct SyncClient {
 }
 
 impl SyncClient {
-    pub fn connect() -> Result<SyncClient, Box<dyn Error>> {
+    pub fn connect() -> Result<SyncClient> {
         Ok(SyncClient {
             client: tungstenite::client::connect("ws://localhost:23074")?.0,
             devel: false,
         })
     }
 
-    pub fn connect_with_devel() -> Result<SyncClient, Box<dyn Error>> {
+    pub fn connect_with_devel() -> Result<SyncClient> {
         Ok(SyncClient {
             client: tungstenite::client::connect("ws://localhost:23074")?.0,
             devel: true,
         })
     }
 
-    fn send_command(&mut self, command: Command, args: &[Cow<str>]) -> Result<(), Box<dyn Error>> {
+    fn send_command(&mut self, command: Command, args: &[Cow<str>]) -> Result<()> {
         self.send_command_with_space(command, None, args)
     }
 
@@ -123,9 +125,9 @@ impl SyncClient {
         command: Command,
         space: Option<Space>,
         args: &[Cow<str>],
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         if self.devel {
-            println!("Send command : {:?}", command);
+            println!("Send command : {command:?}");
         }
         let nspace = space.map(|sp| sp.to_string());
         let query = USB2SnesQuery {
@@ -137,49 +139,49 @@ impl SyncClient {
         let json = serde_json::to_string(&query)?;
         if self.devel {
             let json = serde_json::to_string_pretty(&query)?;
-            println!("{}", json);
+            println!("{json}");
         }
         let message = Message::text(json);
         Ok(self.client.send(message)?)
     }
 
-    fn get_reply(&mut self) -> Result<USB2SnesResult, Box<dyn Error>> {
+    fn get_reply(&mut self) -> Result<USB2SnesResult> {
         let reply = self.client.read()?;
         let mut textreply: String = String::from("");
         match reply {
             Message::Text(value) => {
-                textreply = value;
+                textreply = value.to_string();
             }
-            _ => Err("Error getting a reply")?,
+            _ => Err(anyhow!("Error getting a reply"))?,
         };
         if self.devel {
             println!("Reply:");
-            println!("{}", textreply);
+            println!("{textreply}");
         }
         Ok(serde_json::from_str(&textreply)?)
     }
 
-    pub fn set_name(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_name(&mut self, name: &str) -> Result<()> {
         self.send_command(Command::Name, &[Cow::Borrowed(name)])
     }
 
-    pub fn app_version(&mut self) -> Result<String, Box<dyn Error>> {
+    pub fn app_version(&mut self) -> Result<String> {
         self.send_command(Command::AppVersion, &[])?;
         let usbreply = self.get_reply()?;
         Ok(usbreply.Results[0].to_string())
     }
 
-    pub fn list_device(&mut self) -> Result<Rc<[Rc<str>]>, Box<dyn Error>> {
+    pub fn list_device(&mut self) -> Result<Rc<[Rc<str>]>> {
         self.send_command(Command::DeviceList, &[])?;
         let usbreply = self.get_reply()?;
         Ok(usbreply.Results)
     }
 
-    pub fn attach(&mut self, device: &str) -> Result<(), Box<dyn Error>> {
+    pub fn attach(&mut self, device: &str) -> Result<()> {
         self.send_command(Command::Attach, &[Cow::Borrowed(device)])
     }
 
-    pub fn info(&mut self) -> Result<Infos, Box<dyn Error>> {
+    pub fn info(&mut self) -> Result<Infos> {
         self.send_command(Command::Info, &[])?;
         let usbreply = self.get_reply()?;
         let info = usbreply.Results;
@@ -191,19 +193,19 @@ impl SyncClient {
         })
     }
 
-    pub fn reset(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn reset(&mut self) -> Result<()> {
         self.send_command(Command::Reset, &[])
     }
 
-    pub fn menu(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn menu(&mut self) -> Result<()> {
         self.send_command(Command::Menu, &[])
     }
 
-    pub fn boot(&mut self, toboot: &str) -> Result<(), Box<dyn Error>> {
+    pub fn boot(&mut self, toboot: &str) -> Result<()> {
         self.send_command(Command::Boot, &[Cow::Borrowed(toboot)])
     }
 
-    pub fn ls(&mut self, path: &str) -> Result<Vec<USB2SnesFileInfo>, Box<dyn Error>> {
+    pub fn ls(&mut self, path: &str) -> Result<Vec<USB2SnesFileInfo>> {
         self.send_command(Command::List, &[Cow::Borrowed(path)])?;
         let usbreply = self.get_reply()?;
         let vec_info = usbreply.Results;
@@ -224,7 +226,7 @@ impl SyncClient {
         Ok(toret)
     }
 
-    pub fn send_file(&mut self, path: &str, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    pub fn send_file(&mut self, path: &str, data: &[u8]) -> Result<()> {
         self.send_command(
             Command::PutFile,
             &[Cow::Borrowed(path), Cow::Owned(format!("{:x}", data.len()))],
@@ -232,7 +234,8 @@ impl SyncClient {
         let mut start = 0;
         let mut stop = 1024;
         while start < data.len() {
-            self.client.send(Message::binary(&data[start..stop]))?;
+            self.client
+                .send(Message::binary(Bytes::copy_from_slice(&data[start..stop])))?;
             start += 1024;
             stop += 1024;
             if stop > data.len() {
@@ -242,7 +245,7 @@ impl SyncClient {
         Ok(())
     }
 
-    pub fn get_file(&mut self, path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub fn get_file(&mut self, path: &str) -> Result<Vec<u8>> {
         self.send_command(Command::GetFile, &[Cow::Borrowed(path)])?;
         let string_hex = self.get_reply()?.Results[0].to_string();
         let size = usize::from_str_radix(&string_hex, 16)?;
@@ -253,7 +256,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err("Error getting a reply")?,
+                _ => Err(anyhow!("Error getting a reply"))?,
             }
             if data.len() == size {
                 break;
@@ -262,17 +265,17 @@ impl SyncClient {
         Ok(data)
     }
 
-    pub fn remove_path(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn remove_path(&mut self, path: &str) -> Result<()> {
         self.send_command(Command::Remove, &[Cow::Borrowed(path)])
     }
 
-    pub fn get_address(&mut self, address: u32, size: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub fn get_address(&mut self, address: u32, size: usize) -> Result<Vec<u8>> {
         self.send_command_with_space(
             Command::GetAddress,
             Some(Space::SNES),
             &[
-                Cow::Owned(format!("{:x}", address)),
-                Cow::Owned(format!("{:x}", size)),
+                Cow::Owned(format!("{address:x}")),
+                Cow::Owned(format!("{size:x}")),
             ],
         )?;
         let mut data: Vec<u8> = Vec::with_capacity(size);
@@ -282,7 +285,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err("Error getting a reply")?,
+                _ => Err(anyhow!("Error getting a reply"))?,
             }
             if data.len() == size {
                 break;
@@ -291,15 +294,12 @@ impl SyncClient {
         Ok(data)
     }
 
-    pub fn get_addresses(
-        &mut self,
-        pairs: &[(u32, usize)],
-    ) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+    pub fn get_addresses(&mut self, pairs: &[(u32, usize)]) -> Result<Vec<Vec<u8>>> {
         let mut args = Vec::with_capacity(pairs.len() * 2);
         let mut total_size = 0;
         for &(address, size) in pairs.iter() {
-            args.push(Cow::Owned(format!("{:x}", address)));
-            args.push(Cow::Owned(format!("{:x}", size)));
+            args.push(Cow::Owned(format!("{address:x}")));
+            args.push(Cow::Owned(format!("{size:x}")));
             total_size += size;
         }
         self.send_command_with_space(Command::GetAddress, Some(Space::SNES), &args)?;
@@ -311,7 +311,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err("Error getting a reply")?,
+                _ => Err(anyhow!("Error getting a reply"))?,
             }
             if data.len() == total_size {
                 break;

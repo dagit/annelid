@@ -8,11 +8,11 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("about to show messagebox due to: {}", e);
+            println!("about to show messagebox due to: {e}");
             MessageDialog::new()
                 .set_level(MessageLevel::Error)
                 .set_title("Error")
-                .set_description(format!("{}", e))
+                .set_description(format!("{e}"))
                 .show();
         }
     }
@@ -20,12 +20,12 @@ where
 
 pub fn print_on_error<F>(f: F)
 where
-    F: FnOnce() -> Result<(), Box<dyn std::error::Error>>,
+    F: FnOnce() -> Result<()>,
 {
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("{}", e);
+            println!("{e}");
         }
     }
 }
