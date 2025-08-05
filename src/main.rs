@@ -79,7 +79,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
     let project_dirs = directories::ProjectDirs::from("", "", "annelid")
         .ok_or("Unable to computer configuration directory")?;
-    println!("project_dirs = {:#?}", project_dirs);
+    println!("project_dirs = {project_dirs:#?}");
 
     let preference_dir = project_dirs.preference_dir();
     std::fs::create_dir_all(preference_dir)?;
