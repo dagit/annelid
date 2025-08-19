@@ -17,7 +17,12 @@ pub fn fill_drop_down(ui: &mut egui::Ui, game: &mut Game) {
     ui.selectable_value(game, Game::SuperMetroid, "Super Metroid");
 }
 
-pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>, ip: &String, port: u32) -> Box<dyn Splitter> {
+pub fn nwaobject(
+    game: Game,
+    app_config: Arc<std::sync::RwLock<AppConfig>>,
+    ip: &String,
+    port: u32,
+) -> Box<dyn Splitter> {
     match game {
         Game::Battletoads => Box::new(battletoads::BattletoadsAutoSplitter {
             prior_level: 0,

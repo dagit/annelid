@@ -9,10 +9,13 @@ use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::{net::Ipv4Addr, sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-}};
+use std::{
+    net::Ipv4Addr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -648,7 +651,7 @@ impl LiveSplitCoreRenderer {
                     // TODO: Fix this. It's not updating the value; probably move this into config
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut game = _game.clone();
-                        let mut adr = _adr.clone(); 
+                        let mut adr = _adr.clone();
                         let port = _port.clone();
                         ui.label("NWA address");
                         ui.text_edit_singleline(&mut adr);
