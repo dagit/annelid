@@ -1,12 +1,21 @@
-use crate::autosplitters::supermetroid::Settings;
-use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
-use crate::autosplitters::AutoSplitter;
+use crate::autosplitters::{
+    self,
+    nwa::{fill_drop_down, nwaobject, Game},
+    supermetroid::{Settings, SuperMetroidAutoSplitter},
+    AutoSplitter,
+};
 use anyhow::{anyhow, Context, Result};
 use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{
+    net::Ipv4Addr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -24,17 +33,20 @@ pub struct LiveSplitCoreRenderer {
     layout_state: Option<livesplit_core::layout::LayoutState>,
     image_cache: livesplit_core::settings::ImageCache,
     timer: SharedTimer,
-    show_settings_editor: bool,
-    settings: Arc<RwLock<Settings>>,
+    settings: Arc<RwLock<autosplitters::supermetroid::Settings>>,
     can_exit: bool,
     is_exiting: bool,
     thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-    project_dirs: directories::ProjectDirs,
-    pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub app_config: Arc<std::sync::RwLock<AppConfig>>,
     app_config_processed: bool,
     glow_canvas: GlowCanvas,
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
+    show_edit_autosplitter_settings_dialog: Arc<AtomicBool>,
+    show_nwa_autosplitter_settings_dialog: Arc<AtomicBool>,
+    game: Game,
+    address: Arc<RwLock<String>>,
+    port: Arc<RwLock<u32>>,
 }
 
 fn show_children(
@@ -74,10 +86,8 @@ impl LiveSplitCoreRenderer {
     pub fn new(
         timer: SharedTimer,
         layout: Layout,
-        settings: Arc<RwLock<Settings>>,
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
-        project_dirs: directories::ProjectDirs,
-        cli_config: AppConfig,
+        config: AppConfig,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -85,21 +95,24 @@ impl LiveSplitCoreRenderer {
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
-            show_settings_editor: false,
-            settings,
+            settings: Arc::new(RwLock::new(autosplitters::supermetroid::Settings::new())),
             can_exit: false,
             is_exiting: false,
             thread_chan: chan,
-            project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            app_config: Arc::new(std::sync::RwLock::new(config)),
             app_config_processed: false,
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            show_edit_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
+            show_nwa_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
+            game: Game::Battletoads,
+            address: Arc::new(RwLock::new(Ipv4Addr::new(0, 0, 0, 0).to_string())),
+            port: Arc::new(RwLock::new(48879)),
         }
     }
 
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
+    pub fn confirm_save(&mut self, gl: &Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -142,87 +155,6 @@ impl LiveSplitCoreRenderer {
         self.can_exit = true;
         self.glow_canvas.destroy(gl);
         Ok(())
-    }
-
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
-            use std::io::Write;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Saving to {config_path:#?}");
-            let f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(config_path)?;
-            let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
-            writer.write_all(toml.as_bytes())?;
-            writer.flush()?;
-            Ok(())
-        });
-    }
-
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
-            use std::io::Read;
-            let mut config_path = self.project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            println!("Loading from {config_path:#?}");
-            let saved_config: AppConfig = std::fs::File::open(config_path)
-                .and_then(|mut f| {
-                    let mut buffer = String::new();
-                    f.read_to_string(&mut buffer)?;
-                    match toml::from_str(&buffer) {
-                        Ok(app_config) => Ok(app_config),
-                        Err(e) => Err(from_de_error(e)),
-                    }
-                })
-                .unwrap_or_default();
-            // Let the CLI options take precedent if any provided
-            // TODO: this logic is bad, I really need to know if the CLI
-            // stuff was present and whether the stuff was present in the config
-            // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
-            let mut new_app_config = saved_config;
-            if cli_config.recent_layout.is_some() {
-                new_app_config.recent_layout = cli_config.recent_layout;
-            }
-            if cli_config.recent_splits.is_some() {
-                new_app_config.recent_splits = cli_config.recent_splits;
-            }
-            if cli_config.recent_autosplitter.is_some() {
-                new_app_config.recent_autosplitter = cli_config.recent_autosplitter;
-            }
-            if cli_config.use_autosplitter.is_some() {
-                new_app_config.use_autosplitter = cli_config.use_autosplitter;
-            }
-            if cli_config.frame_rate.is_some() {
-                new_app_config.frame_rate = cli_config.frame_rate;
-            }
-            if cli_config.polling_rate.is_some() {
-                new_app_config.polling_rate = cli_config.polling_rate;
-            }
-            if cli_config.reset_timer_on_game_reset.is_some() {
-                new_app_config.reset_timer_on_game_reset = cli_config.reset_timer_on_game_reset;
-            }
-            if cli_config.reset_game_on_timer_reset.is_some() {
-                new_app_config.reset_game_on_timer_reset = cli_config.reset_game_on_timer_reset;
-            }
-            if cli_config.global_hotkeys.is_some() {
-                new_app_config.global_hotkeys = cli_config.global_hotkeys;
-            }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
-            Ok(())
-        });
     }
 
     pub fn process_app_config(&mut self, ctx: &egui::Context) {
@@ -695,6 +627,96 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
+
+    pub fn nwa_auto_splitter_settings_editor(&mut self, ctx: &egui::Context) {
+        if self
+            .show_nwa_autosplitter_settings_dialog
+            .load(Ordering::Relaxed)
+        {
+            let show_deferred_viewport = self.show_nwa_autosplitter_settings_dialog.clone();
+            let mut _game = self.game;
+            let mut _adr = self.address.write().clone();
+            let mut _port = *self.port.write();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("NWA_deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("NWA AutoSplitter Settings Editor")
+                    .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    // TODO: Fix this. It's not updating the value; probably move this into config
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut game = _game;
+                        let mut adr = _adr.clone();
+                        let port = _port;
+                        ui.label("NWA address");
+                        ui.text_edit_singleline(&mut adr);
+                        ui.label("NWA port");
+                        ui.text_edit_singleline(&mut port.to_string());
+                        ui.label("NWA Game");
+                        egui::ComboBox::from_id_salt("Game")
+                            .selected_text(format!("{:?}", game))
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                            .show_ui(ui, |ui| {
+                                fill_drop_down(ui, &mut game);
+                            });
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+        }
+    }
+
+    pub fn auto_splitter_settings_editor(&mut self, ctx: &egui::Context) {
+        if self
+            .show_edit_autosplitter_settings_dialog
+            .load(Ordering::Relaxed)
+        {
+            let show_deferred_viewport = self.show_edit_autosplitter_settings_dialog.clone();
+            let a_settings = self.settings.clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("AutoSplitter Settings Editor")
+                    .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    egui::CentralPanel::default().show(ctx, |_ui| {
+                        let settings_editor = egui::containers::Window::new("Settings Editor");
+                        settings_editor
+                            .open(&mut show_deferred_viewport.load(Ordering::Relaxed))
+                            .resizable(true)
+                            .collapsible(false)
+                            .hscroll(true)
+                            .vscroll(true)
+                            .show(ctx, |ui| {
+                                ctx.move_to_top(ui.layer_id());
+                                let settings = a_settings.clone();
+                                let mut roots = settings.write().roots();
+                                show_children(&mut settings.write(), ui, ctx, &mut roots);
+                            });
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+        }
+    }
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
@@ -721,7 +743,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 self.is_exiting = true;
                 self.confirm_save(frame.gl().expect("No GL context"))
                     .unwrap();
-                self.save_app_config();
+                self.app_config.read().unwrap().save_app_config(); // aquire read lock then save app config
             }
         });
         if self.can_exit {
@@ -767,10 +789,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         );
         self.glow_canvas
             .paint_layer(ctx, egui::LayerId::background(), viewport);
-        //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);
-        let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit".into())
-            .enabled(!self.show_settings_editor)
             .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.screen_rect.width()));
@@ -847,18 +866,32 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                 });
                 ui.menu_button("Autosplitter", |ui| {
-                    if ui.button("Configure").clicked() {
-                        self.show_settings_editor = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("Load Configuration").clicked() {
-                        ui.close_menu();
-                        self.open_autosplitter_dialog(&document_dir).unwrap();
-                    }
-                    if ui.button("Save Configuration").clicked() {
-                        ui.close_menu();
-                        self.save_autosplitter_dialog(&document_dir).unwrap();
-                    }
+                    ui.menu_button("NWA", |ui| {
+                        if ui.button("Configure").clicked() {
+                            let show_deferred_viewport = true;
+                            self.show_nwa_autosplitter_settings_dialog
+                                .store(show_deferred_viewport, Ordering::Relaxed);
+                            ui.close_menu();
+                        }
+                    });
+                    ui.menu_button("QUSB2SNES", |ui| {
+                        ui.menu_button("Super Metroid", |ui| {
+                            if ui.button("Configure").clicked() {
+                                let show_deferred_viewport = true;
+                                self.show_edit_autosplitter_settings_dialog
+                                    .store(show_deferred_viewport, Ordering::Relaxed);
+                                ui.close_menu();
+                            }
+                            if ui.button("Load Configuration").clicked() {
+                                ui.close_menu();
+                                self.open_autosplitter_dialog(&document_dir).unwrap();
+                            }
+                            if ui.button("Save Configuration").clicked() {
+                                ui.close_menu();
+                                self.save_autosplitter_dialog(&document_dir).unwrap();
+                            }
+                        });
+                    });
                 });
                 ui.separator();
                 ui.add(egui::widgets::Label::new(format!(
@@ -870,18 +903,10 @@ impl eframe::App for LiveSplitCoreRenderer {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close)
                 }
             });
-        settings_editor
-            .open(&mut self.show_settings_editor)
-            .resizable(true)
-            .collapsible(false)
-            .hscroll(true)
-            .vscroll(true)
-            .show(ctx, |ui| {
-                ctx.move_to_top(ui.layer_id());
-                let mut settings = self.settings.write();
-                let mut roots = settings.roots();
-                show_children(&mut settings, ui, ctx, &mut roots);
-            });
+
+        self.auto_splitter_settings_editor(ctx);
+        self.nwa_auto_splitter_settings_editor(ctx);
+
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
             if scroll_delta.y > 0.0 {
@@ -956,7 +981,7 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
+    // app.load_app_config();
     if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
@@ -991,41 +1016,141 @@ pub fn app_init(
     // something equivalent to Arc<RwLock<_>> so it's safe
     // to clone them and pass the clone between threads.
     let timer = app.timer.clone();
-    let settings = app.settings.clone();
     let app_config = app.app_config.clone();
+
     // This thread deals with polling the SNES at a fixed rate.
     if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
-        let _snes_polling_thread = ThreadBuilder::default()
-            .name("SNES Polling Thread".to_owned())
-            // We could change this thread priority, but we probably
-            // should leave it at the default to make sure we get timely
-            // polling of SNES state
-            .spawn(move |_| {
-                loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
-                    print_on_error(|| -> anyhow::Result<()> {
-                        let mut client = crate::usb2snes::SyncClient::connect()
-                            .context("creating usb2snes connection")?;
-                        client.set_name("annelid")?;
-                        println!("Server version is {:?}", client.app_version()?);
-                        let mut devices = client.list_device()?.to_vec();
-                        if devices.len() != 1 {
-                            if devices.is_empty() {
-                                Err(anyhow!("No devices present"))?;
-                            } else {
-                                Err(anyhow!("You need to select a device: {:#?}", devices))?;
+        if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::QUSB2SNES) {
+            //QUSB2SNES stuff here
+            let settings = app.settings.clone();
+            let _snes_polling_thread = ThreadBuilder::default()
+                .name("SNES Polling Thread".to_owned())
+                // We could change this thread priority, but we probably
+                // should leave it at the default to make sure we get timely
+                // polling of SNES state
+                .spawn(move |_| {
+                    loop {
+                        let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                        print_on_error(|| -> anyhow::Result<()> {
+                            let mut client = crate::usb2snes::SyncClient::connect()
+                                .context("creating usb2snes connection")?;
+                            client.set_name("annelid")?;
+                            println!("Server version is {:?}", client.app_version()?);
+                            let mut devices = client.list_device()?.to_vec();
+                            if devices.len() != 1 {
+                                if devices.is_empty() {
+                                    Err(anyhow!("No devices present"))?;
+                                } else {
+                                    Err(anyhow!("You need to select a device: {:#?}", devices))?;
+                                }
                             }
-                        }
-                        let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                        println!("Using device: {device}");
-                        client.attach(&device)?;
-                        println!("Connected.");
-                        println!("{:#?}", client.info()?);
-                        let mut autosplitter: Box<dyn AutoSplitter> =
-                            Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                            let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
+                            println!("Using device: {device}");
+                            client.attach(&device)?;
+                            println!("Connected.");
+                            println!("{:#?}", client.info()?);
+
+                            // TODO: make this generic as well based on user input or add game selector
+                            let mut autosplitter: Box<dyn AutoSplitter> =
+                                Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                            loop {
+                                let summary = autosplitter.update(&mut client)?;
+                                if summary.start {
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .start()
+                                        .ok();
+                                }
+                                if summary.reset
+                                    && app_config
+                                        .read()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire read lock on config: {e}")
+                                        })?
+                                        .reset_timer_on_game_reset
+                                        == Some(YesOrNo::Yes)
+                                {
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .reset(true)
+                                        .ok();
+                                }
+                                if summary.split {
+                                    if let Some(t) = autosplitter.gametime_to_seconds() {
+                                        timer
+                                            .write()
+                                            .map_err(|e| {
+                                                anyhow!(
+                                                    "failed to acquire write lock on timer: {e}"
+                                                )
+                                            })?
+                                            .set_game_time(t)
+                                            .ok();
+                                    }
+                                    timer
+                                        .write()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire write lock on timer: {e}")
+                                        })?
+                                        .split()
+                                        .ok();
+                                }
+                                {
+                                    *latency.write() =
+                                        (summary.latency_average, summary.latency_stddev);
+                                }
+                                // If the timer gets reset, we need to make a fresh snes state
+                                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
+                                    autosplitter.reset_game_tracking();
+                                    // Reset the snes
+                                    if app_config
+                                        .read()
+                                        .map_err(|e| {
+                                            anyhow!("failed to acquire read lock on config: {e}")
+                                        })?
+                                        .reset_game_on_timer_reset
+                                        == Some(YesOrNo::Yes)
+                                    {
+                                        client.reset()?;
+                                    }
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(
+                                    (1000.0 / polling_rate) as u64,
+                                ));
+                            }
+                        });
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                    }
+                })
+                //TODO: fix this unwrap
+                .unwrap();
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::NWA) {
+            //NWA stuff here
+            let game = app.game;
+            let address = app.address.read().clone();
+            let port = *app.port.read();
+            let _nwa_polling_thread = ThreadBuilder::default()
+                .name("NWA Polling Thread".to_owned())
+                .spawn(move |_| loop {
+                    let mut client = nwaobject(game, app_config.clone(), &address, port);
+
+                    print_on_error(|| -> anyhow::Result<()> {
+                        client.emu_info();
+                        client.emu_game_info();
+                        client.emu_status();
+                        client.client_id();
+                        client.core_info();
+                        client.core_memories();
                         loop {
-                            let summary = autosplitter.update(&mut client)?;
-                            if summary.start {
+                            // println!("{game:#?}");
+                            let auto_split_status = client.update().unwrap();
+                            if auto_split_status.start {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1034,15 +1159,7 @@ pub fn app_init(
                                     .start()
                                     .ok();
                             }
-                            if summary.reset
-                                && app_config
-                                    .read()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire read lock on config: {e}")
-                                    })?
-                                    .reset_timer_on_game_reset
-                                    == Some(YesOrNo::Yes)
-                            {
+                            if auto_split_status.reset {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1051,16 +1168,7 @@ pub fn app_init(
                                     .reset(true)
                                     .ok();
                             }
-                            if summary.split {
-                                if let Some(t) = autosplitter.gametime_to_seconds() {
-                                    timer
-                                        .write()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire write lock on timer: {e}")
-                                        })?
-                                        .set_game_time(t)
-                                        .ok();
-                                }
+                            if auto_split_status.split {
                                 timer
                                     .write()
                                     .map_err(|e| {
@@ -1069,34 +1177,66 @@ pub fn app_init(
                                     .split()
                                     .ok();
                             }
-                            {
-                                *latency.write() =
-                                    (summary.latency_average, summary.latency_stddev);
-                            }
-                            // If the timer gets reset, we need to make a fresh snes state
-                            if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                autosplitter.reset_game_tracking();
-                                //Reset the snes
-                                if app_config
-                                    .read()
-                                    .map_err(|e| {
-                                        anyhow!("failed to acquire read lock on config: {e}")
-                                    })?
-                                    .reset_game_on_timer_reset
-                                    == Some(YesOrNo::Yes)
-                                {
-                                    client.reset()?;
-                                }
-                            }
+
                             std::thread::sleep(std::time::Duration::from_millis(
                                 (1000.0 / polling_rate) as u64,
                             ));
                         }
                     });
                     std::thread::sleep(std::time::Duration::from_millis(1000));
-                }
-            })
-            //TODO: fix this unwrap
-            .unwrap();
+                })
+                //TODO: fix this unwrap
+                .unwrap();
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::ASL) {
+            //TODO: unable to configure runtime
+
+            // let test = livesplit_auto_splitting::Runtime::new(module, timer, settings_store);
+            // Livesplit autosplitter support
+            // use livesplit_auto_splitting::*;
+            // let test = ;
+            // let test = livesplit_auto_splitting::Timer;
+            // let module = livesplit_auto_splitting::Runtime::
+            // livesplit_auto_splitting::Runtime::new(module, timer, settings_store)
+            // let x = livesplit_auto_splitting::Runtime::new(module, timer.write().unwrap().deref(), settings_store);
+        } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::CUSTOM)
+        {
+            // TODO: process isn't consistently gotten
+            // TODO: reading crashes with either bad address as root or permission denied as user
+            // This is also linux only
+
+            // use process_memory::*;
+            // use sysinfo::*;
+            // let mut x = 0_u64;
+            // let x = sysinfo::Pid::from(17696).as_u32();
+            // let s = System::new_all();
+            // for (pid, process) in s.processes() {
+            // println!("{} {:?}", pid, process.name());
+            // }
+            // let count = s.processes().clone().("retroarch");
+            // let count = s.processes_by_exact_name(OsStr::new("retroarch")).count();
+            // let p = s.processes_by_exact_name(OsStr::new("retroarch"));
+            // if count == 2 {
+            // x = p.last().unwrap().pid().as_u32();
+            // }
+            // println!("{x:?}");
+
+            // let arch = process_memory::Architecture::from_native();
+            // let process_handle = process_memory::ProcessHandle::try_into_process_handle(&(
+            // x.try_into().unwrap(),
+            // arch,
+            // ))
+            // .unwrap();
+            // let mut member = DataMember::<i32>::new_offset(process_handle, vec![0x10]);
+            // member.set_offset(vec![0x10]);
+
+            // The memory offset can now be correctly calculated:
+            // called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+            // println!(
+            // "Target memory location: {}",
+            // member.clone().get_offset().unwrap()
+            // );
+            // The memory offset can now be used to retrieve and modify values:
+            // println!("Current value: {}", unsafe { member.read().unwrap() });
+        }
     }
 }
