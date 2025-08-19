@@ -20,7 +20,7 @@ pub fn fill_drop_down(ui: &mut egui::Ui, game: &mut Game) {
 pub fn nwaobject(
     game: Game,
     app_config: Arc<std::sync::RwLock<AppConfig>>,
-    ip: &String,
+    ip: &str,
     port: u32,
 ) -> Box<dyn Splitter> {
     match game {

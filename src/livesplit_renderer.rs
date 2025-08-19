@@ -634,9 +634,9 @@ impl LiveSplitCoreRenderer {
             .load(Ordering::Relaxed)
         {
             let show_deferred_viewport = self.show_nwa_autosplitter_settings_dialog.clone();
-            let mut _game = self.game.clone();
+            let mut _game = self.game;
             let mut _adr = self.address.write().clone();
-            let mut _port = self.port.write().clone();
+            let mut _port = *self.port.write();
 
             ctx.show_viewport_deferred(
                 egui::ViewportId::from_hash_of("NWA_deferred_viewport"),
@@ -650,9 +650,9 @@ impl LiveSplitCoreRenderer {
                     );
                     // TODO: Fix this. It's not updating the value; probably move this into config
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        let mut game = _game.clone();
+                        let mut game = _game;
                         let mut adr = _adr.clone();
-                        let port = _port.clone();
+                        let port = _port;
                         ui.label("NWA address");
                         ui.text_edit_singleline(&mut adr);
                         ui.label("NWA port");
@@ -1134,7 +1134,7 @@ pub fn app_init(
             //NWA stuff here
             let game = app.game;
             let address = app.address.read().clone();
-            let port = app.port.read().clone();
+            let port = *app.port.read();
             let _nwa_polling_thread = ThreadBuilder::default()
                 .name("NWA Polling Thread".to_owned())
                 .spawn(move |_| loop {
