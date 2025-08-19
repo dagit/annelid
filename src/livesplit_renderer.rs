@@ -9,10 +9,10 @@ use eframe::egui;
 use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
-use std::sync::{
+use std::{net::Ipv4Addr, sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
-};
+}};
 use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
 
 use crate::config::app_config::*;
@@ -40,7 +40,10 @@ pub struct LiveSplitCoreRenderer {
     global_hotkey_hook: Option<Hook>,
     load_errors: Vec<anyhow::Error>,
     show_edit_autosplitter_settings_dialog: Arc<AtomicBool>,
+    show_nwa_autosplitter_settings_dialog: Arc<AtomicBool>,
     game: Game,
+    address: Arc<RwLock<String>>,
+    port: Arc<RwLock<u32>>,
 }
 
 fn show_children(
@@ -99,7 +102,10 @@ impl LiveSplitCoreRenderer {
             global_hotkey_hook: None,
             load_errors: vec![],
             show_edit_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
+            show_nwa_autosplitter_settings_dialog: Arc::new(AtomicBool::new(false)),
             game: Game::Battletoads,
+            address: Arc::new(RwLock::new(Ipv4Addr::new(0, 0, 0, 0).to_string())),
+            port: Arc::new(RwLock::new(48879)),
         }
     }
 
@@ -618,6 +624,54 @@ impl LiveSplitCoreRenderer {
         println!("registered");
         Ok(())
     }
+
+    pub fn nwa_auto_splitter_settings_editor(&mut self, ctx: &egui::Context) {
+        if self
+            .show_nwa_autosplitter_settings_dialog
+            .load(Ordering::Relaxed)
+        {
+            let show_deferred_viewport = self.show_nwa_autosplitter_settings_dialog.clone();
+            let mut _game = self.game.clone();
+            let mut _adr = self.address.write().clone();
+            let mut _port = self.port.write().clone();
+
+            ctx.show_viewport_deferred(
+                egui::ViewportId::from_hash_of("NWA_deferred_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_title("NWA AutoSplitter Settings Editor")
+                    .with_inner_size([200.0, 500.0]),
+                move |ctx, class| {
+                    assert!(
+                        class == egui::ViewportClass::Deferred,
+                        "This egui backend doesn't support multiple viewports"
+                    );
+                    // TODO: Fix this. It's not updating the value; probably move this into config
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut game = _game.clone();
+                        let mut adr = _adr.clone(); 
+                        let port = _port.clone();
+                        ui.label("NWA address");
+                        ui.text_edit_singleline(&mut adr);
+                        ui.label("NWA port");
+                        ui.text_edit_singleline(&mut port.to_string());
+                        ui.label("NWA Game");
+                        egui::ComboBox::from_id_salt("Game")
+                            .selected_text(format!("{:?}", game))
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                            .show_ui(ui, |ui| {
+                                fill_drop_down(ui, &mut game);
+                            });
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        // Tell parent to close us.
+                        show_deferred_viewport.store(false, Ordering::Relaxed);
+                    }
+                },
+            );
+        }
+    }
+
     pub fn auto_splitter_settings_editor(&mut self, ctx: &egui::Context) {
         if self
             .show_edit_autosplitter_settings_dialog
@@ -811,22 +865,15 @@ impl eframe::App for LiveSplitCoreRenderer {
                 ui.menu_button("Autosplitter", |ui| {
                     ui.menu_button("NWA", |ui| {
                         if ui.button("Configure").clicked() {
-                            // Fill out NWA config
-                            // address
-                            // port
+                            let show_deferred_viewport = true;
+                            self.show_nwa_autosplitter_settings_dialog
+                                .store(show_deferred_viewport, Ordering::Relaxed);
+                            ui.close_menu();
                         }
-                        // TODO: Fix this. It's not updating the value
-                        egui::ComboBox::from_id_salt("Game")
-                            .selected_text(format!("{:?}", &mut self.game))
-                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                            .show_ui(ui, |ui| {
-                                fill_drop_down(ui, &mut self.game);
-                            });
                     });
                     ui.menu_button("QUSB2SNES", |ui| {
                         ui.menu_button("Super Metroid", |ui| {
                             if ui.button("Configure").clicked() {
-                                // self.show_settings_editor = true;
                                 let show_deferred_viewport = true;
                                 self.show_edit_autosplitter_settings_dialog
                                     .store(show_deferred_viewport, Ordering::Relaxed);
@@ -855,6 +902,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             });
 
         self.auto_splitter_settings_editor(ctx);
+        self.nwa_auto_splitter_settings_editor(ctx);
 
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
@@ -1082,10 +1130,12 @@ pub fn app_init(
         } else if app_config.read().unwrap().autosplitter_type == Some(autosplitters::AType::NWA) {
             //NWA stuff here
             let game = app.game;
+            let address = app.address.read().clone();
+            let port = app.port.read().clone();
             let _nwa_polling_thread = ThreadBuilder::default()
                 .name("NWA Polling Thread".to_owned())
                 .spawn(move |_| loop {
-                    let mut client = nwaobject(game, app_config.clone());
+                    let mut client = nwaobject(game, app_config.clone(), &address, port);
 
                     print_on_error(|| -> anyhow::Result<()> {
                         client.emu_info();
