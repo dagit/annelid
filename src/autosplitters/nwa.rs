@@ -1,6 +1,6 @@
 use crate::{autosplitters::NWASummary, config::app_config::AppConfig, nwa::NWASyncClient};
 use anyhow::Result;
-use std::{net::Ipv4Addr, sync::Arc};
+use std::sync::Arc;
 
 pub mod battletoads;
 pub mod supermetroid;
@@ -17,7 +17,7 @@ pub fn fill_drop_down(ui: &mut egui::Ui, game: &mut Game) {
     ui.selectable_value(game, Game::SuperMetroid, "Super Metroid");
 }
 
-pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>) -> Box<dyn Splitter> {
+pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>, ip: &String, port: u32) -> Box<dyn Splitter> {
     match game {
         Game::Battletoads => Box::new(battletoads::BattletoadsAutoSplitter {
             prior_level: 0,
@@ -27,7 +27,7 @@ pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>) -> B
                 .unwrap()
                 .reset_timer_on_game_reset
                 .unwrap(),
-            client: NWASyncClient::connect(&Ipv4Addr::new(0, 0, 0, 0).to_string(), 48879).unwrap(),
+            client: NWASyncClient::connect(ip, port).unwrap(),
         }),
         Game::SuperMetroid => Box::new(supermetroid::SupermetroidAutoSplitter {
             prior_state: 0,
@@ -39,7 +39,7 @@ pub fn nwaobject(game: Game, app_config: Arc<std::sync::RwLock<AppConfig>>) -> B
                 .unwrap()
                 .reset_timer_on_game_reset
                 .unwrap(),
-            client: NWASyncClient::connect(&Ipv4Addr::new(0, 0, 0, 0).to_string(), 48879).unwrap(),
+            client: NWASyncClient::connect(ip, port).unwrap(),
         }),
     }
 }
