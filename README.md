@@ -1,3 +1,11 @@
+# 💖 Support Annelid Development
+
+Annelid is free and always will be, but like all software, it takes time and effort to maintain.
+If you find it useful, please consider supporting my work through Clover Egg.
+Your contribution helps me prioritize Annelid and shows that it's worth investing time in.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F2F61J6MF8)
+
 # About
 
 ![Action Shot](data/inaction.png)
