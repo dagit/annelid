@@ -1720,6 +1720,7 @@ impl SNESState {
         }
     }
 
+    #[expect(clippy::needless_range_loop)]
     pub fn fetch_all(
         &mut self,
         client: &mut crate::usb2snes::SyncClient,
