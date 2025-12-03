@@ -239,18 +239,12 @@ impl LiveSplitCoreRenderer {
                 .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
                 .clone();
             if let Some(layout) = config.recent_layout {
-                let f = std::fs::File::open(&layout)
-                    .with_context(|| format!("Failed to open layout file \"{layout}\""))?;
-                self.load_layout(&f, ctx)
+                self.load_layout(&std::path::PathBuf::from(&layout), ctx)
                     .with_context(|| format!("Failed to load layout file \"{layout}\""))?;
             }
             if let Some(splits) = config.recent_splits {
-                let f = std::fs::File::open(&splits)
-                    .with_context(|| format!("Failed to open splits file \"{splits}\""))?;
-                let path = std::path::Path::new(&splits)
-                    .parent()
-                    .ok_or(anyhow!("failed to find parent directory"))?;
-                self.load_splits(&f, path.to_path_buf())
+                let path = std::path::Path::new(&splits);
+                self.load_splits(path.to_path_buf())
                     .with_context(|| format!("Failed to load splits file \"{splits}\""))?;
             }
             if let Some(autosplitter) = config.recent_autosplitter {
@@ -266,12 +260,25 @@ impl LiveSplitCoreRenderer {
         self.load_errors = queue;
     }
 
-    pub fn load_layout(&mut self, f: &std::fs::File, ctx: &egui::Context) -> Result<()> {
+    pub fn load_layout(&mut self, path: &std::path::PathBuf, ctx: &egui::Context) -> Result<()> {
+        let layout1 = self.load_original_livesplit_layout(ctx, path);
+        let layout2 = self.load_livesplit_one_layout(ctx, path);
+        match (layout1, layout2) {
+            (Err(e1), Err(e2)) => Err(anyhow!("Failed to load file as either LiveSplit or LiveSplit One.\nErrors: LiveSplit: {e1}\nLiveSplit One: {e2}")),
+            (_, _) => Ok(())
+        }
+    }
+
+    fn load_original_livesplit_layout(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::PathBuf,
+    ) -> Result<()> {
         use std::io::Read;
+        let f = std::fs::File::open(path)?;
         let mut reader = std::io::BufReader::new(f);
         let mut layout_file = String::new();
         reader.read_to_string(&mut layout_file)?;
-
         self.layout = livesplit_core::layout::parser::parse(&layout_file)?;
         let doc = roxmltree::Document::parse(&layout_file)?;
         doc.root().children().for_each(|d| {
@@ -313,9 +320,23 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn load_splits(&mut self, f: &std::fs::File, path: std::path::PathBuf) -> Result<()> {
+    fn load_livesplit_one_layout(
+        &mut self,
+        _ctx: &egui::Context,
+        path: &std::path::Path,
+    ) -> Result<()> {
+        let f = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(f);
+        self.layout = livesplit_core::layout::Layout::from_settings(
+            livesplit_core::layout::LayoutSettings::from_json(reader)?,
+        );
+        Ok(())
+    }
+
+    pub fn load_splits(&mut self, path: std::path::PathBuf) -> Result<()> {
         use livesplit_core::run::parser::composite;
         use std::io::{BufReader, Read};
+        let f = std::fs::File::open(&path)?;
         let file_contents: std::result::Result<Vec<_>, _> = BufReader::new(f).bytes().collect();
         *self
             .timer
@@ -475,14 +496,21 @@ impl LiveSplitCoreRenderer {
             .into_os_string()
             .into_string()
             .expect("utf8");
-        self.open_dialog(&dir, ("LiveSplit Layout", "lsl"), |me, f, path| {
-            me.load_layout(&f, ctx)?;
-            me.app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
-                .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
-            Ok(())
-        });
+        self.open_dialog(
+            &dir,
+            &[
+                ("LiveSplit Layout", "lsl"),
+                ("Livesplit One layout", "ls1l"),
+            ],
+            |me, path| {
+                me.load_layout(&path, ctx)?;
+                me.app_config
+                    .write()
+                    .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
+                    .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
+                Ok(())
+            },
+        );
         Ok(())
     }
 
@@ -501,8 +529,8 @@ impl LiveSplitCoreRenderer {
             .into_os_string()
             .into_string()
             .expect("utf8");
-        self.open_dialog(&dir, ("LiveSplit Splits", "lss"), |me, f, path| {
-            me.load_splits(&f, path.clone())?;
+        self.open_dialog(&dir, &[("LiveSplit Splits", "lss")], |me, path| {
+            me.load_splits(path.clone())?;
             me.app_config
                 .write()
                 .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
@@ -529,8 +557,9 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(
             &dir,
-            ("Autosplitter Configuration", "asc"),
-            |me, f, path| {
+            &[("Autosplitter Configuration", "asc")],
+            |me, path| {
+                let f = std::fs::File::open(path.clone())?;
                 me.load_autosplitter(&f)?;
                 me.app_config
                     .write()
@@ -545,22 +574,21 @@ impl LiveSplitCoreRenderer {
     pub fn open_dialog(
         &mut self,
         default_dir: &str,
-        file_type: (&str, &str),
-        open_action: impl FnOnce(&mut Self, std::fs::File, std::path::PathBuf) -> Result<()>,
+        file_types: &[(&str, &str)],
+        open_action: impl FnOnce(&mut Self, std::path::PathBuf) -> Result<()>,
     ) {
         use rfd::FileDialog;
         messagebox_on_error(|| {
-            let path = FileDialog::new()
-                .set_directory(default_dir)
-                .add_filter(file_type.0, &[file_type.1])
-                .add_filter("Any file", &["*"])
-                .pick_file();
+            let mut dialog = FileDialog::new().set_directory(default_dir);
+            for file_type in file_types {
+                dialog = dialog.add_filter(file_type.0, &[file_type.1])
+            }
+            let path = dialog.add_filter("Any file", &["*"]).pick_file();
             let path = match path {
                 Some(path) => path,
                 None => return Ok(()),
             };
-            let f = std::fs::File::open(path.clone())?;
-            open_action(self, f, path)?;
+            open_action(self, path)?;
             Ok(())
         });
     }
