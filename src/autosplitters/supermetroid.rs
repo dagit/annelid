@@ -1766,9 +1766,9 @@ impl SNESState {
         ];
         let snes_data =
             client.get_addresses(&regions.map(|(base, size)| (0xF50000 + base, size)))?;
-        for (i, (base, size)) in regions.into_iter().enumerate() {
+        for ((base, size), snes_data) in regions.into_iter().zip(snes_data.iter()) {
             let base = base as usize;
-            self.data[base..base + size].copy_from_slice(&snes_data[i][0..size]);
+            self.data[base..base + size].copy_from_slice(&snes_data[..size]);
         }
         self.update();
         let start = self.start();
