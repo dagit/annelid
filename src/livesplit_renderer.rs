@@ -99,6 +99,8 @@ impl LiveSplitCoreRenderer {
         }
     }
 
+    // TODO: we need to update this so that whatever the file is saved as becomes the default file
+    // to load next time.
     pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();

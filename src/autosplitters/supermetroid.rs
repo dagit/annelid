@@ -92,6 +92,7 @@ lazy_static! {
         m.insert("lowerNorfairElevator",           0xAF3F );
         m.insert("risingTide",                     0xAFA3 );
         m.insert("spikyAcidSnakes",                0xAFFB );
+        m.insert("frogSavestation",                0xB167 );
         m.insert("acidStatue",                     0xB1E5 );
         m.insert("mainHall",                       0xB236 ); // First room in Lower Norfair
         m.insert("goldenTorizo",                   0xB283 );
@@ -123,8 +124,11 @@ lazy_static! {
         m.insert("gravity",                        0xCE40 );
         m.insert("glassTunnel",                    0xCEFB );
         m.insert("mainStreet",                     0xCFC9 );
+        m.insert("fishTank",                       0xD017 );
         m.insert("mamaTurtle",                     0xD055 );
+        m.insert("mountEverest",                   0xD0B9 );
         m.insert("wateringHole",                   0xD13B );
+        m.insert("crabShaft",                      0xD1A3 );
         m.insert("beach",                          0xD1DD );
         m.insert("plasmaBeam",                     0xD2AA );
         m.insert("maridiaElevator",                0xD30B );
@@ -535,14 +539,22 @@ impl Settings {
         settings.insert_with_parent("redTowerMiddleEntrance", false, "areaTransitions");
         // Split on entering Red Tower from Skree Boost room
         settings.insert_with_parent("redTowerBottomEntrance", false, "areaTransitions");
+        // Split on entering Bat Room from Red Tower
+        settings.insert_with_parent("redTower->batRoom", false, "areaTransitions");
         // Split on entering Kraid's Lair
         settings.insert_with_parent("kraidsLair", false, "areaTransitions");
         // Split on entering Rising Tide from Cathedral
         settings.insert_with_parent("risingTideEntrance", false, "areaTransitions");
+        // Split on entering Business center from frog savestation
+        settings.insert_with_parent("frogSavestation->businessCenter", false, "areaTransitions");
         // Split on exiting Attic
         settings.insert_with_parent("atticExit", false, "areaTransitions");
         // Split on blowing up the tube to enter Maridia
         settings.insert_with_parent("tubeBroken", false, "areaTransitions");
+        // Split on entering mount everest from fish tank
+        settings.insert_with_parent("fishTank->mountEverest", false, "areaTransitions");
+        // Split on entering Aqueduct from crab shaft
+        settings.insert_with_parent("crabShaft->aqueduct", false, "areaTransitions");
         // Split on exiting West Cacattack Alley
         settings.insert_with_parent("cacExit", false, "areaTransitions");
         // Split on entering Toilet Bowl from either direction
@@ -1327,6 +1339,18 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let redTowerBottomEntrance = settings.get("redTowerBottomEntrance")
         && snes["roomID"].old == roomIDEnum["bat"]
         && snes["roomID"].current == roomIDEnum["redTower"];
+    let redTowerToBatRoom = settings.get("redTower->batRoom")
+        && snes["roomID"].old == roomIDEnum["redTower"]
+        && snes["roomID"].current == roomIDEnum["bat"];
+    let frogSavestationToBusinessCenter = settings.get("frogSavestation->businessCenter")
+        && snes["roomID"].old == roomIDEnum["frogSavestation"]
+        && snes["roomID"].current == roomIDEnum["businessCenter"];
+    let fishTankToMountEverest = settings.get("fishTank->mountEverest")
+        && snes["roomID"].old == roomIDEnum["fishTank"]
+        && snes["roomID"].current == roomIDEnum["mountEverest"];
+    let aqueductToCrabShaft = settings.get("crabShaft->aqueduct")
+        && snes["roomID"].old == roomIDEnum["crabShaft"]
+        && snes["roomID"].current == roomIDEnum["aqueduct"];
     let kraidsLair = settings.get("kraidsLair")
         && snes["roomID"].old == roomIDEnum["warehouseEntrance"]
         && snes["roomID"].current == roomIDEnum["warehouseZeela"];
@@ -1408,6 +1432,10 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         || wreckedShipEntrance
         || redTowerMiddleEntrance
         || redTowerBottomEntrance
+        || redTowerToBatRoom
+        || frogSavestationToBusinessCenter
+        || fishTankToMountEverest
+        || aqueductToCrabShaft
         || kraidsLair
         || risingTideEntrance
         || atticExit
