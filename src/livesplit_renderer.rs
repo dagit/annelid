@@ -849,6 +849,12 @@ impl eframe::App for LiveSplitCoreRenderer {
                     }
                 });
                 ui.menu_button("Autosplitter", |ui| {
+                    if ui.button("New").clicked() {
+                        let mut guard = self.settings.write();
+                        *guard = Settings::new();
+                        self.show_settings_editor = true;
+                        ui.close_menu();
+                    }
                     if ui.button("Configure").clicked() {
                         self.show_settings_editor = true;
                         ui.close_menu();
