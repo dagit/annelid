@@ -1748,43 +1748,27 @@ impl SNESState {
         }
     }
 
-    #[expect(clippy::needless_range_loop)]
     pub fn fetch_all(
         &mut self,
         client: &mut crate::usb2snes::SyncClient,
         settings: &Settings,
     ) -> Result<SNESSummary> {
         let start_time = Instant::now();
-        let snes_data = client.get_addresses(&[
-            (0xF5008B, 2),  // Controller 1 Input
-            (0xF5079B, 3),  // ROOM ID + ROOM # for region + Region Number
-            (0xF50998, 1),  // GAME STATE
-            (0xF509A4, 61), // ITEMS
-            (0xF50A28, 1),
-            (0xF50F8C, 66),
-            (0xF5D821, 14),
-            (0xF5D870, 20),
-        ])?;
-        // TODO: refactor this
-        for i in 0..2 {
-            self.data[0x008b + i] = snes_data[0][i];
-        }
-        for i in 0..3 {
-            self.data[0x079b + i] = snes_data[1][i];
-        }
-        self.data[0x0998] = snes_data[2][0];
-        for i in 0..61 {
-            self.data[0x09a4 + i] = snes_data[3][i];
-        }
-        self.data[0x0a28] = snes_data[4][0];
-        for i in 0..66 {
-            self.data[0x0f8c + i] = snes_data[5][i];
-        }
-        for i in 0..14 {
-            self.data[0xd821 + i] = snes_data[6][i];
-        }
-        for i in 0..20 {
-            self.data[0xd870 + i] = snes_data[7][i];
+        let regions = [
+            (0x008B, 2),  // Controller 1 Input
+            (0x079B, 3),  // ROOM ID + ROOM # for region + Region Number
+            (0x0998, 1),  // GAME STATE
+            (0x09A4, 61), // ITEMS
+            (0x0A28, 1),
+            (0x0F8C, 66),
+            (0xD821, 14),
+            (0xD870, 20),
+        ];
+        let snes_data =
+            client.get_addresses(&regions.map(|(base, size)| (0xF50000 + base, size)))?;
+        for (i, (base, size)) in regions.into_iter().enumerate() {
+            let base = base as usize;
+            self.data[base..base + size].copy_from_slice(&snes_data[i][0..size]);
         }
         self.update();
         let start = self.start();
