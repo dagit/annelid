@@ -760,7 +760,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         } else {
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
         }
-        let viewport = ctx.input(|i| i.screen_rect);
+        let viewport = ctx.input(|i| i.content_rect());
         self.glow_canvas.update_frame_buffer(
             viewport,
             frame.gl().unwrap(),
@@ -803,8 +803,8 @@ impl eframe::App for LiveSplitCoreRenderer {
             .enabled(!self.show_settings_editor)
             .movable(false)
             .show(ctx, |ui| {
-                ui.set_width(ctx.input(|i| i.screen_rect.width()));
-                ui.set_height(ctx.input(|i| i.screen_rect.height()));
+                ui.set_width(ctx.input(|i| i.content_rect().width()));
+                ui.set_height(ctx.input(|i| i.content_rect().height()));
             })
             .response
             .context_menu(|ui| {
@@ -818,15 +818,15 @@ impl eframe::App for LiveSplitCoreRenderer {
                 };
                 ui.menu_button("LiveSplit Save/Load", |ui| {
                     if ui.button("Import Layout").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.open_layout_dialog(&document_dir, ctx).unwrap();
                     }
                     if ui.button("Import Splits").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.open_splits_dialog(&document_dir).unwrap();
                     }
                     if ui.button("Save Splits as...").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.save_splits_dialog(&document_dir).unwrap();
                     }
                 });
@@ -834,35 +834,35 @@ impl eframe::App for LiveSplitCoreRenderer {
                     if ui.button("Start").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().start().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
                     if ui.button("Split").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().split().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
                     ui.separator();
                     if ui.button("Skip Split").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().skip_split().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
                     if ui.button("Undo Split").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().undo_split().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
                     ui.separator();
                     if ui.button("Pause").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().pause().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
 
                     if ui.button("Resume").clicked() {
                         // TODO: fix this unwrap
                         self.timer.write().unwrap().resume().ok();
-                        ui.close_menu()
+                        ui.close()
                     }
                     ui.separator();
                     if ui.button("Reset").clicked() {
@@ -873,7 +873,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 .try_send(ThreadEvent::TimerReset)
                                 .unwrap_or(());
                         }
-                        ui.close_menu()
+                        ui.close()
                     }
                 });
                 ui.menu_button("Autosplitter", |ui| {
@@ -881,18 +881,18 @@ impl eframe::App for LiveSplitCoreRenderer {
                         let mut guard = self.settings.write();
                         *guard = Settings::new();
                         self.show_settings_editor = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Configure").clicked() {
                         self.show_settings_editor = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Load Configuration").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.open_autosplitter_dialog(&document_dir).unwrap();
                     }
                     if ui.button("Save Configuration").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.save_autosplitter_dialog(&document_dir).unwrap();
                     }
                 });

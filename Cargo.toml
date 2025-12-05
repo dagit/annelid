@@ -14,10 +14,10 @@ tungstenite = "0"
 livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
 
-epaint = "0.31"
-eframe = { version = "0.31", features = ["glow"] }
-egui = { version = "0.31", features = ["serde"] }
-egui_glow = "0.31"
+epaint = "0.33"
+eframe = { version = "0.33", features = ["glow"] }
+egui = { version = "0.33", features = ["serde"] }
+egui_glow = "0.33"
 
 lazy_static = "1"
 strum = "0"
@@ -33,7 +33,7 @@ serde_derive = "1"
 glow = "0.16"
 bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
-thread-priority = "2"
+thread-priority = "3"
 anyhow = "1"
 
 # Remember to test with --release
