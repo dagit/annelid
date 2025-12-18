@@ -12,6 +12,9 @@ jobs:
     name: Check
     runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
@@ -52,8 +55,11 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
@@ -94,8 +100,11 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
@@ -156,7 +165,7 @@ jobs:
             target: annelid-universal.macos
             artifact-path: ./target/release/Annelid.zip
             is-osx: 1
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: annelid-x86_64.AppImage
             artifact-path: ./target/appimage/annelid.AppImage
             is-linux: 1
@@ -285,7 +294,7 @@ jobs:
     if: github.ref == 'refs/heads/development' || github.ref == 'refs/heads/master'
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
