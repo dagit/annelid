@@ -4,10 +4,9 @@ use anyhow::Result;
 use livesplit_core::TimeSpan;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::ops::Index;
 use std::sync::Arc;
-use std::time::Instant;
 use time::Duration;
 
 use super::{AutoSplitter, SNESSummary};
@@ -1666,7 +1665,6 @@ pub struct SNESState {
     vars: HashMap<&'static str, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
-    latency_samples: VecDeque<u128>,
     data: Vec<u8>,
     // The MemoryWatchers are not in a good
     // state until they've been updated
@@ -1676,15 +1674,12 @@ pub struct SNESState {
     do_extra_update: bool,
 }
 
-const NUM_LATENCY_SAMPLES: usize = 10;
-
 impl SNESState {
     pub fn new() -> SNESState {
         let data = vec![0; 0x10000];
         SNESState {
             do_extra_update: true,
             data,
-            latency_samples: VecDeque::from([]),
             pickedUpHundredthMissile: false,
             pickedUpSporeSpawnSuper: false,
             vars: HashMap::from([
@@ -1753,7 +1748,6 @@ impl SNESState {
         client: &mut crate::usb2snes::SyncClient,
         settings: &Settings,
     ) -> Result<SNESSummary> {
-        let start_time = Instant::now();
         let regions = [
             (0x008B, 2),  // Controller 1 Input
             (0x079B, 3),  // ROOM ID + ROOM # for region + Region Number
@@ -1774,24 +1768,7 @@ impl SNESState {
         let start = self.start();
         let reset = self.reset();
         let split = split(settings, self);
-        let elapsed = start_time.elapsed().as_millis();
-        if self.latency_samples.len() == NUM_LATENCY_SAMPLES {
-            self.latency_samples.pop_front();
-        }
-        self.latency_samples.push_back(elapsed);
-        let average_latency: f32 =
-            self.latency_samples.iter().sum::<u128>() as f32 / self.latency_samples.len() as f32;
-        let mut s = 0;
-        for x in self.latency_samples.iter() {
-            let y = *x as i128;
-            let avg = average_latency as i128;
-            let diff = y - avg;
-            s += diff * diff;
-        }
-        let stddev = (s as f32 / (self.latency_samples.len() as f32 - 1.0)).sqrt();
         Ok(SNESSummary {
-            latency_average: average_latency,
-            latency_stddev: stddev,
             start,
             reset,
             split,

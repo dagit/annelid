@@ -6,8 +6,6 @@ use livesplit_core::TimeSpan;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SNESSummary {
-    pub latency_average: f32,
-    pub latency_stddev: f32,
     pub start: bool,
     pub reset: bool,
     pub split: bool,

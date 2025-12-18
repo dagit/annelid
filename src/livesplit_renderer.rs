@@ -7,7 +7,7 @@ use livesplit_core::{Layout, SharedTimer, Timer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use thread_priority::{set_current_thread_priority, ThreadBuilder, ThreadPriority};
+use thread_priority::ThreadBuilder;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -740,11 +740,6 @@ impl eframe::App for LiveSplitCoreRenderer {
         if !self.app_config_processed {
             self.process_app_config(ctx);
             self.app_config_processed = true;
-            // Since this block should only run once, we abuse it to also
-            // set a thread priority only once. We want rendering to take a
-            // relative backseat to anything else the user has going on
-            // like an emulator.
-            set_current_thread_priority(ThreadPriority::Min).unwrap_or(())
         }
         ctx.input(|i| {
             if i.viewport().close_requested() {
@@ -1013,12 +1008,9 @@ pub fn app_init(
     // possibly more often.
     let _frame_rate_thread = ThreadBuilder::default()
         .name("Frame Rate Thread".to_owned())
-        .priority(ThreadPriority::Min)
         .spawn(move |_| loop {
             context.clone().request_repaint();
-            std::thread::sleep(std::time::Duration::from_millis(
-                (1000.0 / frame_rate) as u64,
-            ));
+            std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / frame_rate));
         })
         // TODO: fix this unwrap
         .unwrap();
@@ -1038,7 +1030,7 @@ pub fn app_init(
             // polling of SNES state
             .spawn(move |_| {
                 loop {
-                    let latency = Arc::new(RwLock::new((0.0, 0.0)));
+                    let period = std::time::Duration::from_secs_f32(1.0 / polling_rate);
                     print_on_error(|| -> anyhow::Result<()> {
                         let mut client = crate::usb2snes::SyncClient::connect()
                             .context("creating usb2snes connection")?;
@@ -1059,6 +1051,7 @@ pub fn app_init(
                         println!("{:#?}", client.info()?);
                         let mut autosplitter: Box<dyn AutoSplitter> =
                             Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                        let mut next = std::time::Instant::now() + period;
                         loop {
                             let summary = autosplitter.update(&mut client)?;
                             if summary.start {
@@ -1105,10 +1098,6 @@ pub fn app_init(
                                     .split()
                                     .ok();
                             }
-                            {
-                                *latency.write() =
-                                    (summary.latency_average, summary.latency_stddev);
-                            }
                             // If the timer gets reset, we need to make a fresh snes state
                             if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                 autosplitter.reset_game_tracking();
@@ -1124,9 +1113,14 @@ pub fn app_init(
                                     client.reset()?;
                                 }
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(
-                                (1000.0 / polling_rate) as u64,
-                            ));
+                            let now = std::time::Instant::now();
+                            if now < next {
+                                std::thread::sleep(next - now);
+                                next += period;
+                            } else {
+                                // skip sleep; we are late
+                                next = now + period;
+                            }
                         }
                     });
                     std::thread::sleep(std::time::Duration::from_millis(1000));
