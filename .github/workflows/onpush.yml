@@ -310,7 +310,7 @@ jobs:
         run: |
           gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read -r tag; do
             echo "Deleting draft release: $tag"
-            gh release delete "$tag" --yes --cleanup-tag
+            gh release delete "$tag" --yes --cleanup-tag || gh release delete "$tag" --yes
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
