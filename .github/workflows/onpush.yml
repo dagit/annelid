@@ -305,6 +305,16 @@ jobs:
         run: echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_OUTPUT
         shell: bash
 
+      - name: Delete old draft releases
+        if: github.ref == 'refs/heads/development'
+        run: |
+          gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read -r tag; do
+            echo "Deleting draft release: $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/download-artifact@v4
         with:
           name: annelid-universal.macos
