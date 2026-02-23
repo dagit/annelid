@@ -788,8 +788,9 @@ impl eframe::App for LiveSplitCoreRenderer {
             if let Some(layout_state) = &self.layout_state {
                 if let Some(gpu_renderer) = &mut self.gpu_renderer {
                     let _span = span!(Level::TRACE, "gpu_render").entered();
-                    let width = viewport.width() as u32;
-                    let height = viewport.height() as u32;
+                    let ppp = ctx.input(|i| i.pixels_per_point());
+                    let width = (viewport.width() * ppp) as u32;
+                    let height = (viewport.height() * ppp) as u32;
                     if width > 0 && height > 0 {
                         unsafe {
                             gpu_renderer.render(layout_state, &self.image_cache, [width, height]);
