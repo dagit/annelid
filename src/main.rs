@@ -54,6 +54,16 @@ fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
+    #[cfg(feature = "tracing")]
+    let _guard = {
+        use tracing_chrome::ChromeLayerBuilder;
+        use tracing_subscriber::prelude::*;
+
+        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
+        tracing_subscriber::registry().with(chrome_layer).init();
+        guard
+    };
+
     let cli_config = AppConfig::parse();
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));

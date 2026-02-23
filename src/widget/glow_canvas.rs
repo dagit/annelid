@@ -1,4 +1,5 @@
 use memoffset::offset_of;
+use tracing::{span, Level};
 
 /// An opengl canvas for efficiently rendering images. Perhaps this should be called `GlowImage`
 /// instead, as it doesn't give you a way to modify anything about what is drawn other than a
@@ -69,12 +70,15 @@ impl GlowCanvas {
     ) where
         F: FnOnce(&mut [u8], [u32; 2], u32),
     {
+        let _span = span!(Level::TRACE, "inside update_frame_buffer").entered();
         let sz = viewport.size();
         let sz = [sz.x as usize, sz.y as usize];
         unsafe {
             use eframe::glow::HasContext;
+            let _span2 = span!(Level::TRACE, "take lock").entered();
             let mut resources_lock = self.opengl_resources.write().unwrap();
             if let Some(resources) = resources_lock.as_mut() {
+                let _span3 = span!(Level::TRACE, "locked").entered();
                 let buffer = resources
                     // opengl resources need to exist by now or we're in big trouble
                     .pixel_buffer
@@ -180,11 +184,14 @@ impl GlowCanvas {
                 assert_ne!(ptr, std::ptr::null_mut());
                 let slice = std::slice::from_raw_parts_mut(ptr, buf_size);
                 debug_assert_eq!(gl.get_error(), 0);
-                update(
-                    slice,
-                    [buffer[next_idx].size[0] as _, buffer[next_idx].size[1] as _],
-                    buffer[next_idx].size[0] as _,
-                );
+                {
+                    let _span_call_update = span!(Level::TRACE, "update called").entered();
+                    update(
+                        slice,
+                        [buffer[next_idx].size[0] as _, buffer[next_idx].size[1] as _],
+                        buffer[next_idx].size[0] as _,
+                    );
+                }
                 debug_assert_eq!(gl.get_error(), 0);
                 gl.unmap_buffer(glow::PIXEL_UNPACK_BUFFER);
                 debug_assert_eq!(gl.get_error(), 0);

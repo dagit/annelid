@@ -8,6 +8,7 @@ use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use thread_priority::ThreadBuilder;
+use tracing::{span, Level};
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -21,6 +22,7 @@ pub enum ThreadEvent {
 pub struct LiveSplitCoreRenderer {
     layout: Layout,
     renderer: livesplit_core::rendering::software::BorrowedRenderer,
+    gpu_renderer: Option<livesplit_renderer_glow::GlowRenderer>,
     layout_state: Option<livesplit_core::layout::LayoutState>,
     image_cache: livesplit_core::settings::ImageCache,
     timer: SharedTimer,
@@ -83,6 +85,7 @@ impl LiveSplitCoreRenderer {
             timer,
             layout,
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
+            gpu_renderer: None,
             image_cache: livesplit_core::settings::ImageCache::new(),
             layout_state: None,
             show_settings_editor: false,
@@ -217,6 +220,14 @@ impl LiveSplitCoreRenderer {
             }
             if cli_config.global_hotkeys.is_some() {
                 new_app_config.global_hotkeys = cli_config.global_hotkeys;
+            }
+            if cli_config.renderer.is_some() {
+                new_app_config.renderer = cli_config.renderer;
+            }
+            // Hack to allow GPU rendering by default
+            let defaults = AppConfig::default();
+            if new_app_config.renderer.is_none() {
+                new_app_config.renderer = defaults.renderer;
             }
             *self
                 .app_config
@@ -729,6 +740,7 @@ impl LiveSplitCoreRenderer {
 
 impl eframe::App for LiveSplitCoreRenderer {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let _frame = span!(Level::TRACE, "frame").entered();
         //let update_timer = std::time::Instant::now();
         if self.app_config_processed && !self.load_errors.is_empty() {
             let mut queue: Vec<anyhow::Error> = vec![];
@@ -756,43 +768,63 @@ impl eframe::App for LiveSplitCoreRenderer {
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::CancelClose)
         }
         let viewport = ctx.input(|i| i.content_rect());
-        self.glow_canvas.update_frame_buffer(
-            viewport,
-            frame.gl().unwrap(),
-            |frame_buffer, sz, stride| {
-                {
-                    let timer = self.timer.read().unwrap();
-                    let snapshot = timer.snapshot();
-                    match &mut self.layout_state {
-                        None => {
-                            self.layout_state =
-                                Some(self.layout.state(&mut self.image_cache, &snapshot));
+        // Update layout state (shared by both renderers)
+        {
+            let _span = span!(Level::TRACE, "layout_state_update").entered();
+            let timer = self.timer.read().unwrap();
+            let snapshot = timer.snapshot();
+            match &mut self.layout_state {
+                None => {
+                    self.layout_state = Some(self.layout.state(&mut self.image_cache, &snapshot));
+                }
+                Some(layout_state) => {
+                    self.layout
+                        .update_state(layout_state, &mut self.image_cache, &snapshot);
+                }
+            }
+        }
+
+        if self.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
+            if let Some(layout_state) = &self.layout_state {
+                if let Some(gpu_renderer) = &mut self.gpu_renderer {
+                    let _span = span!(Level::TRACE, "gpu_render").entered();
+                    let width = viewport.width() as u32;
+                    let height = viewport.height() as u32;
+                    if width > 0 && height > 0 {
+                        unsafe {
+                            gpu_renderer.render(layout_state, &self.image_cache, [width, height]);
                         }
-                        Some(layout_state) => {
-                            self.layout.update_state(
+                    }
+                }
+            }
+        } else {
+            {
+                let _span = span!(Level::TRACE, "update_frame_buffer").entered();
+                self.glow_canvas.update_frame_buffer(
+                    viewport,
+                    frame.gl().unwrap(),
+                    |frame_buffer, sz, stride| {
+                        if let Some(layout_state) = &self.layout_state {
+                            let _renderer_render_span =
+                                span!(Level::TRACE, "renderer.render").entered();
+                            self.renderer.render(
                                 layout_state,
-                                &mut self.image_cache,
-                                &snapshot,
+                                &self.image_cache,
+                                frame_buffer,
+                                sz,
+                                stride,
+                                true,
                             );
                         }
-                    };
-                }
-
-                if let Some(layout_state) = &self.layout_state {
-                    self.renderer.render(
-                        layout_state,
-                        &self.image_cache,
-                        frame_buffer,
-                        sz,
-                        stride,
-                        true,
-                    );
-                }
-            },
-        );
-        self.glow_canvas
-            .paint_layer(ctx, egui::LayerId::background(), viewport);
-        //self.glow_canvas.paint_immediate(frame.gl().unwrap(), viewport);
+                    },
+                );
+            }
+            {
+                let _span = span!(Level::TRACE, "paint_layer").entered();
+                self.glow_canvas
+                    .paint_layer(ctx, egui::LayerId::background(), viewport);
+            }
+        }
         let settings_editor = egui::containers::Window::new("Settings Editor");
         egui::Area::new("livesplit".into())
             .enabled(!self.show_settings_editor)
@@ -988,6 +1020,22 @@ pub fn app_init(
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
     app.load_app_config();
+    if app.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
+        let gl = cc
+            .gl
+            .as_ref()
+            .expect("eframe glow backend required for GPU renderer");
+        match unsafe { livesplit_renderer_glow::GlowRenderer::new(gl.clone()) } {
+            Ok(gpu_renderer) => {
+                app.gpu_renderer = Some(gpu_renderer);
+                println!("GPU renderer initialized");
+            }
+            Err(e) => {
+                eprintln!("Failed to initialize GPU renderer, falling back to software: {e}");
+                app.app_config.write().unwrap().renderer = Some(RendererType::Software);
+            }
+        }
+    }
     if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }

@@ -13,6 +13,7 @@ tungstenite = "0"
 
 livesplit-core = { git = "https://github.com/LiveSplit/livesplit-core", features = ["software-rendering", "font-loading"] }
 livesplit-hotkey = { git = "https://github.com/LiveSplit/livesplit-core" }
+livesplit-renderer-glow = { git = "https://github.com/dagit/livesplit-renderer-glow" }
 
 epaint = "0.33"
 eframe = { version = "0.33", features = ["glow"] }
@@ -35,6 +36,14 @@ bytemuck = { version = "*", features = ["derive"] }
 memoffset = "*"
 thread-priority = "3"
 anyhow = "1"
+tracing = "0.1.44"
+tracing-tracy = { version = "0.11.4", optional = true }
+tracing-subscriber = { version = "0.3.22", optional = true }
+tracing-chrome = { version = "0.7.2", optional = true }
+
+[features]
+default = []
+tracing = ["dep:tracing-tracy", "dep:tracing-subscriber", "dep:tracing-chrome"]
 
 # Remember to test with --release
 [profile.dev]

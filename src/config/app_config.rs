@@ -24,6 +24,8 @@ pub struct AppConfig {
     pub reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     pub global_hotkeys: Option<YesOrNo>,
+    #[clap(name = "renderer", long, short = 'r', value_parser)]
+    pub renderer: Option<RendererType>,
     #[clap(skip)]
     pub hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -45,6 +47,13 @@ pub enum YesOrNo {
     #[default]
     Yes,
     No,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum RendererType {
+    Software,
+    #[default]
+    Gpu,
 }
 
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
@@ -91,6 +100,7 @@ impl AppConfig {
             reset_timer_on_game_reset: Some(YesOrNo::No),
             reset_game_on_timer_reset: Some(YesOrNo::No),
             global_hotkeys: Some(YesOrNo::Yes),
+            renderer: Some(RendererType::Gpu),
         }
     }
 }
