@@ -26,7 +26,7 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) layout_state: Arc<parking_lot::RwLock<Option<livesplit_core::layout::LayoutState>>>,
     pub(crate) image_cache: Arc<parking_lot::RwLock<livesplit_core::settings::ImageCache>>,
     pub(crate) timer: SharedTimer,
-    pub(crate) show_settings_editor: bool,
+    pub(crate) show_settings_editor: Arc<AtomicBool>,
     pub(crate) settings: Arc<RwLock<Settings>>,
     pub(crate) can_exit: bool,
     pub(crate) is_exiting: bool,
@@ -59,7 +59,7 @@ impl LiveSplitCoreRenderer {
                 livesplit_core::settings::ImageCache::new(),
             )),
             layout_state: Arc::new(parking_lot::RwLock::new(None)),
-            show_settings_editor: false,
+            show_settings_editor: Arc::new(AtomicBool::new(false)),
             settings,
             can_exit: false,
             is_exiting: false,
@@ -186,7 +186,11 @@ impl eframe::App for LiveSplitCoreRenderer {
             }
         }
         let response = egui::Area::new("livesplit".into())
-            .enabled(!self.show_settings_editor)
+            .enabled(
+                !self
+                    .show_settings_editor
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            )
             .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.content_rect().width()));

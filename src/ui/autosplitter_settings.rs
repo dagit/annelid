@@ -1,5 +1,6 @@
 use eframe::egui;
-
+use parking_lot::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::autosplitters::supermetroid::Settings;
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
 
@@ -36,20 +37,38 @@ pub fn show_children(
     });
 }
 
+/// Renders the autosplitter settings UI in a deferred viewport.
+fn settings_viewport_ui(ctx: &egui::Context, settings: &RwLock<Settings>, open: &AtomicBool) {
+    if ctx.input(|i| i.viewport().close_requested()) {
+        open.store(false, Ordering::Relaxed);
+        return;
+    }
+    egui::CentralPanel::default().show(ctx, |ui| {
+        egui::ScrollArea::both().show(ui, |ui| {
+            let mut settings = settings.write();
+            let mut roots = settings.roots();
+            show_children(&mut settings, ui, ctx, &mut roots);
+        });
+    });
+}
+
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_autosplitter_settings_window(&mut self, ctx: &egui::Context) {
-        let settings_editor = egui::containers::Window::new("Settings Editor");
-        settings_editor
-            .open(&mut self.show_settings_editor)
-            .resizable(true)
-            .collapsible(false)
-            .hscroll(true)
-            .vscroll(true)
-            .show(ctx, |ui| {
-                ctx.move_to_top(ui.layer_id());
-                let mut settings = self.settings.write();
-                let mut roots = settings.roots();
-                show_children(&mut settings, ui, ctx, &mut roots);
-            });
+        if !self.show_settings_editor.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let settings = self.settings.clone();
+        let open = self.show_settings_editor.clone();
+
+        ctx.show_viewport_deferred(
+            egui::ViewportId::from_hash_of("autosplitter_settings"),
+            egui::ViewportBuilder::default()
+                .with_title("Autosplitter Settings")
+                .with_inner_size([400.0, 500.0]),
+            move |ctx, _class| {
+                settings_viewport_ui(ctx, &settings, &open);
+            },
+        );
     }
 }

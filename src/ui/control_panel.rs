@@ -199,10 +199,10 @@ impl LiveSplitCoreRenderer {
                     let mut guard = self.settings.write();
                     *guard = Settings::new();
                     drop(guard);
-                    self.show_settings_editor = true;
+                    self.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::ConfigureAutosplitter => {
-                    self.show_settings_editor = true;
+                    self.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::OpenAutosplitterDialog => {
                     self.open_autosplitter_dialog(&document_dir).unwrap();
