@@ -6,6 +6,7 @@ use eframe::egui;
 use livesplit_core::{Layout, SharedTimer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use thread_priority::ThreadBuilder;
 use tracing::{span, Level};
@@ -21,11 +22,11 @@ pub enum ThreadEvent {
 pub struct LiveSplitCoreRenderer {
     pub(crate) layout: Layout,
     pub(crate) renderer: livesplit_core::rendering::software::BorrowedRenderer,
-    pub(crate) gpu_renderer: Option<livesplit_renderer_glow::GlowRenderer>,
-    pub(crate) layout_state: Option<livesplit_core::layout::LayoutState>,
-    pub(crate) image_cache: livesplit_core::settings::ImageCache,
+    pub(crate) gpu_renderer: Arc<parking_lot::Mutex<Option<livesplit_renderer_glow::GlowRenderer>>>,
+    pub(crate) layout_state: Arc<parking_lot::RwLock<Option<livesplit_core::layout::LayoutState>>>,
+    pub(crate) image_cache: Arc<parking_lot::RwLock<livesplit_core::settings::ImageCache>>,
     pub(crate) timer: SharedTimer,
-    pub(crate) show_settings_editor: bool,
+    pub(crate) show_settings_editor: Arc<AtomicBool>,
     pub(crate) settings: Arc<RwLock<Settings>>,
     pub(crate) can_exit: bool,
     pub(crate) is_exiting: bool,
@@ -36,6 +37,14 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) glow_canvas: GlowCanvas,
     pub(crate) global_hotkey_hook: Option<Hook>,
     pub(crate) load_errors: Vec<anyhow::Error>,
+    pub(crate) control_panel_open: Arc<AtomicBool>,
+    pub(crate) ui_actions: Arc<parking_lot::Mutex<Vec<crate::ui::control_panel::UiAction>>>,
+    pub(crate) settings_panel_open: Arc<AtomicBool>,
+    pub(crate) settings_panel_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::app_settings::SettingsState>>>,
+    pub(crate) splits_editor_open: Arc<AtomicBool>,
+    pub(crate) splits_editor_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::splits_editor::SplitsEditorState>>>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -51,10 +60,12 @@ impl LiveSplitCoreRenderer {
             timer,
             layout,
             renderer: livesplit_core::rendering::software::BorrowedRenderer::new(),
-            gpu_renderer: None,
-            image_cache: livesplit_core::settings::ImageCache::new(),
-            layout_state: None,
-            show_settings_editor: false,
+            gpu_renderer: Arc::new(parking_lot::Mutex::new(None)),
+            image_cache: Arc::new(parking_lot::RwLock::new(
+                livesplit_core::settings::ImageCache::new(),
+            )),
+            layout_state: Arc::new(parking_lot::RwLock::new(None)),
+            show_settings_editor: Arc::new(AtomicBool::new(false)),
             settings,
             can_exit: false,
             is_exiting: false,
@@ -65,6 +76,12 @@ impl LiveSplitCoreRenderer {
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
+            control_panel_open: Arc::new(AtomicBool::new(false)),
+            ui_actions: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            settings_panel_open: Arc::new(AtomicBool::new(false)),
+            settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
+            splits_editor_open: Arc::new(AtomicBool::new(false)),
+            splits_editor_state: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 }
@@ -104,44 +121,74 @@ impl eframe::App for LiveSplitCoreRenderer {
             let _span = span!(Level::TRACE, "layout_state_update").entered();
             let timer = self.timer.read().unwrap();
             let snapshot = timer.snapshot();
-            match &mut self.layout_state {
+            let mut image_cache = self.image_cache.write();
+            let mut layout_state = self.layout_state.write();
+            match layout_state.as_mut() {
                 None => {
-                    self.layout_state = Some(self.layout.state(&mut self.image_cache, &snapshot));
+                    *layout_state = Some(self.layout.state(
+                        &mut image_cache,
+                        &snapshot,
+                        livesplit_core::Lang::English,
+                    ));
                 }
-                Some(layout_state) => {
-                    self.layout
-                        .update_state(layout_state, &mut self.image_cache, &snapshot);
+                Some(ls) => {
+                    self.layout.update_state(
+                        ls,
+                        &mut image_cache,
+                        &snapshot,
+                        livesplit_core::Lang::English,
+                    );
                 }
             }
         }
 
         if self.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
-            if let Some(layout_state) = &self.layout_state {
-                if let Some(gpu_renderer) = &mut self.gpu_renderer {
-                    let _span = span!(Level::TRACE, "gpu_render").entered();
-                    let ppp = ctx.input(|i| i.pixels_per_point());
-                    let width = (viewport.width() * ppp) as u32;
-                    let height = (viewport.height() * ppp) as u32;
-                    if width > 0 && height > 0 {
-                        unsafe {
-                            gpu_renderer.render(layout_state, &self.image_cache, [width, height]);
-                        }
-                    }
-                }
+            let ppp = ctx.input(|i| i.pixels_per_point());
+            let width = (viewport.width() * ppp) as u32;
+            let height = (viewport.height() * ppp) as u32;
+            if width > 0 && height > 0 {
+                let gpu = self.gpu_renderer.clone();
+                let ls = self.layout_state.clone();
+                let ic = self.image_cache.clone();
+                let painter = ctx.layer_painter(egui::LayerId::background());
+                painter.add(egui::PaintCallback {
+                    rect: viewport,
+                    callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
+                        move |_info, _painter| {
+                            let _span = span!(Level::TRACE, "gpu_render").entered();
+                            let ls_guard = ls.read();
+                            let ic_guard = ic.read();
+                            if let Some(layout_state) = ls_guard.as_ref() {
+                                let mut gpu_guard = gpu.lock();
+                                if let Some(gpu_renderer) = gpu_guard.as_mut() {
+                                    unsafe {
+                                        gpu_renderer.render(
+                                            layout_state,
+                                            &ic_guard,
+                                            [width, height],
+                                        );
+                                    }
+                                }
+                            }
+                        },
+                    )),
+                });
             }
         } else {
             {
                 let _span = span!(Level::TRACE, "update_frame_buffer").entered();
+                let layout_state = self.layout_state.read();
+                let image_cache = self.image_cache.read();
                 self.glow_canvas.update_frame_buffer(
                     viewport,
                     frame.gl().unwrap(),
                     |frame_buffer, sz, stride| {
-                        if let Some(layout_state) = &self.layout_state {
+                        if let Some(layout_state) = layout_state.as_ref() {
                             let _renderer_render_span =
                                 span!(Level::TRACE, "renderer.render").entered();
                             self.renderer.render(
                                 layout_state,
-                                &self.image_cache,
+                                &image_cache,
                                 frame_buffer,
                                 sz,
                                 stride,
@@ -157,18 +204,27 @@ impl eframe::App for LiveSplitCoreRenderer {
                     .paint_layer(ctx, egui::LayerId::background(), viewport);
             }
         }
-        egui::Area::new("livesplit".into())
-            .enabled(!self.show_settings_editor)
+        let response = egui::Area::new("livesplit".into())
+            .enabled(
+                !self
+                    .show_settings_editor
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            )
             .movable(false)
             .show(ctx, |ui| {
                 ui.set_width(ctx.input(|i| i.content_rect().width()));
                 ui.set_height(ctx.input(|i| i.content_rect().height()));
             })
-            .response
-            .context_menu(|ui| {
-                self.show_context_menu(ui, ctx);
-            });
+            .response;
+        if response.secondary_clicked() {
+            self.control_panel_open
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         self.show_autosplitter_settings_window(ctx);
+        self.show_control_panel(ctx);
+        self.show_app_settings(ctx);
+        self.show_splits_editor(ctx);
+        self.process_ui_actions(ctx);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
             if scroll_delta.y > 0.0 {
@@ -198,7 +254,7 @@ pub fn app_init(
             .expect("eframe glow backend required for GPU renderer");
         match unsafe { livesplit_renderer_glow::GlowRenderer::new(gl.clone()) } {
             Ok(gpu_renderer) => {
-                app.gpu_renderer = Some(gpu_renderer);
+                *app.gpu_renderer.lock() = Some(gpu_renderer);
                 println!("GPU renderer initialized");
             }
             Err(e) => {

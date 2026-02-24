@@ -81,7 +81,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         },
         ..eframe::NativeOptions::default()
     };
-    let layout_settings = Layout::default_layout().settings();
+    let layout_settings = Layout::default_layout(livesplit_core::Lang::English).settings();
     //customize_layout(&mut layout_settings);
     let layout = Layout::from_settings(layout_settings);
 
