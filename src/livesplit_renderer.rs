@@ -39,6 +39,9 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) load_errors: Vec<anyhow::Error>,
     pub(crate) control_panel_open: Arc<AtomicBool>,
     pub(crate) ui_actions: Arc<parking_lot::Mutex<Vec<crate::ui::control_panel::UiAction>>>,
+    pub(crate) settings_panel_open: Arc<AtomicBool>,
+    pub(crate) settings_panel_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::app_settings::SettingsState>>>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -72,6 +75,8 @@ impl LiveSplitCoreRenderer {
             load_errors: vec![],
             control_panel_open: Arc::new(AtomicBool::new(false)),
             ui_actions: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            settings_panel_open: Arc::new(AtomicBool::new(false)),
+            settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 }
@@ -115,10 +120,19 @@ impl eframe::App for LiveSplitCoreRenderer {
             let mut layout_state = self.layout_state.write();
             match layout_state.as_mut() {
                 None => {
-                    *layout_state = Some(self.layout.state(&mut image_cache, &snapshot));
+                    *layout_state = Some(self.layout.state(
+                        &mut image_cache,
+                        &snapshot,
+                        livesplit_core::Lang::English,
+                    ));
                 }
                 Some(ls) => {
-                    self.layout.update_state(ls, &mut image_cache, &snapshot);
+                    self.layout.update_state(
+                        ls,
+                        &mut image_cache,
+                        &snapshot,
+                        livesplit_core::Lang::English,
+                    );
                 }
             }
         }
@@ -203,6 +217,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         }
         self.show_autosplitter_settings_window(ctx);
         self.show_control_panel(ctx);
+        self.show_app_settings(ctx);
         self.process_ui_actions(ctx);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;

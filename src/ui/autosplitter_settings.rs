@@ -1,8 +1,8 @@
+use crate::autosplitters::supermetroid::Settings;
+use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use eframe::egui;
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::autosplitters::supermetroid::Settings;
-use crate::livesplit_renderer::LiveSplitCoreRenderer;
 
 pub fn show_children(
     settings: &mut Settings,

@@ -26,6 +26,8 @@ pub(crate) enum UiAction {
     OpenAutosplitterDialog,
     SaveAutosplitterDialog,
     // App
+    OpenSettingsPanel,
+    ApplySettings(AppConfig),
     Quit,
 }
 
@@ -117,6 +119,9 @@ fn control_panel_ui(
             }
             ui.separator();
 
+            if ui.button("Settings").clicked() {
+                actions.lock().push(UiAction::OpenSettingsPanel);
+            }
             if ui.button("Quit").clicked() {
                 actions.lock().push(UiAction::Quit);
             }
@@ -209,6 +214,19 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::SaveAutosplitterDialog => {
                     self.save_autosplitter_dialog(&document_dir).unwrap();
+                }
+                UiAction::OpenSettingsPanel => {
+                    self.settings_panel_open.store(true, Ordering::Relaxed);
+                    let config = self.app_config.read().unwrap().clone();
+                    *self.settings_panel_state.lock() =
+                        Some(crate::ui::app_settings::SettingsState {
+                            config,
+                            capturing: None,
+                        });
+                }
+                UiAction::ApplySettings(new_config) => {
+                    *self.app_config.write().unwrap() = new_config;
+                    self.save_app_config();
                 }
                 UiAction::Quit => {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
