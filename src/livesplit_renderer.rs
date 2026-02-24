@@ -42,6 +42,9 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) settings_panel_open: Arc<AtomicBool>,
     pub(crate) settings_panel_state:
         Arc<parking_lot::Mutex<Option<crate::ui::app_settings::SettingsState>>>,
+    pub(crate) splits_editor_open: Arc<AtomicBool>,
+    pub(crate) splits_editor_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::splits_editor::SplitsEditorState>>>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -77,6 +80,8 @@ impl LiveSplitCoreRenderer {
             ui_actions: Arc::new(parking_lot::Mutex::new(Vec::new())),
             settings_panel_open: Arc::new(AtomicBool::new(false)),
             settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
+            splits_editor_open: Arc::new(AtomicBool::new(false)),
+            splits_editor_state: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 }
@@ -218,6 +223,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         self.show_autosplitter_settings_window(ctx);
         self.show_control_panel(ctx);
         self.show_app_settings(ctx);
+        self.show_splits_editor(ctx);
         self.process_ui_actions(ctx);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;

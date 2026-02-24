@@ -25,6 +25,9 @@ pub(crate) enum UiAction {
     ConfigureAutosplitter,
     OpenAutosplitterDialog,
     SaveAutosplitterDialog,
+    // Splits Editor
+    OpenSplitsEditor,
+    ApplySplitsEdit(Box<livesplit_core::Run>),
     // App
     OpenSettingsPanel,
     ApplySettings(AppConfig),
@@ -57,6 +60,9 @@ fn control_panel_ui(
                     }
                     if ui.button("Save Splits as...").clicked() {
                         actions.lock().push(UiAction::SaveSplitsDialog);
+                    }
+                    if ui.button("Edit Splits").clicked() {
+                        actions.lock().push(UiAction::OpenSplitsEditor);
                     }
                 });
 
@@ -214,6 +220,29 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::SaveAutosplitterDialog => {
                     self.save_autosplitter_dialog(&document_dir).unwrap();
+                }
+                UiAction::OpenSplitsEditor => {
+                    if !self
+                        .splits_editor_open
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                    {
+                        let run = self.timer.read().unwrap().run().clone();
+                        match livesplit_core::run::editor::Editor::new(run) {
+                            Ok(editor) => {
+                                let editor_state =
+                                    crate::ui::splits_editor::SplitsEditorState::new(editor);
+                                *self.splits_editor_state.lock() = Some(editor_state);
+                                self.splits_editor_open
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to open splits editor: {e}");
+                            }
+                        }
+                    }
+                }
+                UiAction::ApplySplitsEdit(run) => {
+                    let _ = self.timer.write().unwrap().set_run(*run);
                 }
                 UiAction::OpenSettingsPanel => {
                     self.settings_panel_open.store(true, Ordering::Relaxed);
