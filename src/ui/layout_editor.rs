@@ -4,8 +4,8 @@ use livesplit_core::component::timer::DeltaGradient;
 use livesplit_core::layout::editor::State as EditorSnapshot;
 use livesplit_core::layout::{LayoutDirection, LayoutState};
 use livesplit_core::settings::{
-    Alignment, BackgroundImage, Color as LsColor, ColumnKind, FontStretch, FontStyle,
-    FontWeight, Gradient, ImageCache, LayoutBackground, ListGradient, Value,
+    Alignment, BackgroundImage, Color as LsColor, ColumnKind, FontStretch, FontStyle, FontWeight,
+    Gradient, ImageCache, LayoutBackground, ListGradient, Value,
 };
 use livesplit_core::timing::formatter::{Accuracy, DigitsFormat};
 use livesplit_core::SharedTimer;
