@@ -28,6 +28,9 @@ pub(crate) enum UiAction {
     // Splits Editor
     OpenSplitsEditor,
     ApplySplitsEdit(Box<livesplit_core::Run>),
+    // Layout Editor
+    OpenLayoutEditor,
+    ApplyLayoutEdit(Box<livesplit_core::Layout>),
     // App
     OpenSettingsPanel,
     ApplySettings(AppConfig),
@@ -63,6 +66,9 @@ fn control_panel_ui(
                     }
                     if ui.button("Edit Splits").clicked() {
                         actions.lock().push(UiAction::OpenSplitsEditor);
+                    }
+                    if ui.button("Edit Layout").clicked() {
+                        actions.lock().push(UiAction::OpenLayoutEditor);
                     }
                 });
 
@@ -243,6 +249,31 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::ApplySplitsEdit(run) => {
                     let _ = self.timer.write().unwrap().set_run(*run);
+                }
+                UiAction::OpenLayoutEditor => {
+                    if !self
+                        .layout_editor_open
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                    {
+                        let layout = self.layout.clone();
+                        match livesplit_core::layout::editor::Editor::new(layout) {
+                            Ok(editor) => {
+                                let editor_state =
+                                    crate::ui::layout_editor::LayoutEditorState::new(editor);
+                                *self.layout_editor_state.lock() = Some(editor_state);
+                                self.layout_editor_open
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to open layout editor: {e}");
+                            }
+                        }
+                    }
+                }
+                UiAction::ApplyLayoutEdit(layout) => {
+                    self.layout = *layout;
+                    // Force layout_state to re-create from the new layout
+                    *self.layout_state.write() = None;
                 }
                 UiAction::OpenSettingsPanel => {
                     self.settings_panel_open.store(true, Ordering::Relaxed);

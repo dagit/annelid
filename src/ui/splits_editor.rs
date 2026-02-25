@@ -181,7 +181,7 @@ fn show_segment_table(
                             for (i, seg) in snapshot.segments.iter().enumerate() {
                                 let is_active = seg.selected == SelectionState::Active;
                                 let label = if is_active {
-                                    format!("\u{25b6}{}", i + 1)
+                                    format!(">{}", i + 1)
                                 } else {
                                     format!(" {}", i + 1)
                                 };

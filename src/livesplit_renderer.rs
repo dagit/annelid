@@ -45,6 +45,11 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) splits_editor_open: Arc<AtomicBool>,
     pub(crate) splits_editor_state:
         Arc<parking_lot::Mutex<Option<crate::ui::splits_editor::SplitsEditorState>>>,
+    pub(crate) layout_editor_open: Arc<AtomicBool>,
+    pub(crate) layout_editor_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::layout_editor::LayoutEditorState>>>,
+    pub(crate) layout_editor_preview:
+        Arc<parking_lot::Mutex<Option<livesplit_core::layout::LayoutState>>>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -82,6 +87,9 @@ impl LiveSplitCoreRenderer {
             settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
             splits_editor_open: Arc::new(AtomicBool::new(false)),
             splits_editor_state: Arc::new(parking_lot::Mutex::new(None)),
+            layout_editor_open: Arc::new(AtomicBool::new(false)),
+            layout_editor_state: Arc::new(parking_lot::Mutex::new(None)),
+            layout_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 }
@@ -119,27 +127,51 @@ impl eframe::App for LiveSplitCoreRenderer {
         // Update layout state (shared by both renderers)
         {
             let _span = span!(Level::TRACE, "layout_state_update").entered();
-            let timer = self.timer.read().unwrap();
-            let snapshot = timer.snapshot();
-            let mut image_cache = self.image_cache.write();
-            let mut layout_state = self.layout_state.write();
-            match layout_state.as_mut() {
-                None => {
-                    *layout_state = Some(self.layout.state(
-                        &mut image_cache,
-                        &snapshot,
-                        livesplit_core::Lang::English,
-                    ));
+            let editor_open = self
+                .layout_editor_open
+                .load(std::sync::atomic::Ordering::Relaxed);
+
+            // If the layout editor is open, use its preview (computed in the
+            // editor's deferred viewport callback — no editor lock needed here).
+            let preview = if editor_open {
+                self.layout_editor_preview.lock().take()
+            } else {
+                // Editor just closed — clear any stale preview
+                let stale = self.layout_editor_preview.lock().take();
+                if stale.is_some() {
+                    *self.layout_state.write() = None;
                 }
-                Some(ls) => {
-                    self.layout.update_state(
-                        ls,
-                        &mut image_cache,
-                        &snapshot,
-                        livesplit_core::Lang::English,
-                    );
+                None
+            };
+
+            if let Some(ls) = preview {
+                *self.layout_state.write() = Some(ls);
+            } else if !editor_open {
+                // Normal path: compute from self.layout
+                let timer = self.timer.read().unwrap();
+                let snapshot = timer.snapshot();
+                let mut image_cache = self.image_cache.write();
+                let mut layout_state = self.layout_state.write();
+                match layout_state.as_mut() {
+                    None => {
+                        *layout_state = Some(self.layout.state(
+                            &mut image_cache,
+                            &snapshot,
+                            livesplit_core::Lang::English,
+                        ));
+                    }
+                    Some(ls) => {
+                        self.layout.update_state(
+                            ls,
+                            &mut image_cache,
+                            &snapshot,
+                            livesplit_core::Lang::English,
+                        );
+                    }
                 }
             }
+            // else: editor is open but no preview yet (first frame) — keep
+            // showing the stale layout_state until the editor produces one
         }
 
         if self.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
@@ -224,6 +256,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         self.show_control_panel(ctx);
         self.show_app_settings(ctx);
         self.show_splits_editor(ctx);
+        self.show_layout_editor(ctx);
         self.process_ui_actions(ctx);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
@@ -285,7 +318,7 @@ pub fn app_init(
         .name("Frame Rate Thread".to_owned())
         .spawn(move |_| loop {
             if frame_rate > 0.0 {
-                context.clone().request_repaint();
+                context.request_repaint_of(egui::ViewportId::ROOT);
                 std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / frame_rate));
             }
         })
