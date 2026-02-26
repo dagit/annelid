@@ -199,6 +199,7 @@ jobs:
       - name: Install dependencies (Linux)
         if: ${{ matrix.is-linux }}
         run: |
+          sudo apt-get update
           sudo apt-get install -y wget libfuse-dev libgtk-3-dev
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
