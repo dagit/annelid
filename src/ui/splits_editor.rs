@@ -105,7 +105,8 @@ impl SplitsEditorState {
 #[derive(PartialEq)]
 enum EditorAction {
     None,
-    Save,
+    Update,
+    SaveToFile,
     Cancel,
 }
 
@@ -350,8 +351,11 @@ fn show_action_buttons(ui: &mut egui::Ui) -> EditorAction {
             if ui.button("Cancel").clicked() {
                 action = EditorAction::Cancel;
             }
-            if ui.button("Save").clicked() {
-                action = EditorAction::Save;
+            if ui.button("Update").clicked() {
+                action = EditorAction::Update;
+            }
+            if ui.button("Save as...").clicked() {
+                action = EditorAction::SaveToFile;
             }
         });
     });
@@ -405,7 +409,7 @@ fn splits_editor_ui(
     }
 
     match action {
-        EditorAction::Save => {
+        EditorAction::Update => {
             if let Some(mut es) = guard.take() {
                 es.editor.set_game_name(es.game_name.as_str());
                 es.editor.set_category_name(es.category_name.as_str());
@@ -420,6 +424,24 @@ fn splits_editor_ui(
                 actions
                     .lock()
                     .push(UiAction::ApplySplitsEdit(Box::new(run)));
+            }
+            open.store(false, Ordering::Relaxed);
+        }
+        EditorAction::SaveToFile => {
+            if let Some(mut es) = guard.take() {
+                es.editor.set_game_name(es.game_name.as_str());
+                es.editor.set_category_name(es.category_name.as_str());
+                let _ = es
+                    .editor
+                    .parse_and_set_offset(&es.offset, livesplit_core::Lang::English);
+                let _ = es.editor.parse_and_set_attempt_count(&es.attempts);
+                es.editor
+                    .active_segment()
+                    .set_name(es.segment_name.as_str());
+                let run = es.editor.close();
+                let mut lock = actions.lock();
+                lock.push(UiAction::ApplySplitsEdit(Box::new(run)));
+                lock.push(UiAction::SaveSplitsDialog);
             }
             open.store(false, Ordering::Relaxed);
         }

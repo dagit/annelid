@@ -21,6 +21,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use config::app_config::*;
+use config::layout_meta::LayoutMeta;
 use livesplit_renderer::*;
 
 #[allow(dead_code)]
@@ -74,11 +75,37 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let timer = Timer::new(run)
         .expect("Run with at least one segment provided")
         .into_shared();
+
+    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
+        .ok_or("Unable to computer configuration directory")?;
+    println!("project_dirs = {project_dirs:#?}");
+
+    let preference_dir = project_dirs.preference_dir();
+    std::fs::create_dir_all(preference_dir)?;
+
+    // Read layout metadata before creating the window so we can set the
+    // initial size/position. Viewport commands sent on the first frame are
+    // ignored by eframe, so we must set this on the ViewportBuilder.
+    let layout_meta: Option<LayoutMeta> = (|| {
+        let layout_path = cli_config.recent_layout.clone().or_else(|| {
+            let mut config_path = project_dirs.preference_dir().to_path_buf();
+            config_path.push("settings.toml");
+            let saved: AppConfig = std::fs::read_to_string(&config_path)
+                .ok()
+                .and_then(|s| toml::from_str(&s).ok())?;
+            saved.recent_layout
+        })?;
+        LayoutMeta::from_layout_file(std::path::Path::new(&layout_path))
+    })();
+
+    let mut viewport = egui::viewport::ViewportBuilder::default();
+    if let Some(ref meta) = layout_meta {
+        viewport = meta.apply_to_viewport_builder(viewport);
+    }
+
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
-        viewport: egui::viewport::ViewportBuilder {
-            ..Default::default()
-        },
+        viewport,
         ..eframe::NativeOptions::default()
     };
     let layout_settings = Layout::default_layout(livesplit_core::Lang::English).settings();
@@ -87,13 +114,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 
     use std::sync::mpsc::sync_channel;
     let (sync_sender, sync_receiver) = sync_channel(1);
-
-    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
-        .ok_or("Unable to computer configuration directory")?;
-    println!("project_dirs = {project_dirs:#?}");
-
-    let preference_dir = project_dirs.preference_dir();
-    std::fs::create_dir_all(preference_dir)?;
 
     let mut app = LiveSplitCoreRenderer::new(
         timer,

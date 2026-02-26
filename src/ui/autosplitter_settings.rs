@@ -1,7 +1,8 @@
 use crate::autosplitters::supermetroid::Settings;
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
+use crate::ui::control_panel::UiAction;
 use eframe::egui;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub fn show_children(
@@ -38,18 +39,42 @@ pub fn show_children(
 }
 
 /// Renders the autosplitter settings UI in a deferred viewport.
-fn settings_viewport_ui(ctx: &egui::Context, settings: &RwLock<Settings>, open: &AtomicBool) {
+fn settings_viewport_ui(
+    ctx: &egui::Context,
+    settings: &RwLock<Settings>,
+    actions: &Mutex<Vec<UiAction>>,
+    open: &AtomicBool,
+) {
     if ctx.input(|i| i.viewport().close_requested()) {
         open.store(false, Ordering::Relaxed);
         return;
     }
+
+    let mut close = false;
+
     egui::CentralPanel::default().show(ctx, |ui| {
         egui::ScrollArea::both().show(ui, |ui| {
             let mut settings = settings.write();
             let mut roots = settings.roots();
             show_children(&mut settings, ui, ctx, &mut roots);
         });
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Close").clicked() {
+                    close = true;
+                }
+                if ui.button("Save as...").clicked() {
+                    actions.lock().push(UiAction::SaveAutosplitterDialog);
+                    close = true;
+                }
+            });
+        });
     });
+
+    if close {
+        open.store(false, Ordering::Relaxed);
+    }
 }
 
 impl LiveSplitCoreRenderer {
@@ -59,6 +84,7 @@ impl LiveSplitCoreRenderer {
         }
 
         let settings = self.settings.clone();
+        let actions = self.ui_actions.clone();
         let open = self.show_settings_editor.clone();
 
         ctx.show_viewport_deferred(
@@ -67,7 +93,7 @@ impl LiveSplitCoreRenderer {
                 .with_title("Autosplitter Settings")
                 .with_inner_size([400.0, 500.0]),
             move |ctx, _class| {
-                settings_viewport_ui(ctx, &settings, &open);
+                settings_viewport_ui(ctx, &settings, &actions, &open);
             },
         );
     }

@@ -12,6 +12,7 @@ pub(crate) enum UiAction {
     OpenLayoutDialog,
     OpenSplitsDialog,
     SaveSplitsDialog,
+    SaveLayoutDialog,
     // Timer
     Start,
     Split,
@@ -57,6 +58,9 @@ fn control_panel_ui(
                 .show(ui, |ui| {
                     if ui.button("Import Layout").clicked() {
                         actions.lock().push(UiAction::OpenLayoutDialog);
+                    }
+                    if ui.button("Save Layout as...").clicked() {
+                        actions.lock().push(UiAction::SaveLayoutDialog);
                     }
                     if ui.button("Import Splits").clicked() {
                         actions.lock().push(UiAction::OpenSplitsDialog);
@@ -186,6 +190,9 @@ impl LiveSplitCoreRenderer {
                 UiAction::SaveSplitsDialog => {
                     self.save_splits_dialog(&document_dir).unwrap();
                 }
+                UiAction::SaveLayoutDialog => {
+                    self.save_layout_dialog(&document_dir, ctx).unwrap();
+                }
                 UiAction::Start => {
                     self.timer.write().unwrap().start().ok();
                 }
@@ -272,6 +279,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::ApplyLayoutEdit(layout) => {
                     self.layout = *layout;
+                    self.layout_modified = true;
                     // Force layout_state to re-create from the new layout
                     *self.layout_state.write() = None;
                 }

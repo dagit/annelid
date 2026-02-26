@@ -2,13 +2,18 @@ use anyhow::{anyhow, Result};
 use eframe::egui;
 
 use crate::config::app_config::*;
+use crate::config::layout_meta::LayoutMeta;
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use crate::utils::*;
 
 impl LiveSplitCoreRenderer {
     // TODO: we need to update this so that whatever the file is saved as becomes the default file
     // to load next time.
-    pub fn confirm_save(&mut self, gl: &std::sync::Arc<eframe::glow::Context>) -> Result<()> {
+    pub fn confirm_save(
+        &mut self,
+        gl: &std::sync::Arc<eframe::glow::Context>,
+        ctx: &egui::Context,
+    ) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
@@ -33,6 +38,27 @@ impl LiveSplitCoreRenderer {
                 .show();
             if save_requested == MessageDialogResult::Yes {
                 self.save_splits_dialog(&document_dir)?;
+            }
+        }
+        // Check if layout needs saving: either the editor changed it, or the
+        // user moved/resized the window beyond the WM's normal adjustments.
+        let layout_changed = self.layout_modified || {
+            if let Some(ref saved) = self.saved_layout_meta {
+                let current = LayoutMeta::from_context(ctx);
+                saved.differs_from(&current)
+            } else {
+                false
+            }
+        };
+        if layout_changed {
+            let save_requested = MessageDialog::new()
+                .set_level(MessageLevel::Warning)
+                .set_title("Save Layout")
+                .set_description("Layout has been modified. Save layout?")
+                .set_buttons(MessageButtons::YesNo)
+                .show();
+            if save_requested == MessageDialogResult::Yes {
+                self.save_layout_dialog(&document_dir, ctx)?;
             }
         }
         if self.settings.read().has_been_modified() {
@@ -180,7 +206,13 @@ impl LiveSplitCoreRenderer {
         let layout2 = self.load_livesplit_one_layout(ctx, path);
         match (layout1, layout2) {
             (Err(e1), Err(e2)) => Err(anyhow!("Failed to load file as either LiveSplit or LiveSplit One.\nErrors: LiveSplit: {e1}\nLiveSplit One: {e2}")),
-            (_, _) => Ok(())
+            (_, _) => {
+                self.layout_modified = false;
+                // Store the loaded geometry as the reference for change detection
+                self.saved_layout_meta =
+                    crate::config::layout_meta::LayoutMeta::from_layout_file(path);
+                Ok(())
+            }
         }
     }
 
@@ -220,16 +252,15 @@ impl LiveSplitCoreRenderer {
                     if mode.is_some() && d.tag_name().name() == format!("{}Height", mode?) {
                         height = d.text().and_then(|d| f32::from_str(d).ok());
                     }
-                    if let (Some(x), Some(y), Some(width), Some(height)) = (x, y, width, height) {
-                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::InnerSize(
-                            egui::Vec2::new(width, height),
-                        ));
-                        ctx.send_viewport_cmd(egui::viewport::ViewportCommand::OuterPosition(
-                            egui::Pos2::new(x, y),
-                        ));
-                    }
                     Some(())
                 });
+                let meta = LayoutMeta {
+                    window_x: x,
+                    window_y: y,
+                    window_width: width,
+                    window_height: height,
+                };
+                meta.apply_to_context(ctx);
             }
         });
         Ok(())
@@ -237,13 +268,25 @@ impl LiveSplitCoreRenderer {
 
     fn load_livesplit_one_layout(
         &mut self,
-        _ctx: &egui::Context,
+        ctx: &egui::Context,
         path: &std::path::Path,
     ) -> Result<()> {
-        let f = std::fs::File::open(path)?;
-        let reader = std::io::BufReader::new(f);
+        use std::io::Read;
+        let mut contents = String::new();
+        std::fs::File::open(path)?.read_to_string(&mut contents)?;
+
+        // Extract annelid window metadata if present
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
+            if let Some(annelid_val) = json.get("annelid") {
+                if let Ok(meta) = serde_json::from_value::<LayoutMeta>(annelid_val.clone()) {
+                    meta.apply_to_context(ctx);
+                }
+            }
+        }
+
+        // Parse the layout settings (ignores the "annelid" key)
         self.layout = livesplit_core::layout::Layout::from_settings(
-            livesplit_core::layout::LayoutSettings::from_json(reader)?,
+            livesplit_core::layout::LayoutSettings::from_json(contents.as_bytes())?,
         );
         Ok(())
     }
@@ -365,6 +408,73 @@ impl LiveSplitCoreRenderer {
                 Ok(())
             },
         );
+        Ok(())
+    }
+
+    pub fn save_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) -> Result<()> {
+        let layout_path: String = self
+            .app_config
+            .read()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
+            .recent_layout
+            .clone()
+            .unwrap_or_else(|| "annelid.ls1l".to_owned());
+        let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
+        let dir = self
+            .app_config
+            .read()
+            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
+            .recent_layout
+            .as_ref()
+            .map_or(default_path_buf.clone(), |p| {
+                let path = std::path::Path::new(&p);
+                path.parent().map_or(default_path_buf, |p| p.to_path_buf())
+            })
+            .into_os_string()
+            .into_string()
+            .expect("utf8");
+        // Build default filename: use basename of recent path, or fallback
+        let default_fname = std::path::Path::new(&layout_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("annelid.ls1l")
+            .to_owned();
+
+        let meta = LayoutMeta::from_context(ctx);
+        use rfd::FileDialog;
+        messagebox_on_error(|| {
+            let path = FileDialog::new()
+                .set_directory(&dir)
+                .set_file_name(&default_fname)
+                .add_filter("LiveSplit One Layout", &["ls1l"])
+                .add_filter("Any file", &["*"])
+                .save_file();
+            let path = match path {
+                Some(path) => path,
+                None => return Ok(()),
+            };
+            // Serialize layout settings to JSON, then inject annelid metadata
+            let settings = self.layout.settings();
+            let mut json = serde_json::to_value(&settings)?;
+            if let serde_json::Value::Object(ref mut map) = json {
+                map.insert("annelid".to_owned(), serde_json::to_value(&meta)?);
+            }
+            let f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&path)?;
+            serde_json::to_writer_pretty(f, &json)?;
+            // Update recent layout path
+            self.app_config
+                .write()
+                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
+                .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
+            self.layout_modified = false;
+            // Update the reference geometry to what we just saved
+            self.saved_layout_meta = Some(meta.clone());
+            Ok(())
+        });
         Ok(())
     }
 

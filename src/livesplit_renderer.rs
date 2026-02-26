@@ -50,6 +50,10 @@ pub struct LiveSplitCoreRenderer {
         Arc<parking_lot::Mutex<Option<crate::ui::layout_editor::LayoutEditorState>>>,
     pub(crate) layout_editor_preview:
         Arc<parking_lot::Mutex<Option<livesplit_core::layout::LayoutState>>>,
+    pub(crate) layout_modified: bool,
+    /// The window geometry that was last loaded from or saved to a layout file.
+    /// Used to detect whether the user has moved/resized the window.
+    pub(crate) saved_layout_meta: Option<crate::config::layout_meta::LayoutMeta>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -90,6 +94,8 @@ impl LiveSplitCoreRenderer {
             layout_editor_open: Arc::new(AtomicBool::new(false)),
             layout_editor_state: Arc::new(parking_lot::Mutex::new(None)),
             layout_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
+            layout_modified: false,
+            saved_layout_meta: None,
         }
     }
 }
@@ -109,14 +115,13 @@ impl eframe::App for LiveSplitCoreRenderer {
             self.process_app_config(ctx);
             self.app_config_processed = true;
         }
-        ctx.input(|i| {
-            if i.viewport().close_requested() {
-                self.is_exiting = true;
-                self.confirm_save(frame.gl().expect("No GL context"))
-                    .unwrap();
-                self.save_app_config();
-            }
-        });
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if close_requested {
+            self.is_exiting = true;
+            self.confirm_save(frame.gl().expect("No GL context"), ctx)
+                .unwrap();
+            self.save_app_config();
+        }
         if self.can_exit {
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
             return;

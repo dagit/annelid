@@ -251,7 +251,8 @@ impl LayoutEditorState {
 #[derive(PartialEq)]
 enum EditorAction {
     None,
-    Save,
+    Update,
+    SaveToFile,
     Cancel,
 }
 
@@ -891,8 +892,11 @@ fn show_action_buttons(ui: &mut egui::Ui) -> EditorAction {
             if ui.button("Cancel").clicked() {
                 action = EditorAction::Cancel;
             }
-            if ui.button("Save").clicked() {
-                action = EditorAction::Save;
+            if ui.button("Update").clicked() {
+                action = EditorAction::Update;
+            }
+            if ui.button("Save as...").clicked() {
+                action = EditorAction::SaveToFile;
             }
         });
     });
@@ -1009,14 +1013,23 @@ fn layout_editor_ui(
         ctx.request_repaint_of(egui::ViewportId::ROOT);
     }
 
-    // Handle save/cancel
+    // Handle update/save/cancel
     match action {
-        EditorAction::Save => {
+        EditorAction::Update => {
             if let Some(les) = guard.take() {
                 let layout = les.editor.close();
                 actions
                     .lock()
                     .push(UiAction::ApplyLayoutEdit(Box::new(layout)));
+            }
+            open.store(false, Ordering::Relaxed);
+        }
+        EditorAction::SaveToFile => {
+            if let Some(les) = guard.take() {
+                let layout = les.editor.close();
+                let mut lock = actions.lock();
+                lock.push(UiAction::ApplyLayoutEdit(Box::new(layout)));
+                lock.push(UiAction::SaveLayoutDialog);
             }
             open.store(false, Ordering::Relaxed);
         }
