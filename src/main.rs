@@ -83,22 +83,32 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let preference_dir = project_dirs.preference_dir();
     std::fs::create_dir_all(preference_dir)?;
 
-    // Read layout metadata before creating the window so we can set the
-    // initial size/position. Viewport commands sent on the first frame are
-    // ignored by eframe, so we must set this on the ViewportBuilder.
+    // Read saved config early so we can set viewport properties that must
+    // be known before window creation (layout size/position, transparency).
+    let saved_config: Option<AppConfig> = {
+        let mut config_path = project_dirs.preference_dir().to_path_buf();
+        config_path.push("settings.toml");
+        std::fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|s| toml::from_str(&s).ok())
+    };
+
     let layout_meta: Option<LayoutMeta> = (|| {
-        let layout_path = cli_config.recent_layout.clone().or_else(|| {
-            let mut config_path = project_dirs.preference_dir().to_path_buf();
-            config_path.push("settings.toml");
-            let saved: AppConfig = std::fs::read_to_string(&config_path)
-                .ok()
-                .and_then(|s| toml::from_str(&s).ok())?;
-            saved.recent_layout
-        })?;
+        let layout_path = cli_config
+            .recent_layout
+            .clone()
+            .or_else(|| saved_config.as_ref()?.recent_layout.clone())?;
         LayoutMeta::from_layout_file(std::path::Path::new(&layout_path))
     })();
 
+    let transparent = cli_config.transparent_window == Some(YesOrNo::Yes)
+        || (cli_config.transparent_window.is_none()
+            && saved_config.as_ref().and_then(|c| c.transparent_window) == Some(YesOrNo::Yes));
+
     let mut viewport = egui::viewport::ViewportBuilder::default();
+    if transparent {
+        viewport = viewport.with_transparent(true);
+    }
     if let Some(ref meta) = layout_meta {
         viewport = meta.apply_to_viewport_builder(viewport);
     }

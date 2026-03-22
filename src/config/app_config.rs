@@ -27,6 +27,8 @@ pub struct AppConfig {
     #[clap(name = "renderer", long, short = 'r', value_parser)]
     pub renderer: Option<RendererType>,
     #[clap(skip)]
+    pub transparent_window: Option<YesOrNo>,
+    #[clap(skip)]
     pub hot_key_start: Option<HotKey>,
     #[clap(skip)]
     pub hot_key_reset: Option<HotKey>,
@@ -101,6 +103,7 @@ impl AppConfig {
             reset_game_on_timer_reset: Some(YesOrNo::No),
             global_hotkeys: Some(YesOrNo::Yes),
             renderer: Some(RendererType::Gpu),
+            transparent_window: None,
         }
     }
 }

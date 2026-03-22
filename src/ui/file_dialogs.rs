@@ -154,6 +154,9 @@ impl LiveSplitCoreRenderer {
             if cli_config.renderer.is_some() {
                 new_app_config.renderer = cli_config.renderer;
             }
+            if cli_config.transparent_window.is_some() {
+                new_app_config.transparent_window = cli_config.transparent_window;
+            }
             // Hack to allow GPU rendering by default
             let defaults = AppConfig::default();
             if new_app_config.renderer.is_none() {

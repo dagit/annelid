@@ -101,6 +101,14 @@ impl LiveSplitCoreRenderer {
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        if self.app_config.read().unwrap().transparent_window == Some(YesOrNo::Yes) {
+            [0.0, 0.0, 0.0, 0.0]
+        } else {
+            [0.0, 0.0, 0.0, 1.0]
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let _frame = span!(Level::TRACE, "frame").entered();
         //let update_timer = std::time::Instant::now();
@@ -216,6 +224,8 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let _span = span!(Level::TRACE, "update_frame_buffer").entered();
                 let layout_state = self.layout_state.read();
                 let image_cache = self.image_cache.read();
+                let draw_background =
+                    self.app_config.read().unwrap().transparent_window != Some(YesOrNo::Yes);
                 self.glow_canvas.update_frame_buffer(
                     viewport,
                     frame.gl().unwrap(),
@@ -229,7 +239,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 frame_buffer,
                                 sz,
                                 stride,
-                                true,
+                                draw_background,
                             );
                         }
                     },

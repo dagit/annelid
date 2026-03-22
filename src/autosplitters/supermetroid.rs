@@ -218,6 +218,12 @@ lazy_static! {
         m
     };
 
+    static ref motherBrainPhaseEnum: HashMap<&'static str, u32> = {
+        let mut m = HashMap::new();
+        m.insert( "phase1", 0x87dd  );
+        m
+    };
+
     static ref eventFlagEnum: HashMap<&'static str, u32> = {
         let mut m = HashMap::new();
         m.insert( "zebesAblaze",    0x40 );
@@ -610,6 +616,8 @@ impl Settings {
         settings.insert_with_parent("ridley", true, "bosses");
         // Split on Mother Brain's head hitting the ground at the end of the first phase
         settings.insert_with_parent("mb1", false, "bosses");
+        // Split on Mother Brain reaching 0hp in the first phase
+        settings.insert_with_parent("mb1_0hp", false, "bosses");
         // Split on the Baby Metroid detaching from Mother Brain's head
         settings.insert_with_parent("mb2", true, "bosses");
         // Split on the start of the Zebes Escape
@@ -1521,6 +1529,15 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     if mb1 {
         println!("Split due to mb1 defeat");
     }
+    let mb1_0hp = settings.get("mb1_0hp")
+        && inMotherBrainRoom
+        && snes["gameState"].current == gameStateEnum["normalGameplay"]
+        && snes["motherBrainHP"].old > 0
+        && snes["motherBrainHP"].current == 0
+        && snes["motherBrainPhase"].current == motherBrainPhaseEnum["phase1"];
+    if mb1_0hp {
+        println!("Split due to mb1 0hp");
+    }
     let mb2 = settings.get("mb2")
         && inMotherBrainRoom
         && snes["gameState"].current == gameStateEnum["normalGameplay"]
@@ -1536,7 +1553,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     if mb3 {
         println!("Split due to mb3 defeat");
     }
-    let bossDefeat = kraid || phantoon || draygon || ridley || mb1 || mb2 || mb3;
+    let bossDefeat = kraid || phantoon || draygon || ridley || mb1 || mb1_0hp || mb2 || mb3;
 
     // Run-ending splits
     let escape = settings.get("rtaFinish")
@@ -1689,6 +1706,7 @@ impl SNESState {
                 ("enemyHP", MemoryWatcher::new(0x0F8C, Width::Word)),
                 ("shipAI", MemoryWatcher::new(0x0FB2, Width::Word)),
                 ("motherBrainHP", MemoryWatcher::new(0x0FCC, Width::Word)),
+                ("motherBrainPhase", MemoryWatcher::new(0x178c, Width::Word)),
                 // Byte
                 ("mapInUse", MemoryWatcher::new(0x079F, Width::Byte)),
                 ("gameState", MemoryWatcher::new(0x0998, Width::Byte)),
@@ -1748,15 +1766,19 @@ impl SNESState {
         client: &mut crate::usb2snes::SyncClient,
         settings: &Settings,
     ) -> Result<SNESSummary> {
+        // We're only allowed to read 8 regions in a single request
+        // This is currently 8 regions, so things will need to be
+        // merged if you want to add more. That increases read latency.
+        // Basically, we should avoid adding anything more to this.
         let regions = [
             (0x008B, 2),  // Controller 1 Input
-            (0x079B, 3),  // ROOM ID + ROOM # for region + Region Number
+            (0x079B, 5),  // ROOM ID + ROOM # for region + Region Number
             (0x0998, 1),  // GAME STATE
             (0x09A4, 61), // ITEMS
-            (0x0A28, 1),
-            (0x0F8C, 66),
-            (0xD821, 14),
-            (0xD870, 20),
+            (0x0A28, 1),  // Pose
+            (0x0F8C, 66), // Enemy HP
+            (0x178C, 2),  // MB Phase hack
+            (0xD821, 99), // Event array + Items collected
         ];
         let snes_data =
             client.get_addresses(&regions.map(|(base, size)| (0xF50000 + base, size)))?;

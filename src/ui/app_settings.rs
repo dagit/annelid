@@ -139,6 +139,10 @@ fn settings_panel_ui(
                         ui.weak("(requires restart)");
                     });
                     ui.horizontal(|ui| {
+                        yes_no_checkbox(ui, "Transparent Window", &mut config.transparent_window);
+                        ui.weak("(requires restart)");
+                    });
+                    ui.horizontal(|ui| {
                         ui.label("Frame Rate:");
                         let mut fr = config.frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
                         if ui

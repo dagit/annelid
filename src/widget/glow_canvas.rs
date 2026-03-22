@@ -10,7 +10,6 @@ use tracing::{span, Level};
 pub struct GlowCanvas {
     opengl_resources: std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
     sense: egui::Sense,
-    previous_texture_size: std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
 }
 
 // TODO: add a destroy method that is called from OpenGLResources::destroy()
@@ -49,7 +48,6 @@ impl Default for GlowCanvas {
         GlowCanvas {
             opengl_resources: std::sync::Arc::new(std::sync::RwLock::new(None)),
             sense: egui::Sense::click(),
-            previous_texture_size: std::sync::Arc::new(std::sync::RwLock::new((0, 0))),
         }
     }
 }
@@ -209,7 +207,7 @@ impl GlowCanvas {
     pub fn paint_immediate(&self, gl: &std::rc::Rc<eframe::glow::Context>, rect: egui::Rect) {
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        paint(&gl_ctx, viewport, gl, &self.previous_texture_size);
+        paint(&gl_ctx, viewport, gl);
     }
 
     /// This uses a paint callback to draw to a chosen layer. Usually, the layer will be `LayerId::background()`.
@@ -219,14 +217,12 @@ impl GlowCanvas {
         let painter = ctx.layer_painter(layer);
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        let prev_size = self.previous_texture_size.clone();
         let callback = egui::PaintCallback {
             rect: viewport,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                paint(&gl_ctx, viewport, painter.gl(), &prev_size);
+                paint(&gl_ctx, viewport, painter.gl());
             })),
         };
-
         painter.add(callback);
     }
 
@@ -237,14 +233,12 @@ impl GlowCanvas {
         if ui.is_rect_visible(rect) {
             let viewport = rect;
             let gl_ctx = self.opengl_resources.clone();
-            let prev_size = self.previous_texture_size.clone();
             let callback = egui::PaintCallback {
                 rect: viewport,
                 callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                    paint(&gl_ctx, viewport, painter.gl(), &prev_size);
+                    paint(&gl_ctx, viewport, painter.gl());
                 })),
             };
-
             ui.painter().add(callback);
         }
     }
@@ -283,7 +277,6 @@ fn paint(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
-    previous_size: &std::sync::Arc<std::sync::RwLock<(usize, usize)>>,
 ) {
     // Wish we could use get_or_insert_with here, but we need to return
     // the Arc<Mutex<_>> instead of just a mut &_
@@ -296,11 +289,7 @@ fn paint(
         }
     };
     unsafe {
-        let mut previous_size = previous_size.write().unwrap();
-        let texture_resized = viewport.width() as usize != previous_size.0
-            || viewport.height() as usize != previous_size.1;
-        paint_lowlevel(&gl_ctx, viewport, gl, texture_resized);
-        *previous_size = (viewport.width() as usize, viewport.height() as usize);
+        paint_lowlevel(&gl_ctx, viewport, gl);
     }
 }
 
@@ -355,6 +344,11 @@ unsafe fn init_gl_resources(gl: &eframe::glow::Context) -> OpenGLResources {
         //gl.enable(glow::DEBUG_OUTPUT);
         debug_assert_eq!(gl.get_error(), 0);
         //gl.debug_message_callback(gl_debug);
+        debug_assert_eq!(gl.get_error(), 0);
+
+        gl.enable(glow::BLEND);
+        debug_assert_eq!(gl.get_error(), 0);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         debug_assert_eq!(gl.get_error(), 0);
 
         let vert = gl.create_shader(glow::VERTEX_SHADER).expect("create vert");
@@ -520,7 +514,6 @@ unsafe fn paint_lowlevel(
     gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
-    texture_resized: bool,
 ) {
     use eframe::glow::HasContext;
     let w = viewport.max.x - viewport.min.x;
@@ -529,8 +522,9 @@ unsafe fn paint_lowlevel(
     let ctx = ctx.as_mut().unwrap();
 
     unsafe {
-        //let timer = std::time::Instant::now();
-        //let gl = frame.gl().expect("Rendering context");
+        gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        gl.clear(glow::COLOR_BUFFER_BIT);
+
         gl.use_program(Some(ctx.program));
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_vertex_array(Some(ctx.vao));
@@ -582,17 +576,14 @@ unsafe fn paint_lowlevel(
 
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         debug_assert_eq!(gl.get_error(), 0);
-        //println!("({},{})", w, h);
-        if texture_resized {
-            ctx.vertices[0].pos.x = viewport.max.x;
-            ctx.vertices[0].pos.y = viewport.min.y;
-            ctx.vertices[1].pos.x = viewport.max.x;
-            ctx.vertices[1].pos.y = viewport.max.y;
-            ctx.vertices[2].pos.x = viewport.min.x;
-            ctx.vertices[2].pos.y = viewport.max.y;
-            ctx.vertices[3].pos.x = viewport.min.x;
-            ctx.vertices[3].pos.y = viewport.min.y;
-        }
+        ctx.vertices[0].pos.x = viewport.max.x;
+        ctx.vertices[0].pos.y = viewport.min.y;
+        ctx.vertices[1].pos.x = viewport.max.x;
+        ctx.vertices[1].pos.y = viewport.max.y;
+        ctx.vertices[2].pos.x = viewport.min.x;
+        ctx.vertices[2].pos.y = viewport.max.y;
+        ctx.vertices[3].pos.x = viewport.min.x;
+        ctx.vertices[3].pos.y = viewport.min.y;
 
         debug_assert_eq!(gl.get_error(), 0);
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
