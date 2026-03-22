@@ -306,7 +306,7 @@ jobs:
           Compress-Archive -Path target/release/annelid.exe -DestinationPath target/release/Annelid.zip -CompressionLevel Optimal
         shell: pwsh
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
           path: ${{ matrix.artifact-path }}
@@ -338,29 +338,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Required artifacts
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-universal.macos
           path: annelid-universal.macos
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-x86_64.AppImage
           path: annelid-x86_64.AppImage
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-x86_64.win
           path: annelid-x86_64.win
 
       # Best-effort aarch64 artifacts (skip if build failed)
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           name: annelid-aarch64.AppImage
           path: annelid-aarch64.AppImage
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           name: annelid-aarch64.win
