@@ -15,32 +15,22 @@ pub struct LayoutMeta {
     pub window_height: Option<f32>,
 }
 
+/// Plain geometry values extracted from a window, independent of any GUI framework.
+pub struct WindowGeometry {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 impl LayoutMeta {
-    /// Read current window geometry from the egui context.
-    pub fn from_context(ctx: &egui::Context) -> Self {
-        let (width, height) = ctx.input(|i| {
-            i.viewport().inner_rect.map_or_else(
-                || {
-                    tracing::warn!("Could not read window inner rect, using defaults");
-                    (DEFAULT_WIDTH, DEFAULT_HEIGHT)
-                },
-                |r| (r.width(), r.height()),
-            )
-        });
-        let (x, y) = ctx.input(|i| {
-            i.viewport().outer_rect.map_or_else(
-                || {
-                    tracing::warn!("Could not read window outer rect, using defaults");
-                    (0.0, 0.0)
-                },
-                |r| (r.left(), r.top()),
-            )
-        });
+    /// Build a LayoutMeta from plain geometry values.
+    pub fn from_geometry(geo: WindowGeometry) -> Self {
         LayoutMeta {
-            window_x: Some(x),
-            window_y: Some(y),
-            window_width: Some(width),
-            window_height: Some(height),
+            window_x: Some(geo.x),
+            window_y: Some(geo.y),
+            window_width: Some(geo.width),
+            window_height: Some(geo.height),
         }
     }
 
@@ -108,20 +98,6 @@ impl LayoutMeta {
         None
     }
 
-    /// Apply window geometry to a ViewportBuilder (for initial window creation).
-    pub fn apply_to_viewport_builder(
-        &self,
-        mut builder: egui::ViewportBuilder,
-    ) -> egui::ViewportBuilder {
-        if let (Some(w), Some(h)) = (self.window_width, self.window_height) {
-            builder = builder.with_inner_size([w, h]);
-        }
-        if let (Some(x), Some(y)) = (self.window_x, self.window_y) {
-            builder = builder.with_position([x, y]);
-        }
-        builder
-    }
-
     /// Returns true if `other` differs from `self` by more than a small
     /// tolerance (to ignore sub-pixel adjustments by the window manager).
     pub fn differs_from(&self, other: &LayoutMeta) -> bool {
@@ -137,6 +113,52 @@ impl LayoutMeta {
             || differs(self.window_height, other.window_height)
             || differs(self.window_x, other.window_x)
             || differs(self.window_y, other.window_y)
+    }
+}
+
+// --- egui-specific helpers (thin wrappers) ---
+
+impl LayoutMeta {
+    /// Read current window geometry from the egui context.
+    pub fn from_context(ctx: &egui::Context) -> Self {
+        let (width, height) = ctx.input(|i| {
+            i.viewport().inner_rect.map_or_else(
+                || {
+                    tracing::warn!("Could not read window inner rect, using defaults");
+                    (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                },
+                |r| (r.width(), r.height()),
+            )
+        });
+        let (x, y) = ctx.input(|i| {
+            i.viewport().outer_rect.map_or_else(
+                || {
+                    tracing::warn!("Could not read window outer rect, using defaults");
+                    (0.0, 0.0)
+                },
+                |r| (r.left(), r.top()),
+            )
+        });
+        Self::from_geometry(WindowGeometry {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    /// Apply window geometry to a ViewportBuilder (for initial window creation).
+    pub fn apply_to_viewport_builder(
+        &self,
+        mut builder: egui::ViewportBuilder,
+    ) -> egui::ViewportBuilder {
+        if let (Some(w), Some(h)) = (self.window_width, self.window_height) {
+            builder = builder.with_inner_size([w, h]);
+        }
+        if let (Some(x), Some(y)) = (self.window_x, self.window_y) {
+            builder = builder.with_position([x, y]);
+        }
+        builder
     }
 
     /// Apply window geometry to the egui viewport (for runtime changes).

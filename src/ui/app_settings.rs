@@ -35,7 +35,8 @@ fn yes_no_checkbox(ui: &mut egui::Ui, label: &str, value: &mut Option<YesOrNo>) 
 fn format_hotkey(ctx: &egui::Context, hotkey: &Option<HotKey>) -> String {
     match hotkey {
         Some(hk) => {
-            let shortcut = egui::KeyboardShortcut::new(hk.modifiers, hk.key);
+            let (mods, key) = hk.to_egui();
+            let shortcut = egui::KeyboardShortcut::new(mods, key);
             ctx.format_shortcut(&shortcut)
         }
         None => "(none)".to_owned(),
@@ -72,8 +73,8 @@ fn hotkey_row(
                         return;
                     }
                     *hotkey = Some(HotKey {
-                        key: *key,
-                        modifiers: *modifiers,
+                        key: (*key).into(),
+                        modifiers: (*modifiers).into(),
                     });
                     *capturing = None;
                     return;

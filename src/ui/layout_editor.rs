@@ -825,8 +825,8 @@ fn show_field_widget(
                                 *hotkey_capturing = None;
                                 return;
                             }
-                            let key_code = crate::hotkey::to_livesplit_keycode(key);
-                            let mods = crate::hotkey::to_livesplit_modifiers(modifiers);
+                            let key_code = crate::hotkey::to_livesplit_keycode((*key).into());
+                            let mods = crate::hotkey::to_livesplit_modifiers((*modifiers).into());
                             let hotkey = key_code.with_modifiers(mods);
                             result = Some(Value::Hotkey(Some(hotkey)));
                             *hotkey_capturing = None;

@@ -29,10 +29,10 @@ impl LiveSplitCoreRenderer {
             // main binding
             hook.register(hot_key.to_livesplit_hotkey(), make_cb.clone())?;
             // optional "alt" binding
-            if let Some(alt_code) = to_livesplit_keycode_alternative(&hot_key.key) {
+            if let Some(alt_code) = to_livesplit_keycode_alternative(hot_key.key) {
                 let alt = livesplit_hotkey::Hotkey {
                     key_code: alt_code,
-                    modifiers: to_livesplit_modifiers(&hot_key.modifiers),
+                    modifiers: to_livesplit_modifiers(hot_key.modifiers),
                 };
                 hook.register(alt, make_cb)?;
             }
@@ -137,14 +137,16 @@ impl LiveSplitCoreRenderer {
         if config.global_hotkeys != Some(YesOrNo::Yes) {
             ctx.input_mut(|input| {
                 if let Some(hot_key) = config.hot_key_start {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.split_or_start().ok();
                         }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_reset {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.reset(true).ok();
                         }
@@ -156,35 +158,40 @@ impl LiveSplitCoreRenderer {
                     }
                 }
                 if let Some(hot_key) = config.hot_key_undo {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.undo_split().ok();
                         }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_skip {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.skip_split().ok();
                         }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_pause {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.toggle_pause().ok();
                         }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_comparison_next {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.switch_to_next_comparison();
                         }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_comparison_prev {
-                    if input.consume_key(hot_key.modifiers, hot_key.key) {
+                    let (mods, key) = hot_key.to_egui();
+                    if input.consume_key(mods, key) {
                         if let Ok(mut t) = self.timer.write() {
                             t.switch_to_previous_comparison();
                         }
