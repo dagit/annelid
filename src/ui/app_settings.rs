@@ -87,6 +87,9 @@ fn hotkey_row(
             if ui.button("Set").clicked() {
                 *capturing = Some(field);
             }
+            if hotkey.is_some() && ui.button("Clear").clicked() {
+                *hotkey = None;
+            }
         }
     });
 }
@@ -261,16 +264,15 @@ fn settings_panel_ui(
 
             // --- Buttons ---
             ui.horizontal(|ui| {
-                if ui.button("Apply").clicked() {
-                    actions.lock().push(UiAction::ApplySettings(config.clone()));
-                }
-                if ui.button("Save").clicked() {
-                    actions.lock().push(UiAction::ApplySettings(config.clone()));
-                    open.store(false, Ordering::Relaxed);
-                }
-                if ui.button("Cancel").clicked() {
-                    open.store(false, Ordering::Relaxed);
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Cancel").clicked() {
+                        open.store(false, Ordering::Relaxed);
+                    }
+                    if ui.button("Update").clicked() {
+                        actions.lock().push(UiAction::ApplySettings(config.clone()));
+                        open.store(false, Ordering::Relaxed);
+                    }
+                });
             });
         });
     });
@@ -295,7 +297,7 @@ impl LiveSplitCoreRenderer {
             egui::ViewportId::from_hash_of("app_settings"),
             egui::ViewportBuilder::default()
                 .with_title("Annelid Settings")
-                .with_inner_size([450.0, 550.0]),
+                .with_inner_size([400.0, 470.0]),
             move |ctx, _class| {
                 settings_panel_ui(ctx, &state, &actions, &open);
             },

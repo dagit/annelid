@@ -159,7 +159,7 @@ impl LiveSplitCoreRenderer {
             egui::ViewportId::from_hash_of("control_panel"),
             egui::ViewportBuilder::default()
                 .with_title("Annelid Control Panel")
-                .with_inner_size([300.0, 400.0]),
+                .with_inner_size([300.0, 440.0]),
             move |ctx, _class| {
                 control_panel_ui(ctx, &timer, &actions, &open);
             },

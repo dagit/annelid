@@ -1065,7 +1065,7 @@ impl LiveSplitCoreRenderer {
             egui::ViewportId::from_hash_of("layout_editor"),
             egui::ViewportBuilder::default()
                 .with_title("Annelid Layout Editor")
-                .with_inner_size([550.0, 650.0]),
+                .with_inner_size([550.0, 560.0]),
             move |ctx, _class| {
                 layout_editor_ui(ctx, &state, &timer, &preview_slot, &actions, &open);
             },

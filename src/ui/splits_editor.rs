@@ -27,6 +27,7 @@ pub(crate) struct SplitsEditorState {
     // Tracking
     pub active_index: usize,
     pub scroll_to_active: bool,
+    pub focus_name: bool,
     // Comparison management
     pub new_comparison_name: String,
 }
@@ -48,6 +49,7 @@ impl SplitsEditorState {
             comparison_times: active_segment.comparison_times.clone(),
             active_index: 0,
             scroll_to_active: true,
+            focus_name: false,
             new_comparison_name: String::new(),
             editor,
             image_cache,
@@ -170,12 +172,17 @@ fn show_segment_table(
             egui::ScrollArea::vertical()
                 .max_height(200.0)
                 .show(ui, |ui| {
+                    let available = ui.available_width();
                     egui::Grid::new("segment_table")
                         .striped(true)
                         .num_columns(3)
+                        .min_col_width(0.0)
                         .show(ui, |ui| {
                             ui.strong("#");
-                            ui.strong("Name");
+                            ui.add_sized(
+                                [available - 150.0, 0.0],
+                                egui::Label::new(egui::RichText::new("Name").strong()),
+                            );
                             ui.strong("Split Time");
                             ui.end_row();
 
@@ -190,12 +197,21 @@ fn show_segment_table(
                                 if is_active && es.scroll_to_active {
                                     row_response.scroll_to_me(Some(egui::Align::Center));
                                 }
-                                ui.label(&seg.name);
+                                let name_response = ui.add_sized(
+                                    [available - 150.0, 0.0],
+                                    egui::Label::new(&seg.name),
+                                );
                                 ui.label(&seg.split_time);
                                 ui.end_row();
 
                                 if row_response.clicked() && !is_active {
                                     new_selection = Some(i);
+                                }
+                                if name_response.double_clicked() {
+                                    if !is_active {
+                                        new_selection = Some(i);
+                                    }
+                                    es.focus_name = true;
                                 }
                             }
                         });
@@ -254,7 +270,11 @@ fn show_selected_segment_detail(ui: &mut egui::Ui, es: &mut SplitsEditorState) {
                 .spacing([8.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("Name:");
-                    ui.text_edit_singleline(&mut es.segment_name);
+                    let name_response = ui.text_edit_singleline(&mut es.segment_name);
+                    if es.focus_name {
+                        name_response.request_focus();
+                        es.focus_name = false;
+                    }
                     es.editor
                         .active_segment()
                         .set_name(es.segment_name.as_str());
@@ -478,7 +498,7 @@ impl LiveSplitCoreRenderer {
             egui::ViewportId::from_hash_of("splits_editor"),
             egui::ViewportBuilder::default()
                 .with_title("Annelid Splits Editor")
-                .with_inner_size([500.0, 600.0]),
+                .with_inner_size([500.0, 480.0]),
             move |ctx, _class| {
                 splits_editor_ui(ctx, &state, &preview_slot, &actions, &open);
             },
