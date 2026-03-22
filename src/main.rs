@@ -1,18 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release mode
-#[macro_use]
-extern crate lazy_static;
-pub mod autosplitters;
-pub mod config;
-pub mod hotkey;
-pub mod livesplit_renderer;
-pub mod logging;
-pub mod routes;
-pub mod ui;
-pub mod usb2snes;
-pub mod utils;
-pub mod widget;
 
-use autosplitters::supermetroid::Settings;
+use annelid::autosplitters::supermetroid::Settings;
 use clap::Parser;
 use eframe::egui;
 use livesplit_core::layout::{ComponentSettings, LayoutSettings};
@@ -21,9 +9,10 @@ use parking_lot::RwLock;
 use std::error::Error;
 use std::sync::Arc;
 
-use config::app_config::*;
-use config::layout_meta::LayoutMeta;
-use livesplit_renderer::*;
+use annelid::config::app_config::*;
+use annelid::config::layout_meta::LayoutMeta;
+use annelid::livesplit_renderer::*;
+use annelid::logging;
 
 #[allow(dead_code)]
 fn customize_layout(layout: &mut LayoutSettings) {
@@ -139,7 +128,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         "Annelid",
         options,
         Box::new(move |cc| {
-            livesplit_renderer::app_init(&mut app, sync_receiver, cc);
+            annelid::livesplit_renderer::app_init(&mut app, sync_receiver, cc);
             Ok(Box::new(app))
         }),
     )?;

@@ -651,7 +651,7 @@ impl Settings {
         self.data.contains_key(var)
     }
 
-    fn get(&self, var: &str) -> bool {
+    pub fn get(&self, var: &str) -> bool {
         match self.data.get(var) {
             None => false,
             Some((b, None)) => *b,
@@ -659,7 +659,7 @@ impl Settings {
         }
     }
 
-    fn set(&mut self, var: &str, value: bool) {
+    pub fn set(&mut self, var: &str, value: bool) {
         let val = match self.data.get_mut(var) {
             None => (value, None),
             Some((_, x)) => (value, x.clone()),
@@ -819,7 +819,7 @@ impl Default for Settings {
 #[allow(non_snake_case)]
 #[allow(clippy::all)]
 // TODO: probably makes sense to move this to the SNESState impl
-fn split(settings: &Settings, snes: &mut SNESState) -> bool {
+pub fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     // Ammo pickup section
     let firstMissile = settings.get("firstMissile")
         && snes["maxMissiles"].old == 0
@@ -1644,9 +1644,9 @@ pub enum Width {
 
 #[derive(Clone)]
 pub struct MemoryWatcher {
-    address: u32,
-    current: u32,
-    old: u32,
+    pub address: u32,
+    pub current: u32,
+    pub old: u32,
     width: Width,
 }
 
@@ -1660,7 +1660,7 @@ impl MemoryWatcher {
         }
     }
 
-    fn update_value(&mut self, memory: &[u8]) {
+    pub fn update_value(&mut self, memory: &[u8]) {
         match self.width {
             Width::Byte => {
                 self.old = self.current;
@@ -1682,7 +1682,7 @@ pub struct SNESState {
     vars: HashMap<&'static str, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     // The MemoryWatchers are not in a good
     // state until they've been updated
     // twice, due to having both old and current
@@ -1751,7 +1751,7 @@ impl SNESState {
         }
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         for watcher in self.vars.iter_mut() {
             if self.do_extra_update {
                 watcher.1.update_value(&self.data);

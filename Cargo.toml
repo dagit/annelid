@@ -122,8 +122,15 @@ auto_link_exclude_list = [
   "libjack.so*",
 ]
 
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
+
+[lib]
+name = "annelid"
+path = "src/lib.rs"
+
 [[bin]]
 name = "annelid"
 path = "src/main.rs"
-test = false
 doc = false

@@ -2,7 +2,9 @@ use serde_derive::{Deserialize, Serialize};
 
 /// Framework-independent key code enum.
 /// Variant names match egui::Key's serde representation for config file compatibility.
-#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(
+    Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq, Hash, strum_macros::EnumIter,
+)]
 pub enum KeyCode {
     ArrowDown,
     ArrowLeft,
