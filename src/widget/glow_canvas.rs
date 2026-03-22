@@ -330,10 +330,10 @@ fn gl_debug(source: u32, typ: u32, id: u32, severity: u32, message: &str) {
         || typ == glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR
         || typ == glow::DEBUG_TYPE_PORTABILITY
     {
-        println!(
-            "source: {source_name}, type: {type_name}, id: {id}, severity: {severity_name}: {message}"
+        tracing::error!(
+            "GL error: source: {source_name}, type: {type_name}, id: {id}, severity: {severity_name}: {message}"
         );
-        panic!();
+        panic!("GL debug callback triggered error");
     }
 }
 

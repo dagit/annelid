@@ -68,7 +68,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     // Initialize logging and panic hook early, before anything else can fail.
     let log_dir = project_dirs.data_dir();
     std::fs::create_dir_all(log_dir)?;
-    logging::init(log_dir);
+    let log_buffer = logging::init(log_dir);
 
     tracing::debug!("Annelid starting up");
     tracing::debug!("Config dir: {}", logging::sanitize_path(preference_dir));
@@ -132,6 +132,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         sync_sender,
         project_dirs,
         cli_config,
+        log_buffer,
     );
 
     eframe::run_native(

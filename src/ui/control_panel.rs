@@ -35,6 +35,8 @@ pub(crate) enum UiAction {
     // App
     OpenSettingsPanel,
     ApplySettings(AppConfig),
+    OpenLogViewer,
+    OpenLogDirectory,
     Quit,
 }
 
@@ -138,6 +140,14 @@ fn control_panel_ui(
             if ui.button("Settings").clicked() {
                 actions.lock().push(UiAction::OpenSettingsPanel);
             }
+            ui.horizontal(|ui| {
+                if ui.button("View Log").clicked() {
+                    actions.lock().push(UiAction::OpenLogViewer);
+                }
+                if ui.button("Open Log Directory").clicked() {
+                    actions.lock().push(UiAction::OpenLogDirectory);
+                }
+            });
             if ui.button("Quit").clicked() {
                 actions.lock().push(UiAction::Quit);
             }
@@ -249,7 +259,7 @@ impl LiveSplitCoreRenderer {
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                             Err(e) => {
-                                eprintln!("Failed to open splits editor: {e}");
+                                tracing::warn!("Failed to open splits editor: {e}");
                             }
                         }
                     }
@@ -272,7 +282,7 @@ impl LiveSplitCoreRenderer {
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                             Err(e) => {
-                                eprintln!("Failed to open layout editor: {e}");
+                                tracing::warn!("Failed to open layout editor: {e}");
                             }
                         }
                     }
@@ -295,6 +305,13 @@ impl LiveSplitCoreRenderer {
                 UiAction::ApplySettings(new_config) => {
                     *self.app_config.write().unwrap() = new_config;
                     self.save_app_config();
+                }
+                UiAction::OpenLogViewer => {
+                    self.log_viewer_open
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                UiAction::OpenLogDirectory => {
+                    crate::logging::open_log_dir();
                 }
                 UiAction::Quit => {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);

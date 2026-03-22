@@ -84,7 +84,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Write;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Saving to {config_path:#?}");
+            tracing::debug!("Saving to {config_path:#?}");
             let f = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -103,7 +103,7 @@ impl LiveSplitCoreRenderer {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
-            println!("Loading from {config_path:#?}");
+            tracing::debug!("Loading from {config_path:#?}");
             let saved_config: AppConfig = std::fs::File::open(config_path)
                 .and_then(|mut f| {
                     let mut buffer = String::new();

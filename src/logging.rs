@@ -1,8 +1,16 @@
+use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 /// The log directory, set once at startup.
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Maximum number of log lines kept in the in-memory ring buffer.
+const MAX_UI_LOG_LINES: usize = 500;
+
+/// Shared ring buffer of formatted log lines for the UI viewer.
+pub type LogBuffer = Arc<Mutex<VecDeque<String>>>;
 
 /// Sanitizes a path by replacing the user's home directory with `~`.
 pub fn sanitize_path(p: &Path) -> String {
@@ -19,11 +27,32 @@ pub fn sanitize_path(p: &Path) -> String {
 /// - Sets up a daily-rotating log file (`annelid.log`) in `log_dir`.
 /// - Installs a panic hook that writes crash info to `annelid-crash.log`
 ///   and shows an error dialog via rfd.
-pub fn init(log_dir: &Path) {
+pub fn init(log_dir: &Path) -> LogBuffer {
     LOG_DIR.set(log_dir.to_owned()).ok();
     cleanup_old_logs(log_dir, 7);
-    init_file_logging(log_dir);
+    let log_buffer = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_UI_LOG_LINES)));
+    init_file_logging(log_dir, log_buffer.clone());
     init_panic_hook();
+    log_buffer
+}
+
+/// Returns the log directory path, if initialized.
+pub fn log_dir() -> Option<&'static Path> {
+    LOG_DIR.get().map(|p| p.as_path())
+}
+
+/// Opens the log directory in the platform's file explorer.
+pub fn open_log_dir() {
+    let Some(dir) = LOG_DIR.get() else {
+        return;
+    };
+    #[cfg(target_os = "linux")]
+    let cmd = "xdg-open";
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    let _ = std::process::Command::new(cmd).arg(dir).spawn();
 }
 
 /// Deletes annelid log files older than `max_age_days` days.
@@ -59,7 +88,7 @@ fn cleanup_old_logs(log_dir: &Path, max_age_days: u64) {
     }
 }
 
-fn init_file_logging(log_dir: &Path) {
+fn init_file_logging(log_dir: &Path, log_buffer: LogBuffer) {
     use tracing_appender::rolling;
     use tracing_subscriber::fmt;
     use tracing_subscriber::prelude::*;
@@ -75,6 +104,8 @@ fn init_file_logging(log_dir: &Path) {
         .with_target(true)
         .with_thread_names(true);
 
+    let ui_layer = UiLogLayer { buffer: log_buffer };
+
     #[cfg(feature = "tracing")]
     {
         use tracing_chrome::ChromeLayerBuilder;
@@ -85,6 +116,7 @@ fn init_file_logging(log_dir: &Path) {
         tracing_subscriber::registry()
             .with(filter)
             .with(fmt_layer)
+            .with(ui_layer)
             .with(chrome_layer)
             .init();
     }
@@ -94,7 +126,56 @@ fn init_file_logging(log_dir: &Path) {
         tracing_subscriber::registry()
             .with(filter)
             .with(fmt_layer)
+            .with(ui_layer)
             .init();
+    }
+}
+
+/// A tracing layer that captures formatted log lines into a shared ring buffer.
+struct UiLogLayer {
+    buffer: LogBuffer,
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for UiLogLayer {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        use std::fmt::Write;
+
+        let metadata = event.metadata();
+        let mut message = String::new();
+        let _ = write!(message, "[{}] {}: ", metadata.level(), metadata.target());
+
+        // Extract the message field from the event
+        struct MessageVisitor<'a>(&'a mut String);
+        impl tracing::field::Visit for MessageVisitor<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write;
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{:?}", value);
+                } else {
+                    let _ = write!(self.0, " {}={:?}", field.name(), value);
+                }
+            }
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                use std::fmt::Write;
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{}", value);
+                } else {
+                    let _ = write!(self.0, " {}={}", field.name(), value);
+                }
+            }
+        }
+
+        event.record(&mut MessageVisitor(&mut message));
+
+        let mut buf = self.buffer.lock();
+        if buf.len() >= MAX_UI_LOG_LINES {
+            buf.pop_front();
+        }
+        buf.push_back(message);
     }
 }
 

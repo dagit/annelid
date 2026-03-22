@@ -21,7 +21,7 @@ impl LayoutMeta {
         let (width, height) = ctx.input(|i| {
             i.viewport().inner_rect.map_or_else(
                 || {
-                    eprintln!("Warning: could not read window inner rect, using defaults");
+                    tracing::warn!("Could not read window inner rect, using defaults");
                     (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                 },
                 |r| (r.width(), r.height()),
@@ -30,7 +30,7 @@ impl LayoutMeta {
         let (x, y) = ctx.input(|i| {
             i.viewport().outer_rect.map_or_else(
                 || {
-                    eprintln!("Warning: could not read window outer rect, using defaults");
+                    tracing::warn!("Could not read window outer rect, using defaults");
                     (0.0, 0.0)
                 },
                 |r| (r.left(), r.top()),

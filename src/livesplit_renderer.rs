@@ -56,6 +56,8 @@ pub struct LiveSplitCoreRenderer {
     /// The window geometry that was last loaded from or saved to a layout file.
     /// Used to detect whether the user has moved/resized the window.
     pub(crate) saved_layout_meta: Option<crate::config::layout_meta::LayoutMeta>,
+    pub(crate) log_buffer: crate::logging::LogBuffer,
+    pub(crate) log_viewer_open: Arc<AtomicBool>,
 }
 
 impl LiveSplitCoreRenderer {
@@ -66,6 +68,7 @@ impl LiveSplitCoreRenderer {
         chan: std::sync::mpsc::SyncSender<ThreadEvent>,
         project_dirs: directories::ProjectDirs,
         cli_config: AppConfig,
+        log_buffer: crate::logging::LogBuffer,
     ) -> Self {
         LiveSplitCoreRenderer {
             timer,
@@ -100,6 +103,8 @@ impl LiveSplitCoreRenderer {
             layout_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
             layout_modified: false,
             saved_layout_meta: None,
+            log_buffer,
+            log_viewer_open: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -299,6 +304,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         self.show_app_settings(ctx);
         self.show_splits_editor(ctx);
         self.show_layout_editor(ctx);
+        self.show_log_viewer(ctx);
         self.process_ui_actions(ctx);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
@@ -330,10 +336,10 @@ pub fn app_init(
         match unsafe { livesplit_renderer_glow::GlowRenderer::new(gl.clone()) } {
             Ok(gpu_renderer) => {
                 *app.gpu_renderer.lock() = Some(gpu_renderer);
-                println!("GPU renderer initialized");
+                tracing::info!("GPU renderer initialized");
             }
             Err(e) => {
-                eprintln!("Failed to initialize GPU renderer, falling back to software: {e}");
+                tracing::warn!("Failed to initialize GPU renderer, falling back to software: {e}");
                 app.app_config.write().unwrap().renderer = Some(RendererType::Software);
             }
         }
@@ -388,7 +394,7 @@ pub fn app_init(
                             let mut client = crate::usb2snes::SyncClient::connect()
                                 .context("creating usb2snes connection")?;
                             client.set_name("annelid")?;
-                            println!("Server version is {:?}", client.app_version()?);
+                            tracing::info!("Server version is {:?}", client.app_version()?);
                             let mut devices = client.list_device()?.to_vec();
                             if devices.len() != 1 {
                                 if devices.is_empty() {
@@ -398,10 +404,10 @@ pub fn app_init(
                                 }
                             }
                             let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                            println!("Using device: {device}");
+                            tracing::info!("Using device: {device}");
                             client.attach(&device)?;
-                            println!("Connected.");
-                            println!("{:#?}", client.info()?);
+                            tracing::info!("Connected.");
+                            tracing::debug!("{:#?}", client.info()?);
                             let mut autosplitter: Box<dyn AutoSplitter> =
                                 Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
                             let mut next = std::time::Instant::now() + period;

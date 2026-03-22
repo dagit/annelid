@@ -1496,28 +1496,28 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && (snes["brinstarBosses"].current & bossFlagEnum["kraid"]) > 0
         && snes["roomID"].current == roomIDEnum["kraid"];
     if kraid {
-        println!("Split due to kraid defeat");
+        tracing::debug!("Split due to kraid defeat");
     }
     let phantoon = settings.get("phantoon")
         && (snes["wreckedShipBosses"].old & bossFlagEnum["phantoon"]) == 0
         && (snes["wreckedShipBosses"].current & bossFlagEnum["phantoon"]) > 0
         && snes["roomID"].current == roomIDEnum["phantoon"];
     if phantoon {
-        println!("Split due to phantoon defeat");
+        tracing::debug!("Split due to phantoon defeat");
     }
     let draygon = settings.get("draygon")
         && (snes["maridiaBosses"].old & bossFlagEnum["draygon"]) == 0
         && (snes["maridiaBosses"].current & bossFlagEnum["draygon"]) > 0
         && snes["roomID"].current == roomIDEnum["draygon"];
     if draygon {
-        println!("Split due to draygon defeat");
+        tracing::debug!("Split due to draygon defeat");
     }
     let ridley = settings.get("ridley")
         && (snes["norfairBosses"].old & bossFlagEnum["ridley"]) == 0
         && (snes["norfairBosses"].current & bossFlagEnum["ridley"]) > 0
         && snes["roomID"].current == roomIDEnum["ridley"];
     if ridley {
-        println!("Split due to ridley defeat");
+        tracing::debug!("Split due to ridley defeat");
     }
     // Mother Brain phases
     let inMotherBrainRoom = snes["roomID"].current == roomIDEnum["motherBrain"];
@@ -1527,7 +1527,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && snes["motherBrainHP"].old == 0
         && snes["motherBrainHP"].current == (motherBrainMaxHPEnum["phase2"]);
     if mb1 {
-        println!("Split due to mb1 defeat");
+        tracing::debug!("Split due to mb1 defeat");
     }
     let mb1_0hp = settings.get("mb1_0hp")
         && inMotherBrainRoom
@@ -1536,7 +1536,7 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && snes["motherBrainHP"].current == 0
         && snes["motherBrainPhase"].current == motherBrainPhaseEnum["phase1"];
     if mb1_0hp {
-        println!("Split due to mb1 0hp");
+        tracing::debug!("Split due to mb1 0hp");
     }
     let mb2 = settings.get("mb2")
         && inMotherBrainRoom
@@ -1544,14 +1544,14 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && snes["motherBrainHP"].old == 0
         && snes["motherBrainHP"].current == (motherBrainMaxHPEnum["phase3"]);
     if mb2 {
-        println!("Split due to mb2 defeat");
+        tracing::debug!("Split due to mb2 defeat");
     }
     let mb3 = settings.get("mb3")
         && inMotherBrainRoom
         && (snes["tourianBosses"].old & bossFlagEnum["motherBrain"]) == 0
         && (snes["tourianBosses"].current & bossFlagEnum["motherBrain"]) > 0;
     if mb3 {
-        println!("Split due to mb3 defeat");
+        tracing::debug!("Split due to mb3 defeat");
     }
     let bossDefeat = kraid || phantoon || draygon || ridley || mb1 || mb1_0hp || mb2 || mb3;
 
@@ -1596,32 +1596,32 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let nonStandardCategoryFinish = sporeSpawnRTAFinish || hundredMissileRTAFinish;
 
     if pickup {
-        println!("Split due to pickup");
+        tracing::debug!("Split due to pickup");
     }
     if unlock {
-        println!("Split due to unlock");
+        tracing::debug!("Split due to unlock");
     }
     if beam {
-        println!("Split due to beam upgrade");
+        tracing::debug!("Split due to beam upgrade");
     }
     if energyUpgrade {
-        println!("Split due to energy upgrade");
+        tracing::debug!("Split due to energy upgrade");
     }
     if roomTransitions {
-        println!("Split due to room transition");
+        tracing::debug!("Split due to room transition");
     }
     if minibossDefeat {
-        println!("Split due to miniboss defeat");
+        tracing::debug!("Split due to miniboss defeat");
     }
     // individual boss defeat conditions already covered above
     if escape {
-        println!("Split due to escape");
+        tracing::debug!("Split due to escape");
     }
     if takeoff {
-        println!("Split due to takeoff");
+        tracing::debug!("Split due to takeoff");
     }
     if nonStandardCategoryFinish {
-        println!("Split due to non standard category finish");
+        tracing::debug!("Split due to non standard category finish");
     }
 
     pickup

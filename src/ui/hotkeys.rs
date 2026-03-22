@@ -47,7 +47,7 @@ impl LiveSplitCoreRenderer {
         let thread_chan = self.thread_chan.clone();
         let app_cfg = self.app_config.clone();
 
-        print!("Registering global hotkeys...");
+        tracing::debug!("Registering global hotkeys...");
         if let Some(hk) = cfg.hot_key_start {
             reg(hook, &hk, {
                 let timer = timer.clone();
@@ -55,7 +55,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.split_or_start().ok())
-                        .map_err(|e| println!("split/start lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("split/start lock failed: {e}"));
                 }
             })?;
         }
@@ -68,7 +68,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.reset(true).ok())
-                        .map_err(|e| println!("reset lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("reset lock failed: {e}"));
                     if app_cfg
                         .read()
                         .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
@@ -86,7 +86,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.undo_split().ok())
-                        .map_err(|e| println!("undo lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("undo lock failed: {e}"));
                 }
             })?;
         }
@@ -97,7 +97,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.skip_split().ok())
-                        .map_err(|e| println!("skip split lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("skip split lock failed: {e}"));
                 }
             })?;
         }
@@ -108,7 +108,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.toggle_pause().ok())
-                        .map_err(|e| println!("toggle pause lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("toggle pause lock failed: {e}"));
                 }
             })?;
         }
@@ -119,7 +119,7 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.switch_to_next_comparison())
-                        .map_err(|e| println!("next comparison lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("next comparison lock failed: {e}"));
                 }
             })?;
         }
@@ -130,12 +130,12 @@ impl LiveSplitCoreRenderer {
                     let _ = timer
                         .write()
                         .map(|mut g| g.switch_to_previous_comparison())
-                        .map_err(|e| println!("prev comparison lock failed: {e}"));
+                        .map_err(|e| tracing::warn!("prev comparison lock failed: {e}"));
                 }
             })?;
         }
 
-        println!("registered");
+        tracing::debug!("Global hotkeys registered");
         Ok(())
     }
 
