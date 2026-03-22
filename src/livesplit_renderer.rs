@@ -19,6 +19,48 @@ pub enum ThreadEvent {
     TimerReset,
 }
 
+/// UI panel management state, separated from domain state for cleaner framework porting.
+pub(crate) struct UiState {
+    pub control_panel_open: Arc<AtomicBool>,
+    pub ui_actions: Arc<parking_lot::Mutex<Vec<crate::ui::control_panel::UiAction>>>,
+    pub settings_panel_open: Arc<AtomicBool>,
+    pub settings_panel_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::app_settings::SettingsState>>>,
+    pub splits_editor_open: Arc<AtomicBool>,
+    pub splits_editor_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::splits_editor::SplitsEditorState>>>,
+    pub layout_editor_open: Arc<AtomicBool>,
+    pub layout_editor_state:
+        Arc<parking_lot::Mutex<Option<crate::ui::layout_editor::LayoutEditorState>>>,
+    pub layout_editor_preview: Arc<parking_lot::Mutex<Option<livesplit_core::layout::LayoutState>>>,
+    pub log_viewer_open: Arc<AtomicBool>,
+    pub show_settings_editor: Arc<AtomicBool>,
+    pub autosplitter_settings_snapshot: Arc<parking_lot::Mutex<Option<Settings>>>,
+    pub splits_editor_preview: Arc<parking_lot::Mutex<Option<livesplit_core::Run>>>,
+    pub layout_modified: bool,
+}
+
+impl UiState {
+    fn new() -> Self {
+        UiState {
+            control_panel_open: Arc::new(AtomicBool::new(false)),
+            ui_actions: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            settings_panel_open: Arc::new(AtomicBool::new(false)),
+            settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
+            splits_editor_open: Arc::new(AtomicBool::new(false)),
+            splits_editor_state: Arc::new(parking_lot::Mutex::new(None)),
+            layout_editor_open: Arc::new(AtomicBool::new(false)),
+            layout_editor_state: Arc::new(parking_lot::Mutex::new(None)),
+            layout_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
+            log_viewer_open: Arc::new(AtomicBool::new(false)),
+            show_settings_editor: Arc::new(AtomicBool::new(false)),
+            autosplitter_settings_snapshot: Arc::new(parking_lot::Mutex::new(None)),
+            splits_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
+            layout_modified: false,
+        }
+    }
+}
+
 pub struct LiveSplitCoreRenderer {
     pub(crate) layout: Layout,
     pub(crate) renderer: livesplit_core::rendering::software::BorrowedRenderer,
@@ -26,7 +68,6 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) layout_state: Arc<parking_lot::RwLock<Option<livesplit_core::layout::LayoutState>>>,
     pub(crate) image_cache: Arc<parking_lot::RwLock<livesplit_core::settings::ImageCache>>,
     pub(crate) timer: SharedTimer,
-    pub(crate) show_settings_editor: Arc<AtomicBool>,
     pub(crate) settings: Arc<RwLock<Settings>>,
     pub(crate) can_exit: bool,
     pub(crate) is_exiting: bool,
@@ -36,28 +77,12 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) app_config_processed: bool,
     pub(crate) glow_canvas: GlowCanvas,
     pub(crate) global_hotkey_hook: Option<Hook>,
-    pub(crate) autosplitter_settings_snapshot: Arc<parking_lot::Mutex<Option<Settings>>>,
-    pub(crate) splits_editor_preview: Arc<parking_lot::Mutex<Option<livesplit_core::Run>>>,
     pub(crate) load_errors: Vec<anyhow::Error>,
-    pub(crate) control_panel_open: Arc<AtomicBool>,
-    pub(crate) ui_actions: Arc<parking_lot::Mutex<Vec<crate::ui::control_panel::UiAction>>>,
-    pub(crate) settings_panel_open: Arc<AtomicBool>,
-    pub(crate) settings_panel_state:
-        Arc<parking_lot::Mutex<Option<crate::ui::app_settings::SettingsState>>>,
-    pub(crate) splits_editor_open: Arc<AtomicBool>,
-    pub(crate) splits_editor_state:
-        Arc<parking_lot::Mutex<Option<crate::ui::splits_editor::SplitsEditorState>>>,
-    pub(crate) layout_editor_open: Arc<AtomicBool>,
-    pub(crate) layout_editor_state:
-        Arc<parking_lot::Mutex<Option<crate::ui::layout_editor::LayoutEditorState>>>,
-    pub(crate) layout_editor_preview:
-        Arc<parking_lot::Mutex<Option<livesplit_core::layout::LayoutState>>>,
-    pub(crate) layout_modified: bool,
     /// The window geometry that was last loaded from or saved to a layout file.
     /// Used to detect whether the user has moved/resized the window.
     pub(crate) saved_layout_meta: Option<crate::config::layout_meta::LayoutMeta>,
     pub(crate) log_buffer: crate::logging::LogBuffer,
-    pub(crate) log_viewer_open: Arc<AtomicBool>,
+    pub(crate) ui: UiState,
 }
 
 impl LiveSplitCoreRenderer {
@@ -79,7 +104,6 @@ impl LiveSplitCoreRenderer {
                 livesplit_core::settings::ImageCache::new(),
             )),
             layout_state: Arc::new(parking_lot::RwLock::new(None)),
-            show_settings_editor: Arc::new(AtomicBool::new(false)),
             settings,
             can_exit: false,
             is_exiting: false,
@@ -87,24 +111,12 @@ impl LiveSplitCoreRenderer {
             project_dirs,
             app_config: Arc::new(RwLock::new(cli_config)),
             app_config_processed: false,
-            autosplitter_settings_snapshot: Arc::new(parking_lot::Mutex::new(None)),
-            splits_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
-            control_panel_open: Arc::new(AtomicBool::new(false)),
-            ui_actions: Arc::new(parking_lot::Mutex::new(Vec::new())),
-            settings_panel_open: Arc::new(AtomicBool::new(false)),
-            settings_panel_state: Arc::new(parking_lot::Mutex::new(None)),
-            splits_editor_open: Arc::new(AtomicBool::new(false)),
-            splits_editor_state: Arc::new(parking_lot::Mutex::new(None)),
-            layout_editor_open: Arc::new(AtomicBool::new(false)),
-            layout_editor_state: Arc::new(parking_lot::Mutex::new(None)),
-            layout_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
-            layout_modified: false,
             saved_layout_meta: None,
             log_buffer,
-            log_viewer_open: Arc::new(AtomicBool::new(false)),
+            ui: UiState::new(),
         }
     }
 }
@@ -155,19 +167,21 @@ impl eframe::App for LiveSplitCoreRenderer {
         {
             let _span = span!(Level::TRACE, "layout_state_update").entered();
             let layout_editor_open = self
+                .ui
                 .layout_editor_open
                 .load(std::sync::atomic::Ordering::Relaxed);
             let splits_editor_open = self
+                .ui
                 .splits_editor_open
                 .load(std::sync::atomic::Ordering::Relaxed);
 
             // If the layout editor is open, use its preview (computed in the
             // editor's deferred viewport callback — no editor lock needed here).
             let layout_preview = if layout_editor_open {
-                self.layout_editor_preview.lock().take()
+                self.ui.layout_editor_preview.lock().take()
             } else {
                 // Editor just closed — clear any stale preview
-                let stale = self.layout_editor_preview.lock().take();
+                let stale = self.ui.layout_editor_preview.lock().take();
                 if stale.is_some() {
                     *self.layout_state.write() = None;
                 }
@@ -177,9 +191,9 @@ impl eframe::App for LiveSplitCoreRenderer {
             // If the splits editor is open, use its preview run to compute
             // a layout state with the edited segment names/times.
             let splits_preview = if splits_editor_open {
-                self.splits_editor_preview.lock().take()
+                self.ui.splits_editor_preview.lock().take()
             } else {
-                self.splits_editor_preview.lock().take(); // drain stale
+                self.ui.splits_editor_preview.lock().take(); // drain stale
                 None
             };
 
@@ -293,6 +307,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         let response = egui::Area::new("livesplit".into())
             .enabled(
                 !self
+                    .ui
                     .show_settings_editor
                     .load(std::sync::atomic::Ordering::Relaxed),
             )
@@ -303,7 +318,8 @@ impl eframe::App for LiveSplitCoreRenderer {
             })
             .response;
         if response.secondary_clicked() {
-            self.control_panel_open
+            self.ui
+                .control_panel_open
                 .store(true, std::sync::atomic::Ordering::Relaxed);
         }
         self.show_autosplitter_settings_window(ctx);

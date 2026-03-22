@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::config::app_config::*;
-use crate::hotkey::HotKey;
+use crate::hotkey::{HotKey, KeyEvent};
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use crate::ui::control_panel::UiAction;
 
@@ -57,27 +57,26 @@ fn hotkey_row(
         let is_capturing = *capturing == Some(field);
         if is_capturing {
             ui.label("Press a key...");
-            // Check for key events
+            // Convert egui events to framework-agnostic KeyEvents and process
             let events = ctx.input(|i| i.events.clone());
             for event in &events {
                 if let egui::Event::Key {
                     key,
-                    pressed: true,
+                    pressed,
                     modifiers,
                     ..
                 } = event
                 {
-                    // Escape cancels capture
-                    if *key == egui::Key::Escape {
+                    let key_event = KeyEvent {
+                        key: (*key).into(),
+                        modifiers: (*modifiers).into(),
+                        pressed: *pressed,
+                    };
+                    if let Some(result) = HotKey::capture_from_event(&key_event) {
+                        *hotkey = result;
                         *capturing = None;
                         return;
                     }
-                    *hotkey = Some(HotKey {
-                        key: (*key).into(),
-                        modifiers: (*modifiers).into(),
-                    });
-                    *capturing = None;
-                    return;
                 }
             }
             if ui.button("Cancel").clicked() {
@@ -281,18 +280,18 @@ fn settings_panel_ui(
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_app_settings(&mut self, ctx: &egui::Context) {
-        if !self.settings_panel_open.load(Ordering::Relaxed) {
+        if !self.ui.settings_panel_open.load(Ordering::Relaxed) {
             // Clear state when panel is closed
-            let mut guard = self.settings_panel_state.lock();
+            let mut guard = self.ui.settings_panel_state.lock();
             if guard.is_some() {
                 *guard = None;
             }
             return;
         }
 
-        let state = self.settings_panel_state.clone();
-        let actions = self.ui_actions.clone();
-        let open = self.settings_panel_open.clone();
+        let state = self.ui.settings_panel_state.clone();
+        let actions = self.ui.ui_actions.clone();
+        let open = self.ui.settings_panel_open.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("app_settings"),

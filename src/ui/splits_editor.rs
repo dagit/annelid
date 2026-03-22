@@ -481,18 +481,18 @@ fn splits_editor_ui(
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_splits_editor(&mut self, ctx: &egui::Context) {
-        if !self.splits_editor_open.load(Ordering::Relaxed) {
-            let mut guard = self.splits_editor_state.lock();
+        if !self.ui.splits_editor_open.load(Ordering::Relaxed) {
+            let mut guard = self.ui.splits_editor_state.lock();
             if guard.is_some() {
                 *guard = None;
             }
             return;
         }
 
-        let state = self.splits_editor_state.clone();
-        let preview_slot = self.splits_editor_preview.clone();
-        let actions = self.ui_actions.clone();
-        let open = self.splits_editor_open.clone();
+        let state = self.ui.splits_editor_state.clone();
+        let preview_slot = self.ui.splits_editor_preview.clone();
+        let actions = self.ui.ui_actions.clone();
+        let open = self.ui.splits_editor_open.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("splits_editor"),

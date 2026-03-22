@@ -3,7 +3,7 @@ use annelid::routes::supermetroid::{anypercent, hundo};
 #[test]
 fn hundo_has_segments() {
     let (settings, run) = hundo();
-    assert!(run.len() > 0, "hundo run should have segments");
+    assert!(!run.is_empty(), "hundo run should have segments");
     // Verify the settings enable expected splits
     assert!(settings.get("kraid"), "hundo should enable kraid");
     assert!(
@@ -34,7 +34,7 @@ fn hundo_segment_count_matches_splits() {
 #[test]
 fn anypercent_has_segments() {
     let (settings, run) = anypercent();
-    assert!(run.len() > 0, "anypercent run should have segments");
+    assert!(!run.is_empty(), "anypercent run should have segments");
     assert!(settings.get("kraid"), "anypercent should enable kraid");
 }
 

@@ -1047,19 +1047,19 @@ fn layout_editor_ui(
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_layout_editor(&mut self, ctx: &egui::Context) {
-        if !self.layout_editor_open.load(Ordering::Relaxed) {
-            let mut guard = self.layout_editor_state.lock();
+        if !self.ui.layout_editor_open.load(Ordering::Relaxed) {
+            let mut guard = self.ui.layout_editor_state.lock();
             if guard.is_some() {
                 *guard = None;
             }
             return;
         }
 
-        let state = self.layout_editor_state.clone();
+        let state = self.ui.layout_editor_state.clone();
         let timer = self.timer.clone();
-        let preview_slot = self.layout_editor_preview.clone();
-        let actions = self.ui_actions.clone();
-        let open = self.layout_editor_open.clone();
+        let preview_slot = self.ui.layout_editor_preview.clone();
+        let actions = self.ui.ui_actions.clone();
+        let open = self.ui.layout_editor_open.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("layout_editor"),

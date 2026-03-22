@@ -111,14 +111,14 @@ fn settings_viewport_ui(
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_autosplitter_settings_window(&mut self, ctx: &egui::Context) {
-        if !self.show_settings_editor.load(Ordering::Relaxed) {
+        if !self.ui.show_settings_editor.load(Ordering::Relaxed) {
             return;
         }
 
         let settings = self.settings.clone();
-        let snapshot = self.autosplitter_settings_snapshot.clone();
-        let actions = self.ui_actions.clone();
-        let open = self.show_settings_editor.clone();
+        let snapshot = self.ui.autosplitter_settings_snapshot.clone();
+        let actions = self.ui.ui_actions.clone();
+        let open = self.ui.show_settings_editor.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("autosplitter_settings"),

@@ -157,13 +157,13 @@ fn control_panel_ui(
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_control_panel(&mut self, ctx: &egui::Context) {
-        if !self.control_panel_open.load(Ordering::Relaxed) {
+        if !self.ui.control_panel_open.load(Ordering::Relaxed) {
             return;
         }
 
         let timer = self.timer.clone();
-        let actions = self.ui_actions.clone();
-        let open = self.control_panel_open.clone();
+        let actions = self.ui.ui_actions.clone();
+        let open = self.ui.control_panel_open.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("control_panel"),
@@ -186,7 +186,7 @@ impl LiveSplitCoreRenderer {
             },
         };
         let actions: Vec<UiAction> = {
-            let mut guard = self.ui_actions.lock();
+            let mut guard = self.ui.ui_actions.lock();
             std::mem::take(&mut *guard)
         };
         for action in actions {
@@ -255,10 +255,10 @@ impl LiveSplitCoreRenderer {
                     let mut guard = self.settings.write();
                     *guard = Settings::new();
                     drop(guard);
-                    self.show_settings_editor.store(true, Ordering::Relaxed);
+                    self.ui.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::ConfigureAutosplitter => {
-                    self.show_settings_editor.store(true, Ordering::Relaxed);
+                    self.ui.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::OpenAutosplitterDialog => {
                     if let Err(e) = self.open_autosplitter_dialog(&document_dir) {
@@ -272,6 +272,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::OpenSplitsEditor => {
                     if !self
+                        .ui
                         .splits_editor_open
                         .load(std::sync::atomic::Ordering::Relaxed)
                     {
@@ -286,8 +287,9 @@ impl LiveSplitCoreRenderer {
                             Ok(editor) => {
                                 let editor_state =
                                     crate::ui::splits_editor::SplitsEditorState::new(editor);
-                                *self.splits_editor_state.lock() = Some(editor_state);
-                                self.splits_editor_open
+                                *self.ui.splits_editor_state.lock() = Some(editor_state);
+                                self.ui
+                                    .splits_editor_open
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                             Err(e) => {
@@ -303,6 +305,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::OpenLayoutEditor => {
                     if !self
+                        .ui
                         .layout_editor_open
                         .load(std::sync::atomic::Ordering::Relaxed)
                     {
@@ -311,8 +314,9 @@ impl LiveSplitCoreRenderer {
                             Ok(editor) => {
                                 let editor_state =
                                     crate::ui::layout_editor::LayoutEditorState::new(editor);
-                                *self.layout_editor_state.lock() = Some(editor_state);
-                                self.layout_editor_open
+                                *self.ui.layout_editor_state.lock() = Some(editor_state);
+                                self.ui
+                                    .layout_editor_open
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                             Err(e) => {
@@ -323,14 +327,14 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::ApplyLayoutEdit(layout) => {
                     self.layout = *layout;
-                    self.layout_modified = true;
+                    self.ui.layout_modified = true;
                     // Force layout_state to re-create from the new layout
                     *self.layout_state.write() = None;
                 }
                 UiAction::OpenSettingsPanel => {
-                    self.settings_panel_open.store(true, Ordering::Relaxed);
+                    self.ui.settings_panel_open.store(true, Ordering::Relaxed);
                     let config = self.app_config.read().clone();
-                    *self.settings_panel_state.lock() =
+                    *self.ui.settings_panel_state.lock() =
                         Some(crate::ui::app_settings::SettingsState {
                             config,
                             capturing: None,
@@ -341,7 +345,8 @@ impl LiveSplitCoreRenderer {
                     self.save_app_config();
                 }
                 UiAction::OpenLogViewer => {
-                    self.log_viewer_open
+                    self.ui
+                        .log_viewer_open
                         .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 UiAction::OpenLogDirectory => {

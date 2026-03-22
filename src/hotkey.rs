@@ -127,7 +127,15 @@ pub struct Modifiers {
     pub command: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+/// A framework-independent key event, used for hotkey capture.
+#[derive(Debug, Copy, Clone)]
+pub struct KeyEvent {
+    pub key: KeyCode,
+    pub modifiers: Modifiers,
+    pub pressed: bool,
+}
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct HotKey {
     pub key: KeyCode,
     pub modifiers: Modifiers,
@@ -136,6 +144,22 @@ pub struct HotKey {
 impl HotKey {
     pub fn to_livesplit_hotkey(self) -> livesplit_hotkey::Hotkey {
         to_livesplit_keycode(self.key).with_modifiers(to_livesplit_modifiers(self.modifiers))
+    }
+
+    /// Process a key event during hotkey capture.
+    /// Returns `Some(None)` for Escape (cancel), `Some(Some(hotkey))` for capture,
+    /// `None` if the event is not a press.
+    pub fn capture_from_event(event: &KeyEvent) -> Option<Option<HotKey>> {
+        if !event.pressed {
+            return None;
+        }
+        if event.key == KeyCode::Escape {
+            return Some(None);
+        }
+        Some(Some(HotKey {
+            key: event.key,
+            modifiers: event.modifiers,
+        }))
     }
 }
 

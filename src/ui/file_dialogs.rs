@@ -54,7 +54,7 @@ impl LiveSplitCoreRenderer {
         }
         // Check if layout needs saving: either the editor changed it, or the
         // user moved/resized the window beyond the WM's normal adjustments.
-        let layout_changed = self.layout_modified || {
+        let layout_changed = self.ui.layout_modified || {
             if let Some(ref saved) = self.saved_layout_meta {
                 let current = LayoutMeta::from_context(ctx);
                 saved.differs_from(&current)
@@ -210,7 +210,7 @@ impl LiveSplitCoreRenderer {
         match (layout1, layout2) {
             (Err(e1), Err(e2)) => Err(anyhow!("Failed to load file as either LiveSplit or LiveSplit One.\nErrors: LiveSplit: {e1}\nLiveSplit One: {e2}")),
             (_, _) => {
-                self.layout_modified = false;
+                self.ui.layout_modified = false;
                 // Store the loaded geometry as the reference for change detection
                 self.saved_layout_meta =
                     crate::config::layout_meta::LayoutMeta::from_layout_file(path);
@@ -475,7 +475,7 @@ impl LiveSplitCoreRenderer {
             // Update recent layout path
             self.app_config.write().recent_layout =
                 Some(path.into_os_string().into_string().expect("utf8"));
-            self.layout_modified = false;
+            self.ui.layout_modified = false;
             // Update the reference geometry to what we just saved
             self.saved_layout_meta = Some(meta.clone());
             Ok(())

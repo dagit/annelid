@@ -8,10 +8,7 @@ fn sanitize_replaces_home_dir() {
         let home = dirs.home_dir();
         let test_path = home.join("Documents").join("splits.lss");
         let result = sanitize_path(&test_path);
-        assert!(
-            result.starts_with("~"),
-            "Expected ~ prefix, got: {result}"
-        );
+        assert!(result.starts_with("~"), "Expected ~ prefix, got: {result}");
         assert!(
             result.contains("Documents"),
             "Expected Documents in path, got: {result}"

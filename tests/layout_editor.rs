@@ -21,15 +21,14 @@ fn component_kind_all_count() {
 
 #[test]
 fn display_names_are_unique() {
-    let names: Vec<&str> = ComponentKind::ALL.iter().map(|k| k.display_name()).collect();
+    let names: Vec<&str> = ComponentKind::ALL
+        .iter()
+        .map(|k| k.display_name())
+        .collect();
     let mut sorted = names.clone();
     sorted.sort();
     sorted.dedup();
-    assert_eq!(
-        names.len(),
-        sorted.len(),
-        "Duplicate display names found"
-    );
+    assert_eq!(names.len(), sorted.len(), "Duplicate display names found");
 }
 
 #[test]
@@ -50,21 +49,14 @@ fn known_display_names() {
 fn check_variant_table<T>(table: &[(T, &str)], name: &str) {
     assert!(!table.is_empty(), "{name} table is empty");
     for (i, (_, label)) in table.iter().enumerate() {
-        assert!(
-            !label.is_empty(),
-            "{name}[{i}] has empty label"
-        );
+        assert!(!label.is_empty(), "{name}[{i}] has empty label");
     }
     // Check labels are unique
     let labels: Vec<&str> = table.iter().map(|(_, l)| *l).collect();
     let mut sorted = labels.clone();
     sorted.sort();
     sorted.dedup();
-    assert_eq!(
-        labels.len(),
-        sorted.len(),
-        "{name} has duplicate labels"
-    );
+    assert_eq!(labels.len(), sorted.len(), "{name} has duplicate labels");
 }
 
 #[test]

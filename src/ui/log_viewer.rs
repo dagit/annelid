@@ -54,12 +54,12 @@ fn log_viewer_ui(ctx: &egui::Context, log_buffer: &LogBuffer, open: &AtomicBool)
 
 impl LiveSplitCoreRenderer {
     pub(crate) fn show_log_viewer(&self, ctx: &egui::Context) {
-        if !self.log_viewer_open.load(Ordering::Relaxed) {
+        if !self.ui.log_viewer_open.load(Ordering::Relaxed) {
             return;
         }
 
         let log_buffer = self.log_buffer.clone();
-        let open = self.log_viewer_open.clone();
+        let open = self.ui.log_viewer_open.clone();
 
         ctx.show_viewport_deferred(
             egui::ViewportId::from_hash_of("log_viewer"),

@@ -1,4 +1,4 @@
-use annelid::hotkey::{HotKey, KeyCode, Modifiers};
+use annelid::hotkey::{HotKey, KeyCode, KeyEvent, Modifiers};
 use proptest::prelude::*;
 use strum::IntoEnumIterator;
 
@@ -92,4 +92,100 @@ command = false
     let hk: HotKey = toml::from_str(toml_str).expect("should deserialize existing format");
     assert_eq!(hk.key, KeyCode::Num1);
     assert_eq!(hk.modifiers, Modifiers::default());
+}
+
+// --- capture_from_event tests ---
+
+#[test]
+fn capture_ignores_release_events() {
+    let event = KeyEvent {
+        key: KeyCode::A,
+        modifiers: Modifiers::default(),
+        pressed: false,
+    };
+    assert!(HotKey::capture_from_event(&event).is_none());
+}
+
+#[test]
+fn capture_escape_cancels() {
+    let event = KeyEvent {
+        key: KeyCode::Escape,
+        modifiers: Modifiers::default(),
+        pressed: true,
+    };
+    let result = HotKey::capture_from_event(&event);
+    assert_eq!(result, Some(None));
+}
+
+#[test]
+fn capture_normal_key() {
+    let event = KeyEvent {
+        key: KeyCode::F5,
+        modifiers: Modifiers::default(),
+        pressed: true,
+    };
+    let result = HotKey::capture_from_event(&event);
+    let hotkey = result.unwrap().unwrap();
+    assert_eq!(hotkey.key, KeyCode::F5);
+    assert_eq!(hotkey.modifiers, Modifiers::default());
+}
+
+#[test]
+fn capture_preserves_modifiers() {
+    let mods = Modifiers {
+        alt: false,
+        ctrl: true,
+        shift: true,
+        mac_cmd: false,
+        command: false,
+    };
+    let event = KeyEvent {
+        key: KeyCode::S,
+        modifiers: mods,
+        pressed: true,
+    };
+    let hotkey = HotKey::capture_from_event(&event).unwrap().unwrap();
+    assert_eq!(hotkey.key, KeyCode::S);
+    assert!(hotkey.modifiers.ctrl);
+    assert!(hotkey.modifiers.shift);
+    assert!(!hotkey.modifiers.alt);
+}
+
+#[test]
+fn capture_escape_with_modifiers_still_cancels() {
+    let mods = Modifiers {
+        alt: false,
+        ctrl: true,
+        shift: false,
+        mac_cmd: false,
+        command: false,
+    };
+    let event = KeyEvent {
+        key: KeyCode::Escape,
+        modifiers: mods,
+        pressed: true,
+    };
+    assert_eq!(HotKey::capture_from_event(&event), Some(None));
+}
+
+proptest! {
+    #[test]
+    fn capture_any_non_escape_key_succeeds(key in arb_keycode(), mods in arb_modifiers()) {
+        let event = KeyEvent { key, modifiers: mods, pressed: true };
+        let result = HotKey::capture_from_event(&event);
+        match key {
+            KeyCode::Escape => prop_assert_eq!(result, Some(None)),
+            _ => {
+                let hk = result.unwrap().unwrap();
+                prop_assert_eq!(hk.key, key);
+                prop_assert_eq!(hk.modifiers, mods);
+            }
+        }
+    }
+
+    #[test]
+    fn capture_release_always_ignored(key in arb_keycode(), mods in arb_modifiers()) {
+        let event = KeyEvent { key, modifiers: mods, pressed: false };
+        prop_assert!(HotKey::capture_from_event(&event).is_none());
+    }
 }

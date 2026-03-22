@@ -17,7 +17,10 @@ fn inject_meta_adds_annelid_key() {
     let annelid = json.get("annelid").unwrap();
     assert_eq!(annelid.get("window_x").unwrap().as_f64().unwrap(), 100.0);
     assert_eq!(annelid.get("window_y").unwrap().as_f64().unwrap(), 200.0);
-    assert_eq!(annelid.get("window_width").unwrap().as_f64().unwrap(), 800.0);
+    assert_eq!(
+        annelid.get("window_width").unwrap().as_f64().unwrap(),
+        800.0
+    );
     assert_eq!(
         annelid.get("window_height").unwrap().as_f64().unwrap(),
         600.0
@@ -61,7 +64,10 @@ fn inject_meta_overwrites_existing_annelid_key() {
     let annelid = json.get("annelid").unwrap();
     // Should have new data, not old
     assert!(annelid.get("old_data").is_none());
-    assert_eq!(annelid.get("window_width").unwrap().as_f64().unwrap(), 1024.0);
+    assert_eq!(
+        annelid.get("window_width").unwrap().as_f64().unwrap(),
+        1024.0
+    );
 }
 
 #[test]
