@@ -36,6 +36,8 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) app_config_processed: bool,
     pub(crate) glow_canvas: GlowCanvas,
     pub(crate) global_hotkey_hook: Option<Hook>,
+    pub(crate) autosplitter_settings_snapshot: Arc<parking_lot::Mutex<Option<Settings>>>,
+    pub(crate) splits_editor_preview: Arc<parking_lot::Mutex<Option<livesplit_core::Run>>>,
     pub(crate) load_errors: Vec<anyhow::Error>,
     pub(crate) control_panel_open: Arc<AtomicBool>,
     pub(crate) ui_actions: Arc<parking_lot::Mutex<Vec<crate::ui::control_panel::UiAction>>>,
@@ -82,6 +84,8 @@ impl LiveSplitCoreRenderer {
             project_dirs,
             app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
             app_config_processed: false,
+            autosplitter_settings_snapshot: Arc::new(parking_lot::Mutex::new(None)),
+            splits_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
             glow_canvas: GlowCanvas::new(),
             global_hotkey_hook: None,
             load_errors: vec![],
@@ -140,13 +144,16 @@ impl eframe::App for LiveSplitCoreRenderer {
         // Update layout state (shared by both renderers)
         {
             let _span = span!(Level::TRACE, "layout_state_update").entered();
-            let editor_open = self
+            let layout_editor_open = self
                 .layout_editor_open
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let splits_editor_open = self
+                .splits_editor_open
                 .load(std::sync::atomic::Ordering::Relaxed);
 
             // If the layout editor is open, use its preview (computed in the
             // editor's deferred viewport callback — no editor lock needed here).
-            let preview = if editor_open {
+            let layout_preview = if layout_editor_open {
                 self.layout_editor_preview.lock().take()
             } else {
                 // Editor just closed — clear any stale preview
@@ -157,9 +164,29 @@ impl eframe::App for LiveSplitCoreRenderer {
                 None
             };
 
-            if let Some(ls) = preview {
+            // If the splits editor is open, use its preview run to compute
+            // a layout state with the edited segment names/times.
+            let splits_preview = if splits_editor_open {
+                self.splits_editor_preview.lock().take()
+            } else {
+                self.splits_editor_preview.lock().take(); // drain stale
+                None
+            };
+
+            if let Some(ls) = layout_preview {
                 *self.layout_state.write() = Some(ls);
-            } else if !editor_open {
+            } else if let Some(run) = splits_preview {
+                if let Ok(preview_timer) = livesplit_core::Timer::new(run) {
+                    let snapshot = preview_timer.snapshot();
+                    let mut image_cache = self.image_cache.write();
+                    let mut layout_state = self.layout_state.write();
+                    *layout_state = Some(self.layout.state(
+                        &mut image_cache,
+                        &snapshot,
+                        livesplit_core::Lang::English,
+                    ));
+                }
+            } else if !layout_editor_open && !splits_editor_open {
                 // Normal path: compute from self.layout
                 let timer = self.timer.read().unwrap();
                 let snapshot = timer.snapshot();

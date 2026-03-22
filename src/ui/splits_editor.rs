@@ -365,6 +365,7 @@ fn show_action_buttons(ui: &mut egui::Ui) -> EditorAction {
 fn splits_editor_ui(
     ctx: &egui::Context,
     state: &Mutex<Option<SplitsEditorState>>,
+    preview_slot: &Mutex<Option<livesplit_core::Run>>,
     actions: &Mutex<Vec<UiAction>>,
     open: &AtomicBool,
 ) {
@@ -407,6 +408,11 @@ fn splits_editor_ui(
     if let Some(idx) = deferred_selection {
         es.select_segment(idx);
     }
+
+    // Compute preview: clone the edited run so the main window can show
+    // updated segment names/times while the editor is open.
+    *preview_slot.lock() = Some(es.editor.run().clone());
+    ctx.request_repaint_of(egui::ViewportId::ROOT);
 
     match action {
         EditorAction::Update => {
@@ -464,6 +470,7 @@ impl LiveSplitCoreRenderer {
         }
 
         let state = self.splits_editor_state.clone();
+        let preview_slot = self.splits_editor_preview.clone();
         let actions = self.ui_actions.clone();
         let open = self.splits_editor_open.clone();
 
@@ -473,7 +480,7 @@ impl LiveSplitCoreRenderer {
                 .with_title("Annelid Splits Editor")
                 .with_inner_size([500.0, 600.0]),
             move |ctx, _class| {
-                splits_editor_ui(ctx, &state, &actions, &open);
+                splits_editor_ui(ctx, &state, &preview_slot, &actions, &open);
             },
         );
     }

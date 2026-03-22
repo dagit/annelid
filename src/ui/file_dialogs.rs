@@ -325,7 +325,13 @@ impl LiveSplitCoreRenderer {
             .read()
             .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
-            .clone()
+            .as_ref()
+            .and_then(|p| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_owned())
+            })
             .unwrap_or_else(|| {
                 if fname.is_empty() {
                     fname += "annelid.lss";
@@ -379,7 +385,13 @@ impl LiveSplitCoreRenderer {
             .read()
             .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
-            .clone()
+            .as_ref()
+            .and_then(|p| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_owned())
+            })
             .unwrap_or_else(|| {
                 if fname.is_empty() {
                     fname += "annelid.asc";

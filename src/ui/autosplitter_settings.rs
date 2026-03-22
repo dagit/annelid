@@ -38,42 +38,74 @@ pub fn show_children(
     });
 }
 
+#[derive(PartialEq)]
+enum EditorAction {
+    None,
+    Update,
+    SaveToFile,
+    Cancel,
+}
+
 /// Renders the autosplitter settings UI in a deferred viewport.
 fn settings_viewport_ui(
     ctx: &egui::Context,
     settings: &RwLock<Settings>,
+    snapshot: &Mutex<Option<Settings>>,
     actions: &Mutex<Vec<UiAction>>,
     open: &AtomicBool,
 ) {
     if ctx.input(|i| i.viewport().close_requested()) {
+        snapshot.lock().take();
         open.store(false, Ordering::Relaxed);
         return;
     }
 
-    let mut close = false;
+    // Initialize snapshot on first frame
+    let mut guard = snapshot.lock();
+    let snap = guard.get_or_insert_with(|| settings.read().clone());
+
+    let mut action = EditorAction::None;
 
     egui::CentralPanel::default().show(ctx, |ui| {
         egui::ScrollArea::both().show(ui, |ui| {
-            let mut settings = settings.write();
-            let mut roots = settings.roots();
-            show_children(&mut settings, ui, ctx, &mut roots);
+            let mut roots = snap.roots();
+            show_children(snap, ui, ctx, &mut roots);
         });
         ui.separator();
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Close").clicked() {
-                    close = true;
+                if ui.button("Cancel").clicked() {
+                    action = EditorAction::Cancel;
+                }
+                if ui.button("Update").clicked() {
+                    action = EditorAction::Update;
                 }
                 if ui.button("Save as...").clicked() {
-                    actions.lock().push(UiAction::SaveAutosplitterDialog);
-                    close = true;
+                    action = EditorAction::SaveToFile;
                 }
             });
         });
     });
 
-    if close {
-        open.store(false, Ordering::Relaxed);
+    match action {
+        EditorAction::Update => {
+            if let Some(snap) = guard.take() {
+                *settings.write() = snap;
+            }
+            open.store(false, Ordering::Relaxed);
+        }
+        EditorAction::SaveToFile => {
+            if let Some(snap) = guard.take() {
+                *settings.write() = snap;
+            }
+            actions.lock().push(UiAction::SaveAutosplitterDialog);
+            open.store(false, Ordering::Relaxed);
+        }
+        EditorAction::Cancel => {
+            guard.take();
+            open.store(false, Ordering::Relaxed);
+        }
+        EditorAction::None => {}
     }
 }
 
@@ -84,6 +116,7 @@ impl LiveSplitCoreRenderer {
         }
 
         let settings = self.settings.clone();
+        let snapshot = self.autosplitter_settings_snapshot.clone();
         let actions = self.ui_actions.clone();
         let open = self.show_settings_editor.clone();
 
@@ -93,7 +126,7 @@ impl LiveSplitCoreRenderer {
                 .with_title("Autosplitter Settings")
                 .with_inner_size([400.0, 500.0]),
             move |ctx, _class| {
-                settings_viewport_ui(ctx, &settings, &actions, &open);
+                settings_viewport_ui(ctx, &settings, &snapshot, &actions, &open);
             },
         );
     }
