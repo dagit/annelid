@@ -23,7 +23,7 @@ egui_glow = "0.33"
 lazy_static = "1"
 strum = "0"
 strum_macros = "0"
-time = "0"
+time = { version = "0", features = ["formatting", "macros"] }
 parking_lot = "*"
 rfd = "0"
 directories = "6"
@@ -37,13 +37,14 @@ memoffset = "*"
 thread-priority = "3"
 anyhow = "1"
 tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2"
 tracing-tracy = { version = "0.11.4", optional = true }
-tracing-subscriber = { version = "0.3.22", optional = true }
 tracing-chrome = { version = "0.7.2", optional = true }
 
 [features]
 default = []
-tracing = ["dep:tracing-tracy", "dep:tracing-subscriber", "dep:tracing-chrome"]
+tracing = ["dep:tracing-tracy", "dep:tracing-chrome"]
 
 # Remember to test with --release
 [profile.dev]

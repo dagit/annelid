@@ -5,6 +5,7 @@ pub mod autosplitters;
 pub mod config;
 pub mod hotkey;
 pub mod livesplit_renderer;
+pub mod logging;
 pub mod routes;
 pub mod ui;
 pub mod usb2snes;
@@ -56,17 +57,23 @@ fn customize_timer(timer: &mut livesplit_core::component::timer::Settings) {
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    #[cfg(feature = "tracing")]
-    let _guard = {
-        use tracing_chrome::ChromeLayerBuilder;
-        use tracing_subscriber::prelude::*;
-
-        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
-        tracing_subscriber::registry().with(chrome_layer).init();
-        guard
-    };
-
     let cli_config = AppConfig::parse();
+
+    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
+        .ok_or("Unable to compute configuration directory")?;
+
+    let preference_dir = project_dirs.preference_dir();
+    std::fs::create_dir_all(preference_dir)?;
+
+    // Initialize logging and panic hook early, before anything else can fail.
+    let log_dir = project_dirs.data_dir();
+    std::fs::create_dir_all(log_dir)?;
+    logging::init(log_dir);
+
+    tracing::debug!("Annelid starting up");
+    tracing::debug!("Config dir: {}", logging::sanitize_path(preference_dir));
+    tracing::debug!("Log dir: {}", logging::sanitize_path(log_dir));
+
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));
     let mut run = Run::default();
@@ -75,13 +82,6 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let timer = Timer::new(run)
         .expect("Run with at least one segment provided")
         .into_shared();
-
-    let project_dirs = directories::ProjectDirs::from("", "", "annelid")
-        .ok_or("Unable to computer configuration directory")?;
-    println!("project_dirs = {project_dirs:#?}");
-
-    let preference_dir = project_dirs.preference_dir();
-    std::fs::create_dir_all(preference_dir)?;
 
     // Read saved config early so we can set viewport properties that must
     // be known before window creation (layout size/position, transparency).
