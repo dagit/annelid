@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::config::app_config::*;
 use crate::hotkey::*;
@@ -39,10 +39,7 @@ impl LiveSplitCoreRenderer {
             Ok(())
         }
 
-        let cfg = self
-            .app_config
-            .read()
-            .map_err(|e| anyhow!("failed to read config: {e}"))?;
+        let cfg = self.app_config.read();
         let timer = self.timer.clone();
         let thread_chan = self.thread_chan.clone();
         let app_cfg = self.app_config.clone();
@@ -69,11 +66,7 @@ impl LiveSplitCoreRenderer {
                         .write()
                         .map(|mut g| g.reset(true).ok())
                         .map_err(|e| tracing::warn!("reset lock failed: {e}"));
-                    if app_cfg
-                        .read()
-                        .map(|g| g.use_autosplitter == Some(YesOrNo::Yes))
-                        .unwrap_or(false)
-                    {
+                    if app_cfg.read().use_autosplitter == Some(YesOrNo::Yes) {
                         tc.try_send(ThreadEvent::TimerReset).unwrap_or(());
                     }
                 }
@@ -140,7 +133,7 @@ impl LiveSplitCoreRenderer {
     }
 
     pub(crate) fn handle_local_hotkeys(&mut self, ctx: &eframe::egui::Context) {
-        let config = self.app_config.read().unwrap();
+        let config = self.app_config.read();
         if config.global_hotkeys != Some(YesOrNo::Yes) {
             ctx.input_mut(|input| {
                 if let Some(hot_key) = config.hot_key_start {

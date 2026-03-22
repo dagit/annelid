@@ -8,7 +8,7 @@ use tracing::{span, Level};
 /// to update the raw bytes of the image manually. by calling `update_frame_buffer`, which will
 /// give you a thread safe handle to the frame buffer that you can mutate.
 pub struct GlowCanvas {
-    opengl_resources: std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    opengl_resources: std::sync::Arc<parking_lot::RwLock<Option<OpenGLResources>>>,
     sense: egui::Sense,
 }
 
@@ -46,7 +46,7 @@ struct Vertex {
 impl Default for GlowCanvas {
     fn default() -> Self {
         GlowCanvas {
-            opengl_resources: std::sync::Arc::new(std::sync::RwLock::new(None)),
+            opengl_resources: std::sync::Arc::new(parking_lot::RwLock::new(None)),
             sense: egui::Sense::click(),
         }
     }
@@ -74,7 +74,7 @@ impl GlowCanvas {
         unsafe {
             use eframe::glow::HasContext;
             let _span2 = span!(Level::TRACE, "take lock").entered();
-            let mut resources_lock = self.opengl_resources.write().unwrap();
+            let mut resources_lock = self.opengl_resources.write();
             if let Some(resources) = resources_lock.as_mut() {
                 let _span3 = span!(Level::TRACE, "locked").entered();
                 let buffer = resources
@@ -248,7 +248,7 @@ impl GlowCanvas {
     pub fn destroy(&self, gl: &eframe::glow::Context) {
         use eframe::glow::HasContext;
         unsafe {
-            if let Some(opengl) = &*self.opengl_resources.read().unwrap() {
+            if let Some(opengl) = &*self.opengl_resources.read() {
                 // TODO: is this everything we're supposed to delete?
                 gl.delete_texture(opengl.texture);
                 debug_assert!(gl.get_error() == 0, "1");
@@ -274,17 +274,17 @@ impl GlowCanvas {
 
 /// Safe-ish Wrapper around the low level painting primitives
 fn paint(
-    gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    gl_ctx: &std::sync::Arc<parking_lot::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
 ) {
     // Wish we could use get_or_insert_with here, but we need to return
     // the Arc<Mutex<_>> instead of just a mut &_
-    let gl_ctx = if gl_ctx.read().unwrap().is_some() {
+    let gl_ctx = if gl_ctx.read().is_some() {
         gl_ctx.clone()
     } else {
         unsafe {
-            *gl_ctx.write().unwrap() = Some(init_gl_resources(gl));
+            *gl_ctx.write() = Some(init_gl_resources(gl));
             gl_ctx.clone()
         }
     };
@@ -511,14 +511,14 @@ void main() {
 }
 
 unsafe fn paint_lowlevel(
-    gl_ctx: &std::sync::Arc<std::sync::RwLock<Option<OpenGLResources>>>,
+    gl_ctx: &std::sync::Arc<parking_lot::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
 ) {
     use eframe::glow::HasContext;
     let w = viewport.max.x - viewport.min.x;
     let h = viewport.max.y - viewport.min.y;
-    let mut ctx = gl_ctx.write().unwrap();
+    let mut ctx = gl_ctx.write();
     let ctx = ctx.as_mut().unwrap();
 
     unsafe {

@@ -32,7 +32,7 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) is_exiting: bool,
     pub(crate) thread_chan: std::sync::mpsc::SyncSender<ThreadEvent>,
     pub(crate) project_dirs: directories::ProjectDirs,
-    pub app_config: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub app_config: Arc<RwLock<AppConfig>>,
     pub(crate) app_config_processed: bool,
     pub(crate) glow_canvas: GlowCanvas,
     pub(crate) global_hotkey_hook: Option<Hook>,
@@ -85,7 +85,7 @@ impl LiveSplitCoreRenderer {
             is_exiting: false,
             thread_chan: chan,
             project_dirs,
-            app_config: std::sync::Arc::new(std::sync::RwLock::new(cli_config)),
+            app_config: Arc::new(RwLock::new(cli_config)),
             app_config_processed: false,
             autosplitter_settings_snapshot: Arc::new(parking_lot::Mutex::new(None)),
             splits_editor_preview: Arc::new(parking_lot::Mutex::new(None)),
@@ -111,7 +111,7 @@ impl LiveSplitCoreRenderer {
 
 impl eframe::App for LiveSplitCoreRenderer {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        if self.app_config.read().unwrap().transparent_window == Some(YesOrNo::Yes) {
+        if self.app_config.read().transparent_window == Some(YesOrNo::Yes) {
             [0.0, 0.0, 0.0, 0.0]
         } else {
             [0.0, 0.0, 0.0, 1.0]
@@ -219,7 +219,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             // showing the stale layout_state until the editor produces one
         }
 
-        if self.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
+        if self.app_config.read().renderer == Some(RendererType::Gpu) {
             let ppp = ctx.input(|i| i.pixels_per_point());
             let width = (viewport.width() * ppp) as u32;
             let height = (viewport.height() * ppp) as u32;
@@ -257,7 +257,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let layout_state = self.layout_state.read();
                 let image_cache = self.image_cache.read();
                 let draw_background =
-                    self.app_config.read().unwrap().transparent_window != Some(YesOrNo::Yes);
+                    self.app_config.read().transparent_window != Some(YesOrNo::Yes);
                 self.glow_canvas.update_frame_buffer(
                     viewport,
                     frame.gl().unwrap(),
@@ -328,7 +328,7 @@ pub fn app_init(
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
     app.load_app_config();
-    if app.app_config.read().unwrap().renderer == Some(RendererType::Gpu) {
+    if app.app_config.read().renderer == Some(RendererType::Gpu) {
         let gl = cc
             .gl
             .as_ref()
@@ -340,23 +340,21 @@ pub fn app_init(
             }
             Err(e) => {
                 tracing::warn!("Failed to initialize GPU renderer, falling back to software: {e}");
-                app.app_config.write().unwrap().renderer = Some(RendererType::Software);
+                app.app_config.write().renderer = Some(RendererType::Software);
             }
         }
     }
-    if app.app_config.read().unwrap().global_hotkeys == Some(YesOrNo::Yes) {
+    if app.app_config.read().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
     let frame_rate = app
         .app_config
         .read()
-        .unwrap()
         .frame_rate
         .unwrap_or(DEFAULT_FRAME_RATE);
     let polling_rate = app
         .app_config
         .read()
-        .unwrap()
         .polling_rate
         .unwrap_or(DEFAULT_POLLING_RATE);
     // This thread is essentially just a refresh rate timer
@@ -380,7 +378,7 @@ pub fn app_init(
     let settings = app.settings.clone();
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
-    if app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+    if app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
         let _snes_polling_thread = ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
@@ -423,12 +421,7 @@ pub fn app_init(
                                         .ok();
                                 }
                                 if summary.reset
-                                    && app_config
-                                        .read()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire read lock on config: {e}")
-                                        })?
-                                        .reset_timer_on_game_reset
+                                    && app_config.read().reset_timer_on_game_reset
                                         == Some(YesOrNo::Yes)
                                 {
                                     timer
@@ -463,12 +456,7 @@ pub fn app_init(
                                 if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
                                     autosplitter.reset_game_tracking();
                                     //Reset the snes
-                                    if app_config
-                                        .read()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire read lock on config: {e}")
-                                        })?
-                                        .reset_game_on_timer_reset
+                                    if app_config.read().reset_game_on_timer_reset
                                         == Some(YesOrNo::Yes)
                                     {
                                         client.reset()?;

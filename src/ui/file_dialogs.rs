@@ -91,7 +91,7 @@ impl LiveSplitCoreRenderer {
                 .truncate(true)
                 .open(config_path)?;
             let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&self.app_config)?;
+            let toml = toml::to_string_pretty(&*self.app_config.read())?;
             writer.write_all(toml.as_bytes())?;
             writer.flush()?;
             Ok(())
@@ -118,11 +118,7 @@ impl LiveSplitCoreRenderer {
             // TODO: this logic is bad, I really need to know if the CLI
             // stuff was present and whether the stuff was present in the config
             // but instead I just see two different states that need to be merged.
-            let cli_config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
+            let cli_config = self.app_config.read().clone();
             let mut new_app_config = saved_config;
             if cli_config.recent_layout.is_some() {
                 new_app_config.recent_layout = cli_config.recent_layout;
@@ -162,11 +158,7 @@ impl LiveSplitCoreRenderer {
             if new_app_config.renderer.is_none() {
                 new_app_config.renderer = defaults.renderer;
             }
-            *self
-                .app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))? =
-                new_app_config;
+            *self.app_config.write() = new_app_config;
             Ok(())
         });
     }
@@ -177,11 +169,7 @@ impl LiveSplitCoreRenderer {
         std::mem::swap(&mut queue, &mut self.load_errors);
         queue_on_error(&mut queue, || {
             // Now that we've converged on a config, try loading what we can
-            let config = self
-                .app_config
-                .read()
-                .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
-                .clone();
+            let config = self.app_config.read().clone();
             if let Some(layout) = config.recent_layout {
                 self.load_layout(&std::path::PathBuf::from(&layout), ctx)
                     .with_context(|| format!("Failed to load layout file \"{layout}\""))?;
@@ -323,7 +311,6 @@ impl LiveSplitCoreRenderer {
         let splits = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .as_ref()
             .and_then(|p| {
@@ -344,7 +331,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -383,7 +369,6 @@ impl LiveSplitCoreRenderer {
         let autosplitter: String = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .as_ref()
             .and_then(|p| {
@@ -404,7 +389,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -430,7 +414,6 @@ impl LiveSplitCoreRenderer {
         let layout_path: String = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_layout
             .clone()
             .unwrap_or_else(|| "annelid.ls1l".to_owned());
@@ -438,7 +421,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_layout
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -481,10 +463,8 @@ impl LiveSplitCoreRenderer {
                 .open(&path)?;
             serde_json::to_writer_pretty(f, &json)?;
             // Update recent layout path
-            self.app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
-                .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
+            self.app_config.write().recent_layout =
+                Some(path.into_os_string().into_string().expect("utf8"));
             self.layout_modified = false;
             // Update the reference geometry to what we just saved
             self.saved_layout_meta = Some(meta.clone());
@@ -527,7 +507,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_layout
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -545,10 +524,8 @@ impl LiveSplitCoreRenderer {
             ],
             |me, path| {
                 me.load_layout(&path, ctx)?;
-                me.app_config
-                    .write()
-                    .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
-                    .recent_layout = Some(path.into_os_string().into_string().expect("utf8"));
+                me.app_config.write().recent_layout =
+                    Some(path.into_os_string().into_string().expect("utf8"));
                 Ok(())
             },
         );
@@ -560,7 +537,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_splits
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -572,10 +548,8 @@ impl LiveSplitCoreRenderer {
             .expect("utf8");
         self.open_dialog(&dir, &[("LiveSplit Splits", "lss")], |me, path| {
             me.load_splits(path.clone())?;
-            me.app_config
-                .write()
-                .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
-                .recent_splits = Some(path.into_os_string().into_string().expect("utf8"));
+            me.app_config.write().recent_splits =
+                Some(path.into_os_string().into_string().expect("utf8"));
             Ok(())
         });
         Ok(())
@@ -586,7 +560,6 @@ impl LiveSplitCoreRenderer {
         let dir = self
             .app_config
             .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?
             .recent_autosplitter
             .as_ref()
             .map_or(default_path_buf.clone(), |p| {
@@ -602,10 +575,8 @@ impl LiveSplitCoreRenderer {
             |me, path| {
                 let f = std::fs::File::open(path.clone())?;
                 me.load_autosplitter(&f)?;
-                me.app_config
-                    .write()
-                    .map_err(|e| anyhow!("failed to acquire write lock on config: {e}"))?
-                    .recent_autosplitter = Some(path.into_os_string().into_string().expect("utf8"));
+                me.app_config.write().recent_autosplitter =
+                    Some(path.into_os_string().into_string().expect("utf8"));
                 Ok(())
             },
         );

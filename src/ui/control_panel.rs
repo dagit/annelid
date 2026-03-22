@@ -223,7 +223,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::Reset => {
                     self.timer.write().unwrap().reset(true).ok();
-                    if self.app_config.read().unwrap().use_autosplitter == Some(YesOrNo::Yes) {
+                    if self.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
                         self.thread_chan
                             .try_send(ThreadEvent::TimerReset)
                             .unwrap_or(());
@@ -295,7 +295,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::OpenSettingsPanel => {
                     self.settings_panel_open.store(true, Ordering::Relaxed);
-                    let config = self.app_config.read().unwrap().clone();
+                    let config = self.app_config.read().clone();
                     *self.settings_panel_state.lock() =
                         Some(crate::ui::app_settings::SettingsState {
                             config,
@@ -303,7 +303,7 @@ impl LiveSplitCoreRenderer {
                         });
                 }
                 UiAction::ApplySettings(new_config) => {
-                    *self.app_config.write().unwrap() = new_config;
+                    *self.app_config.write() = new_config;
                     self.save_app_config();
                 }
                 UiAction::OpenLogViewer => {
