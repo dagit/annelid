@@ -1,8 +1,11 @@
 use eframe::egui;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
-use crate::logging::LogBuffer;
+use crate::logging::{LogBuffer, LogLevel};
+
+/// Tracks the currently selected log level index (indexes into LogLevel::ALL).
+static CURRENT_LEVEL: AtomicU8 = AtomicU8::new(1); // default = Warn
 
 fn log_viewer_ui(ctx: &egui::Context, log_buffer: &LogBuffer, open: &AtomicBool) {
     if ctx.input(|i| i.viewport().close_requested()) {
@@ -20,6 +23,21 @@ fn log_viewer_ui(ctx: &egui::Context, log_buffer: &LogBuffer, open: &AtomicBool)
             }
             let count = log_buffer.lock().len();
             ui.label(format!("{count} lines"));
+
+            ui.separator();
+
+            let mut idx = CURRENT_LEVEL.load(Ordering::Relaxed) as usize;
+            let current = LogLevel::ALL.get(idx).copied().unwrap_or(LogLevel::Warn);
+            egui::ComboBox::from_id_salt("log_level")
+                .selected_text(current.label())
+                .show_ui(ui, |ui| {
+                    for (i, level) in LogLevel::ALL.iter().enumerate() {
+                        if ui.selectable_value(&mut idx, i, level.label()).changed() {
+                            CURRENT_LEVEL.store(idx as u8, Ordering::Relaxed);
+                            crate::logging::set_log_level(*level);
+                        }
+                    }
+                });
         });
         ui.separator();
 

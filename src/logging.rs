@@ -2,15 +2,71 @@ use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+use tracing_subscriber::EnvFilter;
 
 /// The log directory, set once at startup.
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Handle for reloading the log filter at runtime.
+static FILTER_HANDLE: OnceLock<
+    tracing_subscriber::reload::Handle<EnvFilter, tracing_subscriber::Registry>,
+> = OnceLock::new();
 
 /// Maximum number of log lines kept in the in-memory ring buffer.
 const MAX_UI_LOG_LINES: usize = 500;
 
 /// Shared ring buffer of formatted log lines for the UI viewer.
 pub type LogBuffer = Arc<Mutex<VecDeque<String>>>;
+
+/// Log level presets available in the UI.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+}
+
+impl LogLevel {
+    pub const ALL: &[LogLevel] = &[
+        LogLevel::Error,
+        LogLevel::Warn,
+        LogLevel::Info,
+        LogLevel::Debug,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LogLevel::Error => "error",
+            LogLevel::Warn => "warn",
+            LogLevel::Info => "info",
+            LogLevel::Debug => "annelid=debug,warn",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LogLevel::Error => "Error",
+            LogLevel::Warn => "Warn (default)",
+            LogLevel::Info => "Info",
+            LogLevel::Debug => "Debug",
+        }
+    }
+}
+
+/// Change the active log filter at runtime.
+pub fn set_log_level(level: LogLevel) {
+    if let Some(handle) = FILTER_HANDLE.get() {
+        match EnvFilter::try_new(level.as_str()) {
+            Ok(new_filter) => {
+                if handle.reload(new_filter).is_err() {
+                    eprintln!("Failed to reload log filter");
+                }
+            }
+            Err(e) => eprintln!("Invalid log filter: {e}"),
+        }
+    }
+}
 
 /// Sanitizes a path by replacing the user's home directory with `~`.
 pub fn sanitize_path(p: &Path) -> String {
@@ -92,11 +148,12 @@ fn init_file_logging(log_dir: &Path, log_buffer: LogBuffer) {
     use tracing_appender::rolling;
     use tracing_subscriber::fmt;
     use tracing_subscriber::prelude::*;
-    use tracing_subscriber::EnvFilter;
 
     let file_appender = rolling::daily(log_dir, "annelid.log");
 
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let (filter_layer, reload_handle) = tracing_subscriber::reload::Layer::new(filter);
+    FILTER_HANDLE.set(reload_handle).ok();
 
     let fmt_layer = fmt::layer()
         .with_writer(file_appender)
@@ -114,7 +171,7 @@ fn init_file_logging(log_dir: &Path, log_buffer: LogBuffer) {
         // This is only active when the `tracing` feature is enabled (profiling).
         std::mem::forget(_guard);
         tracing_subscriber::registry()
-            .with(filter)
+            .with(filter_layer)
             .with(fmt_layer)
             .with(ui_layer)
             .with(chrome_layer)
@@ -124,7 +181,7 @@ fn init_file_logging(log_dir: &Path, log_buffer: LogBuffer) {
     #[cfg(not(feature = "tracing"))]
     {
         tracing_subscriber::registry()
-            .with(filter)
+            .with(filter_layer)
             .with(fmt_layer)
             .with(ui_layer)
             .init();
@@ -146,7 +203,13 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for UiLogLayer {
 
         let metadata = event.metadata();
         let mut message = String::new();
-        let _ = write!(message, "[{}] {}: ", metadata.level(), metadata.target());
+        let _ = write!(
+            message,
+            "{} [{}] {}: ",
+            time_stamp(),
+            metadata.level(),
+            metadata.target()
+        );
 
         // Extract the message field from the event
         struct MessageVisitor<'a>(&'a mut String);
@@ -254,10 +317,18 @@ fn init_panic_hook() {
 
 fn time_stamp() -> String {
     use time::OffsetDateTime;
-    let now = OffsetDateTime::now_utc();
-    // e.g. "2026-03-21 14:30:05 UTC"
-    now.format(time::macros::format_description!(
-        "[year]-[month]-[day] [hour]:[minute]:[second] UTC"
-    ))
-    .unwrap_or_else(|_| "unknown time".to_string())
+    // Try local time; fall back to UTC if the platform doesn't support it
+    // (e.g. some multi-threaded Unix environments).
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let is_utc = now.offset().is_utc();
+    let formatted = now
+        .format(time::macros::format_description!(
+            "[year]-[month]-[day] [hour]:[minute]:[second]"
+        ))
+        .unwrap_or_else(|_| "unknown time".to_string());
+    if is_utc {
+        format!("{formatted} UTC")
+    } else {
+        formatted
+    }
 }

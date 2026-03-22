@@ -327,6 +327,16 @@ impl eframe::App for LiveSplitCoreRenderer {
     }
 }
 
+fn panic_payload_to_string(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    }
+}
+
 pub fn app_init(
     app: &mut LiveSplitCoreRenderer,
     sync_receiver: std::sync::mpsc::Receiver<ThreadEvent>,
@@ -369,10 +379,15 @@ pub fn app_init(
     // possibly more often.
     match ThreadBuilder::default()
         .name("Frame Rate Thread".to_owned())
-        .spawn(move |_| loop {
-            if frame_rate > 0.0 {
-                context.request_repaint_of(egui::ViewportId::ROOT);
-                std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / frame_rate));
+        .spawn(move |_| {
+            if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| loop {
+                if frame_rate > 0.0 {
+                    context.request_repaint_of(egui::ViewportId::ROOT);
+                    std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / frame_rate));
+                }
+            })) {
+                let msg = panic_payload_to_string(&panic);
+                tracing::error!("Frame rate thread panicked: {msg}");
             }
         }) {
         Ok(_) => {}
@@ -393,95 +408,108 @@ pub fn app_init(
             // should leave it at the default to make sure we get timely
             // polling of SNES state
             .spawn(move |_| {
-                if polling_rate > 0.0 {
-                    loop {
-                        let period = std::time::Duration::from_secs_f32(1.0 / polling_rate);
-                        print_on_error(|| -> anyhow::Result<()> {
-                            let mut client = crate::usb2snes::SyncClient::connect()
-                                .context("creating usb2snes connection")?;
-                            client.set_name("annelid")?;
-                            tracing::info!("Server version is {:?}", client.app_version()?);
-                            let mut devices = client.list_device()?.to_vec();
-                            if devices.len() != 1 {
-                                if devices.is_empty() {
-                                    Err(anyhow!("No devices present"))?;
-                                } else {
-                                    Err(anyhow!("You need to select a device: {:#?}", devices))?;
-                                }
-                            }
-                            let device = devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                            tracing::info!("Using device: {device}");
-                            client.attach(&device)?;
-                            tracing::info!("Connected.");
-                            tracing::debug!("{:#?}", client.info()?);
-                            let mut autosplitter: Box<dyn AutoSplitter> =
-                                Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
-                            let mut next = std::time::Instant::now() + period;
+                if let Err(panic) =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        if polling_rate > 0.0 {
                             loop {
-                                let summary = autosplitter.update(&mut client)?;
-                                if summary.start {
-                                    timer
+                                let period = std::time::Duration::from_secs_f32(1.0 / polling_rate);
+                                print_on_error(|| -> anyhow::Result<()> {
+                                    let mut client = crate::usb2snes::SyncClient::connect()
+                                        .context("creating usb2snes connection")?;
+                                    client.set_name("annelid")?;
+                                    tracing::info!("Server version is {:?}", client.app_version()?);
+                                    let mut devices = client.list_device()?.to_vec();
+                                    if devices.len() != 1 {
+                                        if devices.is_empty() {
+                                            Err(anyhow!("No devices present"))?;
+                                        } else {
+                                            Err(anyhow!(
+                                                "You need to select a device: {:#?}",
+                                                devices
+                                            ))?;
+                                        }
+                                    }
+                                    let device =
+                                        devices.pop().ok_or(anyhow!("Device list was empty"))?;
+                                    tracing::info!("Using device: {device}");
+                                    client.attach(&device)?;
+                                    tracing::info!("Connected.");
+                                    tracing::debug!("{:#?}", client.info()?);
+                                    let mut autosplitter: Box<dyn AutoSplitter> =
+                                        Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
+                                    let mut next = std::time::Instant::now() + period;
+                                    loop {
+                                        let summary = autosplitter.update(&mut client)?;
+                                        if summary.start {
+                                            timer
                                         .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .start()
                                         .ok();
-                                }
-                                if summary.reset
-                                    && app_config.read().reset_timer_on_game_reset
-                                        == Some(YesOrNo::Yes)
-                                {
-                                    timer
+                                        }
+                                        if summary.reset
+                                            && app_config.read().reset_timer_on_game_reset
+                                                == Some(YesOrNo::Yes)
+                                        {
+                                            timer
                                         .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .reset(true)
                                         .ok();
-                                }
-                                if summary.split {
-                                    if let Some(t) = autosplitter.gametime_to_seconds() {
-                                        timer
-                                            .write()
-                                            .map_err(|e| {
-                                                anyhow!(
+                                        }
+                                        if summary.split {
+                                            if let Some(t) = autosplitter.gametime_to_seconds() {
+                                                timer
+                                                    .write()
+                                                    .map_err(|e| {
+                                                        anyhow!(
                                                     "failed to acquire write lock on timer: {e}"
                                                 )
-                                            })?
-                                            .set_game_time(t)
-                                            .ok();
-                                    }
-                                    timer
+                                                    })?
+                                                    .set_game_time(t)
+                                                    .ok();
+                                            }
+                                            timer
                                         .write()
                                         .map_err(|e| {
                                             anyhow!("failed to acquire write lock on timer: {e}")
                                         })?
                                         .split()
                                         .ok();
-                                }
-                                // If the timer gets reset, we need to make a fresh snes state
-                                if let Ok(ThreadEvent::TimerReset) = sync_receiver.try_recv() {
-                                    autosplitter.reset_game_tracking();
-                                    //Reset the snes
-                                    if app_config.read().reset_game_on_timer_reset
-                                        == Some(YesOrNo::Yes)
-                                    {
-                                        client.reset()?;
+                                        }
+                                        // If the timer gets reset, we need to make a fresh snes state
+                                        if let Ok(ThreadEvent::TimerReset) =
+                                            sync_receiver.try_recv()
+                                        {
+                                            autosplitter.reset_game_tracking();
+                                            //Reset the snes
+                                            if app_config.read().reset_game_on_timer_reset
+                                                == Some(YesOrNo::Yes)
+                                            {
+                                                client.reset()?;
+                                            }
+                                        }
+                                        let now = std::time::Instant::now();
+                                        if now < next {
+                                            std::thread::sleep(next - now);
+                                            next += period;
+                                        } else {
+                                            // skip sleep; we are late
+                                            next = now + period;
+                                        }
                                     }
-                                }
-                                let now = std::time::Instant::now();
-                                if now < next {
-                                    std::thread::sleep(next - now);
-                                    next += period;
-                                } else {
-                                    // skip sleep; we are late
-                                    next = now + period;
-                                }
+                                });
+                                std::thread::sleep(std::time::Duration::from_millis(1000));
                             }
-                        });
-                        std::thread::sleep(std::time::Duration::from_millis(1000));
-                    }
+                        }
+                    }))
+                {
+                    let msg = panic_payload_to_string(&panic);
+                    tracing::error!("SNES polling thread panicked: {msg}");
                 }
             }) {
             Ok(_) => {}
