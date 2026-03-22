@@ -135,8 +135,13 @@ impl eframe::App for LiveSplitCoreRenderer {
         let close_requested = ctx.input(|i| i.viewport().close_requested());
         if close_requested {
             self.is_exiting = true;
-            self.confirm_save(frame.gl().expect("No GL context"), ctx)
-                .unwrap();
+            if let Some(gl) = frame.gl() {
+                if let Err(e) = self.confirm_save(gl, ctx) {
+                    tracing::error!("Error during save on exit: {e}");
+                }
+            } else {
+                tracing::error!("No GL context available during exit");
+            }
             self.save_app_config();
         }
         if self.can_exit {
@@ -193,7 +198,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                 }
             } else if !layout_editor_open && !splits_editor_open {
                 // Normal path: compute from self.layout
-                let timer = self.timer.read().unwrap();
+                let Ok(timer) = self.timer.read() else {
+                    return;
+                };
                 let snapshot = timer.snapshot();
                 let mut image_cache = self.image_cache.write();
                 let mut layout_state = self.layout_state.write();
@@ -258,10 +265,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let image_cache = self.image_cache.read();
                 let draw_background =
                     self.app_config.read().transparent_window != Some(YesOrNo::Yes);
-                self.glow_canvas.update_frame_buffer(
-                    viewport,
-                    frame.gl().unwrap(),
-                    |frame_buffer, sz, stride| {
+                let Some(gl) = frame.gl() else {
+                    return;
+                };
+                self.glow_canvas
+                    .update_frame_buffer(viewport, gl, |frame_buffer, sz, stride| {
                         if let Some(layout_state) = layout_state.as_ref() {
                             let _renderer_render_span =
                                 span!(Level::TRACE, "renderer.render").entered();
@@ -274,8 +282,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 draw_background,
                             );
                         }
-                    },
-                );
+                    });
             }
             {
                 let _span = span!(Level::TRACE, "paint_layer").entered();
@@ -360,16 +367,17 @@ pub fn app_init(
     // This thread is essentially just a refresh rate timer
     // it ensures that the gui thread is redrawn at the requested frame_rate,
     // possibly more often.
-    let _frame_rate_thread = ThreadBuilder::default()
+    match ThreadBuilder::default()
         .name("Frame Rate Thread".to_owned())
         .spawn(move |_| loop {
             if frame_rate > 0.0 {
                 context.request_repaint_of(egui::ViewportId::ROOT);
                 std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / frame_rate));
             }
-        })
-        // TODO: fix this unwrap
-        .unwrap();
+        }) {
+        Ok(_) => {}
+        Err(e) => tracing::error!("Failed to spawn frame rate thread: {e}"),
+    }
 
     // The timer, settings, and app_config are all behind
     // something equivalent to Arc<RwLock<_>> so it's safe
@@ -379,7 +387,7 @@ pub fn app_init(
     let app_config = app.app_config.clone();
     // This thread deals with polling the SNES at a fixed rate.
     if app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
-        let _snes_polling_thread = ThreadBuilder::default()
+        match ThreadBuilder::default()
             .name("SNES Polling Thread".to_owned())
             // We could change this thread priority, but we probably
             // should leave it at the default to make sure we get timely
@@ -475,8 +483,9 @@ pub fn app_init(
                         std::thread::sleep(std::time::Duration::from_millis(1000));
                     }
                 }
-            })
-            //TODO: fix this unwrap
-            .unwrap();
+            }) {
+            Ok(_) => {}
+            Err(e) => tracing::error!("Failed to spawn SNES polling thread: {e}"),
+        }
     }
 }

@@ -192,37 +192,59 @@ impl LiveSplitCoreRenderer {
         for action in actions {
             match action {
                 UiAction::OpenLayoutDialog => {
-                    self.open_layout_dialog(&document_dir, ctx).unwrap();
+                    if let Err(e) = self.open_layout_dialog(&document_dir, ctx) {
+                        tracing::warn!("Failed to open layout dialog: {e}");
+                    }
                 }
                 UiAction::OpenSplitsDialog => {
-                    self.open_splits_dialog(&document_dir).unwrap();
+                    if let Err(e) = self.open_splits_dialog(&document_dir) {
+                        tracing::warn!("Failed to open splits dialog: {e}");
+                    }
                 }
                 UiAction::SaveSplitsDialog => {
-                    self.save_splits_dialog(&document_dir).unwrap();
+                    if let Err(e) = self.save_splits_dialog(&document_dir) {
+                        tracing::warn!("Failed to save splits: {e}");
+                    }
                 }
                 UiAction::SaveLayoutDialog => {
-                    self.save_layout_dialog(&document_dir, ctx).unwrap();
+                    if let Err(e) = self.save_layout_dialog(&document_dir, ctx) {
+                        tracing::warn!("Failed to save layout: {e}");
+                    }
                 }
                 UiAction::Start => {
-                    self.timer.write().unwrap().start().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.start().ok();
+                    }
                 }
                 UiAction::Split => {
-                    self.timer.write().unwrap().split().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.split().ok();
+                    }
                 }
                 UiAction::SkipSplit => {
-                    self.timer.write().unwrap().skip_split().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.skip_split().ok();
+                    }
                 }
                 UiAction::UndoSplit => {
-                    self.timer.write().unwrap().undo_split().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.undo_split().ok();
+                    }
                 }
                 UiAction::Pause => {
-                    self.timer.write().unwrap().pause().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.pause().ok();
+                    }
                 }
                 UiAction::Resume => {
-                    self.timer.write().unwrap().resume().ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.resume().ok();
+                    }
                 }
                 UiAction::Reset => {
-                    self.timer.write().unwrap().reset(true).ok();
+                    if let Ok(mut t) = self.timer.write() {
+                        t.reset(true).ok();
+                    }
                     if self.app_config.read().use_autosplitter == Some(YesOrNo::Yes) {
                         self.thread_chan
                             .try_send(ThreadEvent::TimerReset)
@@ -239,17 +261,27 @@ impl LiveSplitCoreRenderer {
                     self.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::OpenAutosplitterDialog => {
-                    self.open_autosplitter_dialog(&document_dir).unwrap();
+                    if let Err(e) = self.open_autosplitter_dialog(&document_dir) {
+                        tracing::warn!("Failed to open autosplitter dialog: {e}");
+                    }
                 }
                 UiAction::SaveAutosplitterDialog => {
-                    self.save_autosplitter_dialog(&document_dir).unwrap();
+                    if let Err(e) = self.save_autosplitter_dialog(&document_dir) {
+                        tracing::warn!("Failed to save autosplitter: {e}");
+                    }
                 }
                 UiAction::OpenSplitsEditor => {
                     if !self
                         .splits_editor_open
                         .load(std::sync::atomic::Ordering::Relaxed)
                     {
-                        let run = self.timer.read().unwrap().run().clone();
+                        let run = match self.timer.read() {
+                            Ok(guard) => guard.run().clone(),
+                            Err(e) => {
+                                tracing::warn!("Failed to read timer for splits editor: {e}");
+                                continue;
+                            }
+                        };
                         match livesplit_core::run::editor::Editor::new(run) {
                             Ok(editor) => {
                                 let editor_state =
@@ -265,7 +297,9 @@ impl LiveSplitCoreRenderer {
                     }
                 }
                 UiAction::ApplySplitsEdit(run) => {
-                    let _ = self.timer.write().unwrap().set_run(*run);
+                    if let Ok(mut t) = self.timer.write() {
+                        let _ = t.set_run(*run);
+                    }
                 }
                 UiAction::OpenLayoutEditor => {
                     if !self

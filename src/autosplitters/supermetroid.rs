@@ -1832,7 +1832,9 @@ impl Index<&str> for SNESState {
     type Output = MemoryWatcher;
 
     fn index(&self, var: &str) -> &Self::Output {
-        self.vars.get(var).unwrap()
+        self.vars
+            .get(var)
+            .unwrap_or_else(|| panic!("unknown SNES variable: {var}"))
     }
 }
 

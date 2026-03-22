@@ -138,14 +138,16 @@ impl LiveSplitCoreRenderer {
             ctx.input_mut(|input| {
                 if let Some(hot_key) = config.hot_key_start {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().split_or_start().ok();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.split_or_start().ok();
+                        }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_reset {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().reset(true).ok();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.reset(true).ok();
+                        }
                         if config.use_autosplitter == Some(YesOrNo::Yes) {
                             self.thread_chan
                                 .try_send(ThreadEvent::TimerReset)
@@ -155,32 +157,37 @@ impl LiveSplitCoreRenderer {
                 }
                 if let Some(hot_key) = config.hot_key_undo {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().undo_split().ok();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.undo_split().ok();
+                        }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_skip {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().skip_split().ok();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.skip_split().ok();
+                        }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_pause {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().toggle_pause().ok();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.toggle_pause().ok();
+                        }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_comparison_next {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().switch_to_next_comparison();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.switch_to_next_comparison();
+                        }
                     }
                 }
                 if let Some(hot_key) = config.hot_key_comparison_prev {
                     if input.consume_key(hot_key.modifiers, hot_key.key) {
-                        // TODO: fix this unwrap
-                        self.timer.write().unwrap().switch_to_previous_comparison();
+                        if let Ok(mut t) = self.timer.write() {
+                            t.switch_to_previous_comparison();
+                        }
                     }
                 }
             });
