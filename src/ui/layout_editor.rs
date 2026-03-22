@@ -20,8 +20,8 @@ use crate::ui::control_panel::UiAction;
 // ComponentKind — type-safe enum for the "Add Component" dropdown
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ComponentKind {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComponentKind {
     BlankSpace,
     CurrentComparison,
     CurrentPace,
@@ -42,7 +42,7 @@ pub(crate) enum ComponentKind {
 }
 
 impl ComponentKind {
-    const ALL: &[Self] = &[
+    pub const ALL: &[Self] = &[
         Self::BlankSpace,
         Self::CurrentComparison,
         Self::CurrentPace,
@@ -62,7 +62,7 @@ impl ComponentKind {
         Self::TotalPlaytime,
     ];
 
-    fn display_name(self) -> &'static str {
+    pub fn display_name(self) -> &'static str {
         match self {
             Self::BlankSpace => "Blank Space",
             Self::CurrentComparison => "Current Comparison",
@@ -120,14 +120,14 @@ impl ComponentKind {
 // Enum variant tables for ComboBox widgets
 // ---------------------------------------------------------------------------
 
-const ACCURACY_VARIANTS: &[(Accuracy, &str)] = &[
+pub const ACCURACY_VARIANTS: &[(Accuracy, &str)] = &[
     (Accuracy::Seconds, "Seconds"),
     (Accuracy::Tenths, "Tenths"),
     (Accuracy::Hundredths, "Hundredths"),
     (Accuracy::Milliseconds, "Milliseconds"),
 ];
 
-const DIGITS_FORMAT_VARIANTS: &[(DigitsFormat, &str)] = &[
+pub const DIGITS_FORMAT_VARIANTS: &[(DigitsFormat, &str)] = &[
     (DigitsFormat::SingleDigitSeconds, "1:23"),
     (DigitsFormat::DoubleDigitSeconds, "01:23"),
     (DigitsFormat::SingleDigitMinutes, "1:01:23"),
@@ -136,18 +136,18 @@ const DIGITS_FORMAT_VARIANTS: &[(DigitsFormat, &str)] = &[
     (DigitsFormat::DoubleDigitHours, "01:01:01:23"),
 ];
 
-const ALIGNMENT_VARIANTS: &[(Alignment, &str)] = &[
+pub const ALIGNMENT_VARIANTS: &[(Alignment, &str)] = &[
     (Alignment::Auto, "Auto"),
     (Alignment::Left, "Left"),
     (Alignment::Center, "Center"),
 ];
 
-const COLUMN_KIND_VARIANTS: &[(ColumnKind, &str)] = &[
+pub const COLUMN_KIND_VARIANTS: &[(ColumnKind, &str)] = &[
     (ColumnKind::Time, "Time"),
     (ColumnKind::Variable, "Variable"),
 ];
 
-const COLUMN_START_WITH_VARIANTS: &[(ColumnStartWith, &str)] = &[
+pub const COLUMN_START_WITH_VARIANTS: &[(ColumnStartWith, &str)] = &[
     (ColumnStartWith::Empty, "Empty"),
     (ColumnStartWith::ComparisonTime, "Comparison Time"),
     (
@@ -157,7 +157,7 @@ const COLUMN_START_WITH_VARIANTS: &[(ColumnStartWith, &str)] = &[
     (ColumnStartWith::PossibleTimeSave, "Possible Time Save"),
 ];
 
-const COLUMN_UPDATE_WITH_VARIANTS: &[(ColumnUpdateWith, &str)] = &[
+pub const COLUMN_UPDATE_WITH_VARIANTS: &[(ColumnUpdateWith, &str)] = &[
     (ColumnUpdateWith::DontUpdate, "Don't Update"),
     (ColumnUpdateWith::SplitTime, "Split Time"),
     (ColumnUpdateWith::Delta, "Delta"),
@@ -170,7 +170,7 @@ const COLUMN_UPDATE_WITH_VARIANTS: &[(ColumnUpdateWith, &str)] = &[
     ),
 ];
 
-const COLUMN_UPDATE_TRIGGER_VARIANTS: &[(ColumnUpdateTrigger, &str)] = &[
+pub const COLUMN_UPDATE_TRIGGER_VARIANTS: &[(ColumnUpdateTrigger, &str)] = &[
     (
         ColumnUpdateTrigger::OnStartingSegment,
         "On Starting Segment",
@@ -179,18 +179,18 @@ const COLUMN_UPDATE_TRIGGER_VARIANTS: &[(ColumnUpdateTrigger, &str)] = &[
     (ColumnUpdateTrigger::OnEndingSegment, "On Ending Segment"),
 ];
 
-const LAYOUT_DIRECTION_VARIANTS: &[(LayoutDirection, &str)] = &[
+pub const LAYOUT_DIRECTION_VARIANTS: &[(LayoutDirection, &str)] = &[
     (LayoutDirection::Vertical, "Vertical"),
     (LayoutDirection::Horizontal, "Horizontal"),
 ];
 
-const FONT_STYLE_VARIANTS: &[(FontStyle, &str)] = &[
+pub const FONT_STYLE_VARIANTS: &[(FontStyle, &str)] = &[
     (FontStyle::Normal, "Normal"),
     (FontStyle::Italic, "Italic"),
     (FontStyle::Oblique, "Oblique"),
 ];
 
-const FONT_WEIGHT_VARIANTS: &[(FontWeight, &str)] = &[
+pub const FONT_WEIGHT_VARIANTS: &[(FontWeight, &str)] = &[
     (FontWeight::Thin, "Thin"),
     (FontWeight::ExtraLight, "Extra Light"),
     (FontWeight::Light, "Light"),
@@ -204,7 +204,7 @@ const FONT_WEIGHT_VARIANTS: &[(FontWeight, &str)] = &[
     (FontWeight::ExtraBlack, "Extra Black"),
 ];
 
-const FONT_STRETCH_VARIANTS: &[(FontStretch, &str)] = &[
+pub const FONT_STRETCH_VARIANTS: &[(FontStretch, &str)] = &[
     (FontStretch::UltraCondensed, "Ultra Condensed"),
     (FontStretch::ExtraCondensed, "Extra Condensed"),
     (FontStretch::Condensed, "Condensed"),

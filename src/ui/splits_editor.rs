@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use crate::ui::control_panel::UiAction;
 
-pub(crate) struct SplitsEditorState {
+pub struct SplitsEditorState {
     pub editor: Editor,
     pub image_cache: ImageCache,
     // Run metadata buffers
@@ -56,7 +56,7 @@ impl SplitsEditorState {
         }
     }
 
-    fn reload_segment_buffers(&mut self) {
+    pub fn reload_segment_buffers(&mut self) {
         let state = self
             .editor
             .state(&mut self.image_cache, livesplit_core::Lang::English);
@@ -69,7 +69,7 @@ impl SplitsEditorState {
         }
     }
 
-    fn select_segment(&mut self, index: usize) {
+    pub fn select_segment(&mut self, index: usize) {
         if index == self.active_index {
             return;
         }
@@ -84,7 +84,7 @@ impl SplitsEditorState {
         self.reload_segment_buffers();
     }
 
-    fn update_after_mutation(&mut self) {
+    pub fn update_after_mutation(&mut self) {
         let state = self
             .editor
             .state(&mut self.image_cache, livesplit_core::Lang::English);

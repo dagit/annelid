@@ -6,6 +6,18 @@ use crate::config::layout_meta::LayoutMeta;
 use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use crate::utils::*;
 
+/// Inject annelid window metadata into a layout JSON value.
+/// The metadata is stored under the `"annelid"` key at the top level.
+pub fn inject_layout_meta(
+    layout_json: &mut serde_json::Value,
+    meta: &LayoutMeta,
+) -> Result<(), serde_json::Error> {
+    if let serde_json::Value::Object(ref mut map) = layout_json {
+        map.insert("annelid".to_owned(), serde_json::to_value(meta)?);
+    }
+    Ok(())
+}
+
 impl LiveSplitCoreRenderer {
     // TODO: we need to update this so that whatever the file is saved as becomes the default file
     // to load next time.
@@ -453,9 +465,7 @@ impl LiveSplitCoreRenderer {
             // Serialize layout settings to JSON, then inject annelid metadata
             let settings = self.layout.settings();
             let mut json = serde_json::to_value(&settings)?;
-            if let serde_json::Value::Object(ref mut map) = json {
-                map.insert("annelid".to_owned(), serde_json::to_value(&meta)?);
-            }
+            inject_layout_meta(&mut json, &meta)?;
             let f = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
