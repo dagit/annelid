@@ -64,7 +64,7 @@ impl UiState {
 pub struct LiveSplitCoreRenderer {
     pub(crate) layout: Layout,
     pub(crate) renderer: livesplit_core::rendering::software::BorrowedRenderer,
-    pub(crate) gpu_renderer: Arc<parking_lot::Mutex<Option<livesplit_renderer_glow::GlowRenderer>>>,
+    pub(crate) gpu_renderer: Arc<parking_lot::Mutex<Option<livesplit_renderer_gpu::GlowRenderer>>>,
     pub(crate) layout_state: Arc<parking_lot::RwLock<Option<livesplit_core::layout::LayoutState>>>,
     pub(crate) image_cache: Arc<parking_lot::RwLock<livesplit_core::settings::ImageCache>>,
     pub(crate) timer: SharedTimer,
@@ -240,6 +240,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             // showing the stale layout_state until the editor produces one
         }
 
+        let draw_bg = self.app_config.read().transparent_window != Some(YesOrNo::Yes);
         if self.app_config.read().renderer == Some(RendererType::Gpu) {
             let ppp = ctx.input(|i| i.pixels_per_point());
             let width = (viewport.width() * ppp) as u32;
@@ -264,6 +265,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                             layout_state,
                                             &ic_guard,
                                             [width, height],
+                                            draw_bg,
                                         );
                                     }
                                 }
@@ -366,7 +368,7 @@ pub fn app_init(
             .gl
             .as_ref()
             .expect("eframe glow backend required for GPU renderer");
-        match unsafe { livesplit_renderer_glow::GlowRenderer::new(gl.clone()) } {
+        match unsafe { livesplit_renderer_gpu::GlowRenderer::new(gl.clone()) } {
             Ok(gpu_renderer) => {
                 *app.gpu_renderer.lock() = Some(gpu_renderer);
                 tracing::info!("GPU renderer initialized");
