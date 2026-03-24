@@ -541,8 +541,8 @@ unsafe fn paint_lowlevel(
     let mut ctx = gl_ctx.write();
     let ctx = ctx.as_mut().unwrap();
 
-    let diag_should_log = matches!(diag_mode, Some(DiagMode::LogOps))
-        && (diag_frame <= 60 || diag_frame % 30 == 0);
+    let diag_should_log =
+        matches!(diag_mode, Some(DiagMode::LogOps)) && (diag_frame <= 60 || diag_frame % 30 == 0);
 
     unsafe {
         // --- Diagnostic logging ---
@@ -579,9 +579,7 @@ unsafe fn paint_lowlevel(
             }
             Some(DiagMode::TripleClear) => {
                 let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
-                tracing::info!(
-                    "Frame {diag_frame}: TripleClear in paint_lowlevel, FBO={fbo}"
-                );
+                tracing::info!("Frame {diag_frame}: TripleClear in paint_lowlevel, FBO={fbo}");
                 gl.clear_color(0.0, 0.0, 0.0, 1.0);
                 gl.clear(glow::COLOR_BUFFER_BIT);
             }
@@ -594,106 +592,110 @@ unsafe fn paint_lowlevel(
             }
         }
 
-        gl.use_program(Some(ctx.program));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_vertex_array(Some(ctx.vao));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.enable_vertex_attrib_array(0);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.enable_vertex_attrib_array(1);
-        debug_assert_eq!(gl.get_error(), 0);
+        // FlashFrames: skip the texture draw so the solid red/blue
+        // clear is all you see.
+        if !matches!(diag_mode, Some(DiagMode::FlashFrames)) {
+            gl.use_program(Some(ctx.program));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_vertex_array(Some(ctx.vao));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.enable_vertex_attrib_array(0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.enable_vertex_attrib_array(1);
+            debug_assert_eq!(gl.get_error(), 0);
 
-        gl.uniform_2_f32(Some(&ctx.u_screen_size), w, h);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.uniform_1_i32(Some(&ctx.u_sampler), 0);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.active_texture(glow::TEXTURE0);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_vertex_array(Some(ctx.vao));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-        debug_assert_eq!(gl.get_error(), 0);
+            gl.uniform_2_f32(Some(&ctx.u_screen_size), w, h);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.uniform_1_i32(Some(&ctx.u_sampler), 0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.active_texture(glow::TEXTURE0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_vertex_array(Some(ctx.vao));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
+            debug_assert_eq!(gl.get_error(), 0);
 
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as _,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as _,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(ctx.texture));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as _,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as _,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
 
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_S,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_T,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
 
-        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-        debug_assert_eq!(gl.get_error(), 0);
-        ctx.vertices[0].pos.x = viewport.max.x;
-        ctx.vertices[0].pos.y = viewport.min.y;
-        ctx.vertices[1].pos.x = viewport.max.x;
-        ctx.vertices[1].pos.y = viewport.max.y;
-        ctx.vertices[2].pos.x = viewport.min.x;
-        ctx.vertices[2].pos.y = viewport.max.y;
-        ctx.vertices[3].pos.x = viewport.min.x;
-        ctx.vertices[3].pos.y = viewport.min.y;
+            gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+            debug_assert_eq!(gl.get_error(), 0);
+            ctx.vertices[0].pos.x = viewport.max.x;
+            ctx.vertices[0].pos.y = viewport.min.y;
+            ctx.vertices[1].pos.x = viewport.max.x;
+            ctx.vertices[1].pos.y = viewport.max.y;
+            ctx.vertices[2].pos.x = viewport.min.x;
+            ctx.vertices[2].pos.y = viewport.max.y;
+            ctx.vertices[3].pos.x = viewport.min.x;
+            ctx.vertices[3].pos.y = viewport.min.y;
 
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(ctx.vertices.as_slice()),
-            glow::STREAM_DRAW,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            bytemuck::cast_slice(ctx.indices.as_slice()),
-            glow::STREAM_DRAW,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.draw_elements(
-            glow::TRIANGLES,
-            ctx.indices.len() as i32,
-            glow::UNSIGNED_INT,
-            0,
-        );
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_texture(glow::TEXTURE_2D, None);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.disable_vertex_attrib_array(0);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.disable_vertex_attrib_array(1);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_vertex_array(None);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.bind_buffer(glow::ARRAY_BUFFER, None);
-        debug_assert_eq!(gl.get_error(), 0);
-        gl.use_program(None);
-        debug_assert_eq!(gl.get_error(), 0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(ctx.vbo));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(ctx.vertices.as_slice()),
+                glow::STREAM_DRAW,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ctx.element_array_buffer));
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.buffer_data_u8_slice(
+                glow::ELEMENT_ARRAY_BUFFER,
+                bytemuck::cast_slice(ctx.indices.as_slice()),
+                glow::STREAM_DRAW,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.draw_elements(
+                glow::TRIANGLES,
+                ctx.indices.len() as i32,
+                glow::UNSIGNED_INT,
+                0,
+            );
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.disable_vertex_attrib_array(0);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.disable_vertex_attrib_array(1);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_vertex_array(None);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            debug_assert_eq!(gl.get_error(), 0);
+            gl.use_program(None);
+            debug_assert_eq!(gl.get_error(), 0);
+        }
 
         // --- Diagnostic: re-enable blend if we disabled it ---
         if matches!(diag_mode, Some(DiagMode::NoBlend)) {

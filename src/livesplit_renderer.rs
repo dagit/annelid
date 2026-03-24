@@ -366,18 +366,22 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 }
                             }
 
-                            let ls_guard = ls.read();
-                            let ic_guard = ic.read();
-                            if let Some(layout_state) = ls_guard.as_ref() {
-                                let mut gpu_guard = gpu.lock();
-                                if let Some(gpu_renderer) = gpu_guard.as_mut() {
-                                    unsafe {
-                                        gpu_renderer.render(
-                                            layout_state,
-                                            &ic_guard,
-                                            [width, height],
-                                            draw_bg,
-                                        );
+                            // FlashFrames: skip the actual render so the
+                            // solid red/blue clear is all you see.
+                            if !matches!(diag_mode, Some(DiagMode::FlashFrames)) {
+                                let ls_guard = ls.read();
+                                let ic_guard = ic.read();
+                                if let Some(layout_state) = ls_guard.as_ref() {
+                                    let mut gpu_guard = gpu.lock();
+                                    if let Some(gpu_renderer) = gpu_guard.as_mut() {
+                                        unsafe {
+                                            gpu_renderer.render(
+                                                layout_state,
+                                                &ic_guard,
+                                                [width, height],
+                                                draw_bg,
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -401,8 +405,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                     return;
                 };
                 let single_pbo = matches!(diag_mode, Some(DiagMode::SinglePbo));
-                self.glow_canvas
-                    .update_frame_buffer(viewport, gl, single_pbo, |frame_buffer, sz, stride| {
+                self.glow_canvas.update_frame_buffer(
+                    viewport,
+                    gl,
+                    single_pbo,
+                    |frame_buffer, sz, stride| {
                         if let Some(layout_state) = layout_state.as_ref() {
                             let _renderer_render_span =
                                 span!(Level::TRACE, "renderer.render").entered();
@@ -415,12 +422,18 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 draw_background,
                             );
                         }
-                    });
+                    },
+                );
             }
             {
                 let _span = span!(Level::TRACE, "paint_layer").entered();
-                self.glow_canvas
-                    .paint_layer(ctx, egui::LayerId::background(), viewport, diag_mode, diag_frame);
+                self.glow_canvas.paint_layer(
+                    ctx,
+                    egui::LayerId::background(),
+                    viewport,
+                    diag_mode,
+                    diag_frame,
+                );
             }
         }
         let response = egui::Area::new("livesplit".into())
@@ -480,6 +493,11 @@ pub fn app_init(
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
     app.load_app_config();
+    // Auto-bump log level to info when any diagnostic mode is active
+    if app.app_config.read().diag_mode.is_some() {
+        crate::logging::set_log_level(crate::logging::LogLevel::Info);
+        tracing::info!("Diagnostic mode active — log level set to info");
+    }
     if app.app_config.read().renderer == Some(RendererType::Gpu) {
         let gl = cc
             .gl
@@ -500,18 +518,9 @@ pub fn app_init(
     if let Some(gl) = cc.gl.as_ref() {
         unsafe {
             tracing::info!("=== GL Environment ===");
-            tracing::info!(
-                "GL_VERSION: {}",
-                gl.get_parameter_string(glow::VERSION)
-            );
-            tracing::info!(
-                "GL_RENDERER: {}",
-                gl.get_parameter_string(glow::RENDERER)
-            );
-            tracing::info!(
-                "GL_VENDOR: {}",
-                gl.get_parameter_string(glow::VENDOR)
-            );
+            tracing::info!("GL_VERSION: {}", gl.get_parameter_string(glow::VERSION));
+            tracing::info!("GL_RENDERER: {}", gl.get_parameter_string(glow::RENDERER));
+            tracing::info!("GL_VENDOR: {}", gl.get_parameter_string(glow::VENDOR));
             tracing::info!(
                 "GL_SHADING_LANGUAGE_VERSION: {}",
                 gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION)
@@ -520,10 +529,7 @@ pub fn app_init(
                 "GL_DOUBLEBUFFER: {}",
                 gl.get_parameter_i32(glow::DOUBLEBUFFER)
             );
-            tracing::info!(
-                "GL_SAMPLES: {}",
-                gl.get_parameter_i32(glow::SAMPLES)
-            );
+            tracing::info!("GL_SAMPLES: {}", gl.get_parameter_i32(glow::SAMPLES));
             tracing::info!(
                 "GL_SAMPLE_BUFFERS: {}",
                 gl.get_parameter_i32(glow::SAMPLE_BUFFERS)
@@ -532,10 +538,7 @@ pub fn app_init(
                 "GL_DRAW_FRAMEBUFFER_BINDING: {}",
                 gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING)
             );
-            tracing::info!(
-                "BLEND enabled: {}",
-                gl.is_enabled(glow::BLEND)
-            );
+            tracing::info!("BLEND enabled: {}", gl.is_enabled(glow::BLEND));
             tracing::info!(
                 "BLEND_SRC_RGB: 0x{:04X}",
                 gl.get_parameter_i32(glow::BLEND_SRC_RGB)
@@ -577,7 +580,10 @@ pub fn app_init(
                 "LIBGL_ALWAYS_SOFTWARE: {}",
                 std::env::var("LIBGL_ALWAYS_SOFTWARE").unwrap_or_else(|_| "<unset>".into())
             );
-            tracing::info!("=== Diagnostic mode: {:?} ===", app.app_config.read().diag_mode);
+            tracing::info!(
+                "=== Diagnostic mode: {:?} ===",
+                app.app_config.read().diag_mode
+            );
         }
     }
 
