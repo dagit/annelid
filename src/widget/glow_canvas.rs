@@ -1,3 +1,4 @@
+use crate::config::app_config::DiagMode;
 use memoffset::offset_of;
 use tracing::{span, Level};
 
@@ -64,6 +65,7 @@ impl GlowCanvas {
         &self,
         viewport: egui::Rect,
         gl: &std::sync::Arc<eframe::glow::Context>,
+        single_pbo: bool,
         update: F,
     ) where
         F: FnOnce(&mut [u8], [u32; 2], u32),
@@ -112,8 +114,15 @@ impl GlowCanvas {
                         buffers
                     });
                 debug_assert_eq!(gl.get_error(), 0);
-                resources.buffer_idx = (resources.buffer_idx + 1) % 2;
-                let next_idx = (resources.buffer_idx + 1) % 2;
+                if !single_pbo {
+                    resources.buffer_idx = (resources.buffer_idx + 1) % 2;
+                }
+                let next_idx = if single_pbo {
+                    // SinglePbo: always use buffer 0, no rotation
+                    0
+                } else {
+                    (resources.buffer_idx + 1) % 2
+                };
                 gl.bind_buffer(
                     glow::PIXEL_UNPACK_BUFFER,
                     Some(buffer[resources.buffer_idx].native_buffer),
@@ -207,20 +216,27 @@ impl GlowCanvas {
     pub fn paint_immediate(&self, gl: &std::rc::Rc<eframe::glow::Context>, rect: egui::Rect) {
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
-        paint(&gl_ctx, viewport, gl);
+        paint(&gl_ctx, viewport, gl, None, 0);
     }
 
     /// This uses a paint callback to draw to a chosen layer. Usually, the layer will be `LayerId::background()`.
     /// This should be about the same overhead as `paint_immediate` while using the paint callback
     /// system because it seems to be better supported across egui versions.
-    pub fn paint_layer(&self, ctx: &egui::Context, layer: egui::LayerId, rect: egui::Rect) {
+    pub fn paint_layer(
+        &self,
+        ctx: &egui::Context,
+        layer: egui::LayerId,
+        rect: egui::Rect,
+        diag_mode: Option<DiagMode>,
+        diag_frame: u64,
+    ) {
         let painter = ctx.layer_painter(layer);
         let viewport = rect;
         let gl_ctx = self.opengl_resources.clone();
         let callback = egui::PaintCallback {
             rect: viewport,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                paint(&gl_ctx, viewport, painter.gl());
+                paint(&gl_ctx, viewport, painter.gl(), diag_mode, diag_frame);
             })),
         };
         painter.add(callback);
@@ -236,7 +252,7 @@ impl GlowCanvas {
             let callback = egui::PaintCallback {
                 rect: viewport,
                 callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                    paint(&gl_ctx, viewport, painter.gl());
+                    paint(&gl_ctx, viewport, painter.gl(), None, 0);
                 })),
             };
             ui.painter().add(callback);
@@ -277,6 +293,8 @@ fn paint(
     gl_ctx: &std::sync::Arc<parking_lot::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
+    diag_mode: Option<DiagMode>,
+    diag_frame: u64,
 ) {
     // Wish we could use get_or_insert_with here, but we need to return
     // the Arc<Mutex<_>> instead of just a mut &_
@@ -289,7 +307,7 @@ fn paint(
         }
     };
     unsafe {
-        paint_lowlevel(&gl_ctx, viewport, gl);
+        paint_lowlevel(&gl_ctx, viewport, gl, diag_mode, diag_frame);
     }
 }
 
@@ -514,6 +532,8 @@ unsafe fn paint_lowlevel(
     gl_ctx: &std::sync::Arc<parking_lot::RwLock<Option<OpenGLResources>>>,
     viewport: egui::Rect,
     gl: &eframe::glow::Context,
+    diag_mode: Option<DiagMode>,
+    diag_frame: u64,
 ) {
     use eframe::glow::HasContext;
     let w = viewport.max.x - viewport.min.x;
@@ -521,9 +541,58 @@ unsafe fn paint_lowlevel(
     let mut ctx = gl_ctx.write();
     let ctx = ctx.as_mut().unwrap();
 
+    let diag_should_log = matches!(diag_mode, Some(DiagMode::LogOps))
+        && (diag_frame <= 60 || diag_frame % 30 == 0);
+
     unsafe {
-        gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        gl.clear(glow::COLOR_BUFFER_BIT);
+        // --- Diagnostic logging ---
+        if diag_should_log {
+            let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+            let blend = gl.is_enabled(glow::BLEND);
+            let src_rgb = gl.get_parameter_i32(glow::BLEND_SRC_RGB);
+            let dst_rgb = gl.get_parameter_i32(glow::BLEND_DST_RGB);
+            tracing::info!(
+                "Frame {diag_frame}: paint_lowlevel entered, FBO={fbo}, \
+                 blend={blend}, src_rgb=0x{src_rgb:04X}, dst_rgb=0x{dst_rgb:04X}"
+            );
+        }
+
+        // --- Diagnostic: NoBlend ---
+        if matches!(diag_mode, Some(DiagMode::NoBlend)) {
+            gl.disable(glow::BLEND);
+        }
+
+        // --- Diagnostic: FlashFrames ---
+        if matches!(diag_mode, Some(DiagMode::FlashFrames)) {
+            if diag_frame % 2 == 0 {
+                gl.clear_color(1.0, 0.0, 0.0, 1.0);
+            } else {
+                gl.clear_color(0.0, 0.0, 1.0, 1.0);
+            }
+            gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+
+        // --- Clear logic ---
+        match diag_mode {
+            Some(DiagMode::NoClear) => {
+                // Skip clear
+            }
+            Some(DiagMode::TripleClear) => {
+                let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                tracing::info!(
+                    "Frame {diag_frame}: TripleClear in paint_lowlevel, FBO={fbo}"
+                );
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+            Some(DiagMode::FlashFrames) => {
+                // Already cleared with flash color
+            }
+            _ => {
+                gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+        }
 
         gl.use_program(Some(ctx.program));
         debug_assert_eq!(gl.get_error(), 0);
@@ -625,6 +694,11 @@ unsafe fn paint_lowlevel(
         debug_assert_eq!(gl.get_error(), 0);
         gl.use_program(None);
         debug_assert_eq!(gl.get_error(), 0);
+
+        // --- Diagnostic: re-enable blend if we disabled it ---
+        if matches!(diag_mode, Some(DiagMode::NoBlend)) {
+            gl.enable(glow::BLEND);
+        }
         //println!("Time to render texture: {}μs", timer.elapsed().as_micros());
     }
 }

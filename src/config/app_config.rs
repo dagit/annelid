@@ -26,6 +26,8 @@ pub struct AppConfig {
     pub global_hotkeys: Option<YesOrNo>,
     #[clap(name = "renderer", long, short = 'r', value_parser)]
     pub renderer: Option<RendererType>,
+    #[clap(name = "diag-mode", long, value_parser)]
+    pub diag_mode: Option<DiagMode>,
     #[clap(skip)]
     pub transparent_window: Option<YesOrNo>,
     #[clap(skip)]
@@ -56,6 +58,24 @@ pub enum RendererType {
     Software,
     #[default]
     Gpu,
+}
+
+/// Diagnostic modes for debugging rendering issues (ghosting, etc.).
+/// Use via CLI: `annelid --diag-mode flash-frames`
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DiagMode {
+    /// Flash alternating red/blue frames to detect double-buffer issues
+    FlashFrames,
+    /// Skip ALL glClear calls to see if clearing is helping or hurting
+    NoClear,
+    /// Disable blending globally to test for blend state leaks
+    NoBlend,
+    /// Force triple-clear at every stage of the pipeline
+    TripleClear,
+    /// Software renderer only: disable PBO double-buffering
+    SinglePbo,
+    /// Log every GL clear/draw operation per frame (verbose)
+    LogOps,
 }
 
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
@@ -104,6 +124,7 @@ impl AppConfig {
             reset_game_on_timer_reset: Some(YesOrNo::No),
             global_hotkeys: Some(YesOrNo::Yes),
             renderer: Some(RendererType::Gpu),
+            diag_mode: None,
             transparent_window: None,
         }
     }

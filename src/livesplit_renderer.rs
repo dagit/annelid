@@ -84,6 +84,8 @@ pub struct LiveSplitCoreRenderer {
     pub(crate) saved_layout_meta: Option<crate::config::layout_meta::LayoutMeta>,
     pub(crate) log_buffer: crate::logging::LogBuffer,
     pub(crate) ui: UiState,
+    /// Diagnostic frame counter for ghosting debug modes.
+    pub(crate) diag_frame_count: u64,
 }
 
 impl LiveSplitCoreRenderer {
@@ -118,21 +120,66 @@ impl LiveSplitCoreRenderer {
             saved_layout_meta: None,
             log_buffer,
             ui: UiState::new(),
+            diag_frame_count: 0,
         }
     }
 }
 
 impl eframe::App for LiveSplitCoreRenderer {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        if self.app_config.read().transparent_window == Some(YesOrNo::Yes) {
-            [0.0, 0.0, 0.0, 0.0]
-        } else {
-            [0.0, 0.0, 0.0, 1.0]
+        let config = self.app_config.read();
+        match config.diag_mode {
+            Some(DiagMode::NoClear) => {
+                // Return transparent so eframe's clear is a no-op
+                [0.0, 0.0, 0.0, 0.0]
+            }
+            Some(DiagMode::TripleClear) => {
+                // Always opaque black for triple-clear test
+                [0.0, 0.0, 0.0, 1.0]
+            }
+            _ => {
+                if config.transparent_window == Some(YesOrNo::Yes) {
+                    [0.0, 0.0, 0.0, 0.0]
+                } else {
+                    [0.0, 0.0, 0.0, 1.0]
+                }
+            }
         }
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let _frame = span!(Level::TRACE, "frame").entered();
+        self.diag_frame_count = self.diag_frame_count.wrapping_add(1);
+        let diag_mode = self.app_config.read().diag_mode;
+        let diag_frame = self.diag_frame_count;
+        let diag_should_log = matches!(diag_mode, Some(DiagMode::LogOps))
+            && (diag_frame <= 60 || diag_frame % 30 == 0);
+
+        // TripleClear: clear at the very start of update()
+        if matches!(diag_mode, Some(DiagMode::TripleClear)) {
+            if let Some(gl) = frame.gl() {
+                unsafe {
+                    let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                    tracing::info!("Frame {diag_frame}: TripleClear at update() start, FBO={fbo}");
+                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                    gl.clear(glow::COLOR_BUFFER_BIT);
+                }
+            }
+        }
+
+        if diag_should_log {
+            if let Some(gl) = frame.gl() {
+                unsafe {
+                    let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                    let blend = gl.is_enabled(glow::BLEND);
+                    tracing::info!(
+                        "Frame {diag_frame}: update() start, FBO={fbo}, blend={blend}, renderer={:?}",
+                        self.app_config.read().renderer
+                    );
+                }
+            }
+        }
+
         //let update_timer = std::time::Instant::now();
         if self.app_config_processed && !self.load_errors.is_empty() {
             let mut queue: Vec<anyhow::Error> = vec![];
@@ -256,19 +303,69 @@ impl eframe::App for LiveSplitCoreRenderer {
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
                         move |_info, painter| {
                             let _span = span!(Level::TRACE, "gpu_render").entered();
-                            // Clear the default framebuffer when the window is
-                            // opaque.  The GPU renderer blits its result onto
-                            // the default FB, but nothing else clears it
-                            // between frames.  Without this, stale pixels from
-                            // the previous frame bleed through any transparent
-                            // regions of the layout (ghosting).
-                            if draw_bg {
-                                let gl = painter.gl();
+                            let gl = painter.gl();
+
+                            // --- Diagnostic: log FBO and blend state ---
+                            if diag_should_log {
                                 unsafe {
-                                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                                    let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                                    let blend = gl.is_enabled(glow::BLEND);
+                                    let src_rgb = gl.get_parameter_i32(glow::BLEND_SRC_RGB);
+                                    let dst_rgb = gl.get_parameter_i32(glow::BLEND_DST_RGB);
+                                    tracing::info!(
+                                        "Frame {diag_frame}: GPU callback entered, FBO={fbo}, \
+                                         blend={blend}, src_rgb=0x{src_rgb:04X}, dst_rgb=0x{dst_rgb:04X}"
+                                    );
+                                }
+                            }
+
+                            // --- Diagnostic: NoBlend ---
+                            if matches!(diag_mode, Some(DiagMode::NoBlend)) {
+                                unsafe { gl.disable(glow::BLEND); }
+                            }
+
+                            // --- Diagnostic: FlashFrames ---
+                            if matches!(diag_mode, Some(DiagMode::FlashFrames)) {
+                                unsafe {
+                                    if diag_frame % 2 == 0 {
+                                        gl.clear_color(1.0, 0.0, 0.0, 1.0); // red
+                                    } else {
+                                        gl.clear_color(0.0, 0.0, 1.0, 1.0); // blue
+                                    }
                                     gl.clear(glow::COLOR_BUFFER_BIT);
                                 }
                             }
+
+                            // --- Normal or diagnostic clear ---
+                            match diag_mode {
+                                Some(DiagMode::NoClear) => {
+                                    // Skip all clears
+                                }
+                                Some(DiagMode::TripleClear) => {
+                                    // Third clear point (in callback)
+                                    unsafe {
+                                        let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                                        tracing::info!(
+                                            "Frame {diag_frame}: TripleClear in GPU callback, FBO={fbo}"
+                                        );
+                                        gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                                        gl.clear(glow::COLOR_BUFFER_BIT);
+                                    }
+                                }
+                                Some(DiagMode::FlashFrames) => {
+                                    // Already cleared with flash color above
+                                }
+                                _ => {
+                                    // Normal behavior
+                                    if draw_bg {
+                                        unsafe {
+                                            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                                            gl.clear(glow::COLOR_BUFFER_BIT);
+                                        }
+                                    }
+                                }
+                            }
+
                             let ls_guard = ls.read();
                             let ic_guard = ic.read();
                             if let Some(layout_state) = ls_guard.as_ref() {
@@ -284,6 +381,11 @@ impl eframe::App for LiveSplitCoreRenderer {
                                     }
                                 }
                             }
+
+                            // --- Diagnostic: re-enable blend if we disabled it ---
+                            if matches!(diag_mode, Some(DiagMode::NoBlend)) {
+                                unsafe { gl.enable(glow::BLEND); }
+                            }
                         },
                     )),
                 });
@@ -298,8 +400,9 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let Some(gl) = frame.gl() else {
                     return;
                 };
+                let single_pbo = matches!(diag_mode, Some(DiagMode::SinglePbo));
                 self.glow_canvas
-                    .update_frame_buffer(viewport, gl, |frame_buffer, sz, stride| {
+                    .update_frame_buffer(viewport, gl, single_pbo, |frame_buffer, sz, stride| {
                         if let Some(layout_state) = layout_state.as_ref() {
                             let _renderer_render_span =
                                 span!(Level::TRACE, "renderer.render").entered();
@@ -317,7 +420,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             {
                 let _span = span!(Level::TRACE, "paint_layer").entered();
                 self.glow_canvas
-                    .paint_layer(ctx, egui::LayerId::background(), viewport);
+                    .paint_layer(ctx, egui::LayerId::background(), viewport, diag_mode, diag_frame);
             }
         }
         let response = egui::Area::new("livesplit".into())
@@ -393,6 +496,91 @@ pub fn app_init(
             }
         }
     }
+    // --- Diagnostic GL environment logging (always runs) ---
+    if let Some(gl) = cc.gl.as_ref() {
+        unsafe {
+            tracing::info!("=== GL Environment ===");
+            tracing::info!(
+                "GL_VERSION: {}",
+                gl.get_parameter_string(glow::VERSION)
+            );
+            tracing::info!(
+                "GL_RENDERER: {}",
+                gl.get_parameter_string(glow::RENDERER)
+            );
+            tracing::info!(
+                "GL_VENDOR: {}",
+                gl.get_parameter_string(glow::VENDOR)
+            );
+            tracing::info!(
+                "GL_SHADING_LANGUAGE_VERSION: {}",
+                gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION)
+            );
+            tracing::info!(
+                "GL_DOUBLEBUFFER: {}",
+                gl.get_parameter_i32(glow::DOUBLEBUFFER)
+            );
+            tracing::info!(
+                "GL_SAMPLES: {}",
+                gl.get_parameter_i32(glow::SAMPLES)
+            );
+            tracing::info!(
+                "GL_SAMPLE_BUFFERS: {}",
+                gl.get_parameter_i32(glow::SAMPLE_BUFFERS)
+            );
+            tracing::info!(
+                "GL_DRAW_FRAMEBUFFER_BINDING: {}",
+                gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING)
+            );
+            tracing::info!(
+                "BLEND enabled: {}",
+                gl.is_enabled(glow::BLEND)
+            );
+            tracing::info!(
+                "BLEND_SRC_RGB: 0x{:04X}",
+                gl.get_parameter_i32(glow::BLEND_SRC_RGB)
+            );
+            tracing::info!(
+                "BLEND_DST_RGB: 0x{:04X}",
+                gl.get_parameter_i32(glow::BLEND_DST_RGB)
+            );
+            tracing::info!(
+                "BLEND_SRC_ALPHA: 0x{:04X}",
+                gl.get_parameter_i32(glow::BLEND_SRC_ALPHA)
+            );
+            tracing::info!(
+                "BLEND_DST_ALPHA: 0x{:04X}",
+                gl.get_parameter_i32(glow::BLEND_DST_ALPHA)
+            );
+            tracing::debug!(
+                "GL_EXTENSIONS: {}",
+                gl.get_parameter_string(glow::EXTENSIONS)
+            );
+            tracing::info!("=== Environment Variables ===");
+            tracing::info!(
+                "XDG_SESSION_TYPE: {}",
+                std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "<unset>".into())
+            );
+            tracing::info!(
+                "WAYLAND_DISPLAY: {}",
+                std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "<unset>".into())
+            );
+            tracing::info!(
+                "GDK_BACKEND: {}",
+                std::env::var("GDK_BACKEND").unwrap_or_else(|_| "<unset>".into())
+            );
+            tracing::info!(
+                "__GL_SYNC_TO_VBLANK: {}",
+                std::env::var("__GL_SYNC_TO_VBLANK").unwrap_or_else(|_| "<unset>".into())
+            );
+            tracing::info!(
+                "LIBGL_ALWAYS_SOFTWARE: {}",
+                std::env::var("LIBGL_ALWAYS_SOFTWARE").unwrap_or_else(|_| "<unset>".into())
+            );
+            tracing::info!("=== Diagnostic mode: {:?} ===", app.app_config.read().diag_mode);
+        }
+    }
+
     if app.app_config.read().global_hotkeys == Some(YesOrNo::Yes) {
         messagebox_on_error(|| app.enable_global_hotkeys());
     }
