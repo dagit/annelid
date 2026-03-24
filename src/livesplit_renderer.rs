@@ -155,6 +155,16 @@ impl eframe::App for LiveSplitCoreRenderer {
         let diag_should_log = matches!(diag_mode, Some(DiagMode::LogOps))
             && (diag_frame <= 60 || diag_frame % 30 == 0);
 
+        // NoClear: log a reminder that eframe's own glClear still runs
+        // (we can't suppress it — clear_color() only controls the color,
+        // not whether the clear happens).  Our manual clears are skipped.
+        if matches!(diag_mode, Some(DiagMode::NoClear)) && diag_frame == 1 {
+            tracing::info!(
+                "NoClear mode: NOTE eframe's built-in glClear still runs \
+                 (cleared to transparent black). Only annelid's manual clears are skipped."
+            );
+        }
+
         // TripleClear: clear at the very start of update()
         if matches!(diag_mode, Some(DiagMode::TripleClear)) {
             if let Some(gl) = frame.gl() {
@@ -424,6 +434,20 @@ impl eframe::App for LiveSplitCoreRenderer {
                         }
                     },
                 );
+            }
+            // TripleClear: third clear point for software path (between
+            // update_frame_buffer and paint_layer)
+            if matches!(diag_mode, Some(DiagMode::TripleClear)) {
+                if let Some(gl) = frame.gl() {
+                    unsafe {
+                        let fbo = gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING);
+                        tracing::info!(
+                            "Frame {diag_frame}: TripleClear before software paint_layer, FBO={fbo}"
+                        );
+                        gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                        gl.clear(glow::COLOR_BUFFER_BIT);
+                    }
+                }
             }
             {
                 let _span = span!(Level::TRACE, "paint_layer").entered();

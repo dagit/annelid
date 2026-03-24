@@ -103,7 +103,10 @@ impl LiveSplitCoreRenderer {
                 .truncate(true)
                 .open(config_path)?;
             let mut writer = std::io::BufWriter::new(f);
-            let toml = toml::to_string_pretty(&*self.app_config.read())?;
+            // Don't persist diag_mode — it's a CLI-only runtime flag
+            let mut config_to_save = self.app_config.read().clone();
+            config_to_save.diag_mode = None;
+            let toml = toml::to_string_pretty(&config_to_save)?;
             writer.write_all(toml.as_bytes())?;
             writer.flush()?;
             Ok(())
