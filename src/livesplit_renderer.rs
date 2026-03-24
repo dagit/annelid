@@ -3,6 +3,7 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context};
 use eframe::egui;
+use glow::HasContext;
 use livesplit_core::{Layout, SharedTimer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
@@ -253,8 +254,21 @@ impl eframe::App for LiveSplitCoreRenderer {
                 painter.add(egui::PaintCallback {
                     rect: viewport,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
-                        move |_info, _painter| {
+                        move |_info, painter| {
                             let _span = span!(Level::TRACE, "gpu_render").entered();
+                            // Clear the default framebuffer when the window is
+                            // opaque.  The GPU renderer blits its result onto
+                            // the default FB, but nothing else clears it
+                            // between frames.  Without this, stale pixels from
+                            // the previous frame bleed through any transparent
+                            // regions of the layout (ghosting).
+                            if draw_bg {
+                                let gl = painter.gl();
+                                unsafe {
+                                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                                    gl.clear(glow::COLOR_BUFFER_BIT);
+                                }
+                            }
                             let ls_guard = ls.read();
                             let ic_guard = ic.read();
                             if let Some(layout_state) = ls_guard.as_ref() {
