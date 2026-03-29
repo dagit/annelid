@@ -3,7 +3,6 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context};
 use eframe::egui;
-use glow::HasContext;
 use livesplit_core::{Layout, SharedTimer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
@@ -241,7 +240,6 @@ impl eframe::App for LiveSplitCoreRenderer {
             // showing the stale layout_state until the editor produces one
         }
 
-        let draw_bg = self.app_config.read().transparent_window != Some(YesOrNo::Yes);
         if self.app_config.read().renderer == Some(RendererType::Gpu) {
             let ppp = ctx.input(|i| i.pixels_per_point());
             let width = (viewport.width() * ppp) as u32;
@@ -254,32 +252,23 @@ impl eframe::App for LiveSplitCoreRenderer {
                 painter.add(egui::PaintCallback {
                     rect: viewport,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
-                        move |_info, painter| {
+                        move |_info, _painter| {
                             let _span = span!(Level::TRACE, "gpu_render").entered();
-                            // Clear the default framebuffer when the window is
-                            // opaque.  The GPU renderer blits its result onto
-                            // the default FB, but nothing else clears it
-                            // between frames.  Without this, stale pixels from
-                            // the previous frame bleed through any transparent
-                            // regions of the layout (ghosting).
-                            if draw_bg {
-                                let gl = painter.gl();
-                                unsafe {
-                                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                                    gl.clear(glow::COLOR_BUFFER_BIT);
-                                }
-                            }
                             let ls_guard = ls.read();
                             let ic_guard = ic.read();
                             if let Some(layout_state) = ls_guard.as_ref() {
                                 let mut gpu_guard = gpu.lock();
                                 if let Some(gpu_renderer) = gpu_guard.as_mut() {
+                                    // Always draw the layout background — its
+                                    // own alpha controls OBS compositing.
+                                    // Window-level transparency is handled by
+                                    // clear_color() returning alpha=0.
                                     unsafe {
                                         gpu_renderer.render(
                                             layout_state,
                                             &ic_guard,
                                             [width, height],
-                                            draw_bg,
+                                            true,
                                         );
                                     }
                                 }
@@ -293,8 +282,6 @@ impl eframe::App for LiveSplitCoreRenderer {
                 let _span = span!(Level::TRACE, "update_frame_buffer").entered();
                 let layout_state = self.layout_state.read();
                 let image_cache = self.image_cache.read();
-                let draw_background =
-                    self.app_config.read().transparent_window != Some(YesOrNo::Yes);
                 let Some(gl) = frame.gl() else {
                     return;
                 };
@@ -309,7 +296,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                                 frame_buffer,
                                 sz,
                                 stride,
-                                draw_background,
+                                true,
                             );
                         }
                     });

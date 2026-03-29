@@ -2174,7 +2174,7 @@ dependencies = [
 [[package]]
 name = "livesplit-renderer-gpu"
 version = "0.1.0"
-source = "git+https://github.com/dagit/livesplit-renderer-gpu#80816c3f967185b1a918e1447006552b5348e306"
+source = "git+https://github.com/dagit/livesplit-renderer-gpu#313cff199241e821bb335da190d0ddcb8ff2dcf1"
 dependencies = [
  "bytemuck",
  "glow",
