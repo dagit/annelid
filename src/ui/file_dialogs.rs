@@ -57,7 +57,19 @@ impl LiveSplitCoreRenderer {
         let layout_changed = self.ui.layout_modified || {
             if let Some(ref saved) = self.saved_layout_meta {
                 let current = LayoutMeta::from_context(ctx);
-                saved.differs_from(&current)
+                // On Wayland, from_context() returns None for position since
+                // the compositor controls it.  Clear position on the saved
+                // side too so we only compare size.
+                if crate::platform::is_wayland() {
+                    let saved_size_only = LayoutMeta {
+                        window_x: None,
+                        window_y: None,
+                        ..saved.clone()
+                    };
+                    saved_size_only.differs_from(&current)
+                } else {
+                    saved.differs_from(&current)
+                }
             } else {
                 false
             }

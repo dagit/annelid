@@ -62,6 +62,14 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     tracing::debug!("Annelid starting up");
     tracing::debug!("Config dir: {}", logging::sanitize_path(preference_dir));
     tracing::debug!("Log dir: {}", logging::sanitize_path(log_dir));
+    tracing::debug!(
+        "Display server: {}",
+        if annelid::platform::is_wayland() {
+            "Wayland"
+        } else {
+            "X11 (or unknown)"
+        }
+    );
 
     let settings = Settings::new();
     let settings = Arc::new(RwLock::new(settings));

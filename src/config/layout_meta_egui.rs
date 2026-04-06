@@ -17,6 +17,17 @@ impl LayoutMeta {
                 |r| (r.width(), r.height()),
             )
         });
+        // Wayland does not support reading window position; avoid storing
+        // bogus (0, 0) values that would overwrite valid X11 positions in
+        // shared layout files.
+        if crate::platform::is_wayland() {
+            return LayoutMeta {
+                window_x: None,
+                window_y: None,
+                window_width: Some(width),
+                window_height: Some(height),
+            };
+        }
         let (x, y) = ctx.input(|i| {
             i.viewport().outer_rect.map_or_else(
                 || {
@@ -43,7 +54,13 @@ impl LayoutMeta {
             builder = builder.with_inner_size([w, h]);
         }
         if let (Some(x), Some(y)) = (self.window_x, self.window_y) {
-            builder = builder.with_position([x, y]);
+            if crate::platform::is_wayland() {
+                tracing::debug!(
+                    "Skipping window position ({x}, {y}): Wayland does not support client-side positioning"
+                );
+            } else {
+                builder = builder.with_position([x, y]);
+            }
         }
         builder
     }
@@ -51,14 +68,21 @@ impl LayoutMeta {
     /// Apply window geometry to the egui viewport (for runtime changes).
     pub fn apply_to_context(&self, ctx: &egui::Context) {
         if let (Some(w), Some(h)) = (self.window_width, self.window_height) {
+            tracing::debug!("Requesting window size: {w}x{h}");
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::InnerSize(egui::Vec2::new(
                 w, h,
             )));
         }
         if let (Some(x), Some(y)) = (self.window_x, self.window_y) {
-            ctx.send_viewport_cmd(egui::viewport::ViewportCommand::OuterPosition(
-                egui::Pos2::new(x, y),
-            ));
+            if crate::platform::is_wayland() {
+                tracing::debug!(
+                    "Skipping window position ({x}, {y}): Wayland does not support client-side positioning"
+                );
+            } else {
+                ctx.send_viewport_cmd(egui::viewport::ViewportCommand::OuterPosition(
+                    egui::Pos2::new(x, y),
+                ));
+            }
         }
     }
 }
