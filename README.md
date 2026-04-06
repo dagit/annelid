@@ -1,27 +1,22 @@
-# 💖 Support Annelid Development
-
-Annelid is free and always will be, but like all software, it takes time and effort to maintain.
-If you find it useful, please consider supporting my work through Clover Egg.
-Your contribution helps me prioritize Annelid and shows that it's worth investing time in.
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F2F61J6MF8)
-
 # About
+
+This is a LiveSplit-like autosplitter for SNES
+(sd2snes/fxpak + qusb2snes or SNI). It's named for the [phylum of segmented
+worms](https://en.wikipedia.org/wiki/Annelid), because segments.
+
+The autosplitter currently only supports Super Metroid, but other SNES games could be easily
+added. The Super Metroid support is based on
+[SuperMetroid.asl](data/SuperMetroid.asl). You can of course also use it without an autosplitter by manually splitting. Global hotkeys are also supported.
+
+It's written in Rust using `egui`. This means it should work on Windows, macOS,
+and Linux. However, I've only tested it on Linux.
+
+Under the hood Annelid uses the same core LiveSplit library as LiveSplit One and that allows it to
+import and edit LiveSplit layout files and splits files.
 
 ![Action Shot](data/inaction.png)
 ![Menu](data/context-menu.png)
 ![Settings Editor](data/settings-editor.png)
-
-This is a simple barebones re-imagining of LiveSplit + autosplitter for SNES
-(sd2snes/fxpak + qusb2snes or SNI). It's named for the [phylum of segmented
-worms](https://en.wikipedia.org/wiki/Annelid), because segments.
-
-It currently only supports Super Metroid, but other SNES games could be easily
-added. The Super Metroid support is based on
-[SuperMetroid.asl](data/SuperMetroid.asl).
-
-It's written in Rust using `egui`. This means it should work on Windows, macOS,
-and Linux. However, I've only tested it on Linux.
 
 # Dependencies
 
@@ -89,45 +84,11 @@ Error: "No devices present"
 
 That means you need to turn on your SNES and make sure that qusb2snes is connected to it.
 
-# TODO
 
-  * [X] Settings editor. A tree view with checkboxes should work pretty well for
-    configuring autosplit behavior.
-  * [X] Named settings that can be saved/loaded
-  * [X] Right-click menu for:
-    * [X] Settings editor
-    * [X] Save/Load splits and settings
-    * [ ] Way to select your usb2snes server
-    * [ ] Toggle for latency display
-  * [ ] Keybindings for skipping a split, undo, pausing, and stopping. Whatever livesplit supports.
-  * [X] Make sure the logic for starting a new run starts from a fresh snes state
-  * [X] Implement comparisons
-  * [X] Fix the horizontal sizing, currently hard coded
-  * [X] Allow it to start up without a connection and stay running when the
-  connection dies
-  * [ ] Do something to avoid refiring splits in the case of reset or death mid
-    run.
+# 💖 Support Annelid Development
 
-# Cross compiling
+Annelid is free and always will be, but like all software, it takes time and effort to maintain.
+If you find it useful, please consider supporting my work through Clover Egg.
+Your contribution helps me prioritize Annelid and shows that it's worth investing time in.
 
-## For Windows
-```sh
-sudo xbps-install -Su cross-x86_64-w64-mingw32
-rustup target add x86_64-pc-windows-gnu
-cargo build --target x86_64-pc-windows-gnu
-wine ./target/x86_64-pc-windows-gnu/debug/annelid.exe
-```
-
-## For macOS
-
-This fails because it needs all the Apple frameworks and there is currently no
-way to test it from linux. So cross compiling to macOS effectively doesn't work
-yet.
-
-However, it may still be useful to list the target in case those things change.
-
-```sh
-rustup target add x86_64-apple-darwin
-cargo build --target x86_64-apple-darwin
-```
-
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F2F61J6MF8)
