@@ -10,10 +10,13 @@ on: [push, pull_request]
 jobs:
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -24,7 +27,7 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -32,7 +35,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
@@ -40,7 +43,7 @@ jobs:
             ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: ${{ runner.os }}-target-check-${{ hashFiles('**/Cargo.lock') }}
@@ -52,10 +55,13 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -66,7 +72,7 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -74,7 +80,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
@@ -82,7 +88,7 @@ jobs:
             ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: ${{ runner.os }}-target-test-${{ hashFiles('**/Cargo.lock') }}
@@ -94,10 +100,13 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: apt update
+        run: sudo apt-get update
+
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -110,7 +119,7 @@ jobs:
         run: sudo apt-get install -y wget libfuse-dev libgtk-3-dev
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -118,7 +127,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
@@ -126,7 +135,7 @@ jobs:
             ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: ${{ runner.os }}-target-lints-${{ hashFiles('**/Cargo.lock') }}
@@ -146,38 +155,49 @@ jobs:
       - test
       - lints
     runs-on: '${{ matrix.os }}'
+    continue-on-error: ${{ matrix.allow-failure || false }}
     env:
       VERSION: ${{ github.ref }}
       REPOSITORY_NAME: 'annelid'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             target: annelid-universal.macos
             artifact-path: ./target/release/Annelid.zip
             is-osx: 1
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: annelid-x86_64.AppImage
             artifact-path: ./target/appimage/annelid.AppImage
             is-linux: 1
+          - os: ubuntu-24.04-arm
+            target: annelid-aarch64.AppImage
+            artifact-path: ./target/appimage/annelid.AppImage
+            is-linux: 1
+            allow-failure: true
           - os: windows-latest
             target: annelid-x86_64.win
-            artifact-path: ./target/release/annelid.exe
+            artifact-path: ./target/release/Annelid.zip
             is-windows: 1
+          - os: windows-11-arm
+            target: annelid-aarch64.win
+            artifact-path: ./target/release/Annelid.zip
+            is-windows: 1
+            allow-failure: true
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
       - name: Install dependencies (Linux)
         if: ${{ matrix.is-linux }}
         run: |
+          sudo apt-get update
           sudo apt-get install -y wget libfuse-dev libgtk-3-dev
           cargo install --force cargo-appimage
           wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$(uname -m).AppImage -O appimagetool
@@ -189,7 +209,7 @@ jobs:
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -197,7 +217,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Cache Cargo git repository
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
@@ -205,12 +225,21 @@ jobs:
             ${{ runner.os }}-cargo-git-
 
       - name: Cache target directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: ${{ runner.os }}-target-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-target-build-${{ matrix.target }}-
+
+      - name: Clean stale build outputs
+        shell: bash
+        run: |
+          rm -f target/release/annelid target/release/annelid.exe target/release/Annelid.zip
+          rm -f target/appimage/annelid.AppImage
+          rm -rf target/universal/release/annelid Annelid.app
+          rm -f target/x86_64-apple-darwin/release/annelid
+          rm -f target/aarch64-apple-darwin/release/annelid
 
       - name: Set MACOSX_DEPLOYMENT_TARGET (macOS)
         if: ${{ matrix.is-osx }}
@@ -264,7 +293,7 @@ jobs:
           cp Info.plist Annelid.app/Contents/
           codesign --deep --force --sign - Annelid.app
           lipo -info Annelid.app/Contents/MacOS/annelid
-          zip -r ./target/release/Annelid.zip Annelid.app
+          zip -9 -r ./target/release/Annelid.zip Annelid.app
 
       - name: Linux bundling
         if: ${{ matrix.is-linux }}
@@ -274,9 +303,10 @@ jobs:
       - name: Windows bundling
         if: ${{ matrix.is-windows }}
         run: |
-          echo "No additional bundling steps for Windows."
+          Compress-Archive -Path target/release/annelid.exe -DestinationPath target/release/Annelid.zip -CompressionLevel Optimal
+        shell: pwsh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
           path: ${{ matrix.artifact-path }}
@@ -285,9 +315,9 @@ jobs:
     if: github.ref == 'refs/heads/development' || github.ref == 'refs/heads/master'
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
           lfs: true
@@ -296,20 +326,45 @@ jobs:
         run: echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_OUTPUT
         shell: bash
 
-      - uses: actions/download-artifact@v4
+      - name: Delete old draft releases
+        if: github.ref == 'refs/heads/development'
+        run: |
+          gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read -r tag; do
+            echo "Deleting draft release: $tag"
+            gh release delete "$tag" --yes || true
+            gh api --method DELETE "repos/${{ github.repository }}/git/refs/tags/$tag" || true
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Required artifacts
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-universal.macos
           path: annelid-universal.macos
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-x86_64.AppImage
           path: annelid-x86_64.AppImage
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: annelid-x86_64.win
           path: annelid-x86_64.win
+
+      # Best-effort aarch64 artifacts (skip if build failed)
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: annelid-aarch64.AppImage
+          path: annelid-aarch64.AppImage
+
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: annelid-aarch64.win
+          path: annelid-aarch64.win
 
       - name: Display structure of downloaded files
         run: ls -R
@@ -326,7 +381,9 @@ jobs:
         run: |
           mv ./annelid-universal.macos/Annelid.zip ./annelid-universal.macos/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
           mv ./annelid-x86_64.AppImage/annelid.AppImage ./annelid-x86_64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
-          mv ./annelid-x86_64.win/annelid.exe ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
+          mv ./annelid-x86_64.win/Annelid.zip ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.zip
+          mv ./annelid-aarch64.AppImage/annelid.AppImage ./annelid-aarch64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-aarch64-linux.AppImage || true
+          mv ./annelid-aarch64.win/Annelid.zip ./annelid-aarch64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-aarch64-windows.zip || true
 
       - name: Upload Assets to Release
         uses: softprops/action-gh-release@v2
@@ -335,9 +392,12 @@ jobs:
           tag_name: ${{ steps.tag_date.outputs.TAG_NAME }}
           name: Annelid Release ${{ steps.tag_date.outputs.TAG_NAME }}
           prerelease: true
+          fail_on_unmatched_files: false
           files: |
             ./annelid-universal.macos/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-universal-macOS.zip
             ./annelid-x86_64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-linux.AppImage
-            ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.exe
+            ./annelid-x86_64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-x86_64-windows.zip
+            ./annelid-aarch64.AppImage/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-aarch64-linux.AppImage
+            ./annelid-aarch64.win/Annelid-${{ steps.tag_date.outputs.TAG_NAME }}-aarch64-windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,7 +8,7 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("about to show messagebox due to: {e}");
+            tracing::warn!("about to show messagebox due to: {e}");
             MessageDialog::new()
                 .set_level(MessageLevel::Error)
                 .set_title("Error")
@@ -25,7 +25,7 @@ where
     match f() {
         Ok(()) => {}
         Err(e) => {
-            println!("{e}");
+            tracing::warn!("{e}");
         }
     }
 }

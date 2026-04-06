@@ -4,10 +4,9 @@ use anyhow::Result;
 use livesplit_core::TimeSpan;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::ops::Index;
 use std::sync::Arc;
-use std::time::Instant;
 use time::Duration;
 
 use super::{AutoSplitter, SNESSummary};
@@ -216,6 +215,12 @@ lazy_static! {
         m.insert( "phase1", 0xBB8  );    // 3000
         m.insert( "phase2", 0x4650 );   // 18000
         m.insert( "phase3", 0x8CA0 );   // 36000
+        m
+    };
+
+    static ref motherBrainPhaseEnum: HashMap<&'static str, u32> = {
+        let mut m = HashMap::new();
+        m.insert( "phase1", 0x87dd  );
         m
     };
 
@@ -611,6 +616,8 @@ impl Settings {
         settings.insert_with_parent("ridley", true, "bosses");
         // Split on Mother Brain's head hitting the ground at the end of the first phase
         settings.insert_with_parent("mb1", false, "bosses");
+        // Split on Mother Brain reaching 0hp in the first phase
+        settings.insert_with_parent("mb1_0hp", false, "bosses");
         // Split on the Baby Metroid detaching from Mother Brain's head
         settings.insert_with_parent("mb2", true, "bosses");
         // Split on the start of the Zebes Escape
@@ -644,7 +651,7 @@ impl Settings {
         self.data.contains_key(var)
     }
 
-    fn get(&self, var: &str) -> bool {
+    pub fn get(&self, var: &str) -> bool {
         match self.data.get(var) {
             None => false,
             Some((b, None)) => *b,
@@ -652,7 +659,7 @@ impl Settings {
         }
     }
 
-    fn set(&mut self, var: &str, value: bool) {
+    pub fn set(&mut self, var: &str, value: bool) {
         let val = match self.data.get_mut(var) {
             None => (value, None),
             Some((_, x)) => (value, x.clone()),
@@ -812,7 +819,7 @@ impl Default for Settings {
 #[allow(non_snake_case)]
 #[allow(clippy::all)]
 // TODO: probably makes sense to move this to the SNESState impl
-fn split(settings: &Settings, snes: &mut SNESState) -> bool {
+pub fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     // Ammo pickup section
     let firstMissile = settings.get("firstMissile")
         && snes["maxMissiles"].old == 0
@@ -1489,28 +1496,28 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && (snes["brinstarBosses"].current & bossFlagEnum["kraid"]) > 0
         && snes["roomID"].current == roomIDEnum["kraid"];
     if kraid {
-        println!("Split due to kraid defeat");
+        tracing::debug!("Split due to kraid defeat");
     }
     let phantoon = settings.get("phantoon")
         && (snes["wreckedShipBosses"].old & bossFlagEnum["phantoon"]) == 0
         && (snes["wreckedShipBosses"].current & bossFlagEnum["phantoon"]) > 0
         && snes["roomID"].current == roomIDEnum["phantoon"];
     if phantoon {
-        println!("Split due to phantoon defeat");
+        tracing::debug!("Split due to phantoon defeat");
     }
     let draygon = settings.get("draygon")
         && (snes["maridiaBosses"].old & bossFlagEnum["draygon"]) == 0
         && (snes["maridiaBosses"].current & bossFlagEnum["draygon"]) > 0
         && snes["roomID"].current == roomIDEnum["draygon"];
     if draygon {
-        println!("Split due to draygon defeat");
+        tracing::debug!("Split due to draygon defeat");
     }
     let ridley = settings.get("ridley")
         && (snes["norfairBosses"].old & bossFlagEnum["ridley"]) == 0
         && (snes["norfairBosses"].current & bossFlagEnum["ridley"]) > 0
         && snes["roomID"].current == roomIDEnum["ridley"];
     if ridley {
-        println!("Split due to ridley defeat");
+        tracing::debug!("Split due to ridley defeat");
     }
     // Mother Brain phases
     let inMotherBrainRoom = snes["roomID"].current == roomIDEnum["motherBrain"];
@@ -1520,7 +1527,16 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && snes["motherBrainHP"].old == 0
         && snes["motherBrainHP"].current == (motherBrainMaxHPEnum["phase2"]);
     if mb1 {
-        println!("Split due to mb1 defeat");
+        tracing::debug!("Split due to mb1 defeat");
+    }
+    let mb1_0hp = settings.get("mb1_0hp")
+        && inMotherBrainRoom
+        && snes["gameState"].current == gameStateEnum["normalGameplay"]
+        && snes["motherBrainHP"].old > 0
+        && snes["motherBrainHP"].current == 0
+        && snes["motherBrainPhase"].current == motherBrainPhaseEnum["phase1"];
+    if mb1_0hp {
+        tracing::debug!("Split due to mb1 0hp");
     }
     let mb2 = settings.get("mb2")
         && inMotherBrainRoom
@@ -1528,16 +1544,16 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
         && snes["motherBrainHP"].old == 0
         && snes["motherBrainHP"].current == (motherBrainMaxHPEnum["phase3"]);
     if mb2 {
-        println!("Split due to mb2 defeat");
+        tracing::debug!("Split due to mb2 defeat");
     }
     let mb3 = settings.get("mb3")
         && inMotherBrainRoom
         && (snes["tourianBosses"].old & bossFlagEnum["motherBrain"]) == 0
         && (snes["tourianBosses"].current & bossFlagEnum["motherBrain"]) > 0;
     if mb3 {
-        println!("Split due to mb3 defeat");
+        tracing::debug!("Split due to mb3 defeat");
     }
-    let bossDefeat = kraid || phantoon || draygon || ridley || mb1 || mb2 || mb3;
+    let bossDefeat = kraid || phantoon || draygon || ridley || mb1 || mb1_0hp || mb2 || mb3;
 
     // Run-ending splits
     let escape = settings.get("rtaFinish")
@@ -1580,32 +1596,32 @@ fn split(settings: &Settings, snes: &mut SNESState) -> bool {
     let nonStandardCategoryFinish = sporeSpawnRTAFinish || hundredMissileRTAFinish;
 
     if pickup {
-        println!("Split due to pickup");
+        tracing::debug!("Split due to pickup");
     }
     if unlock {
-        println!("Split due to unlock");
+        tracing::debug!("Split due to unlock");
     }
     if beam {
-        println!("Split due to beam upgrade");
+        tracing::debug!("Split due to beam upgrade");
     }
     if energyUpgrade {
-        println!("Split due to energy upgrade");
+        tracing::debug!("Split due to energy upgrade");
     }
     if roomTransitions {
-        println!("Split due to room transition");
+        tracing::debug!("Split due to room transition");
     }
     if minibossDefeat {
-        println!("Split due to miniboss defeat");
+        tracing::debug!("Split due to miniboss defeat");
     }
     // individual boss defeat conditions already covered above
     if escape {
-        println!("Split due to escape");
+        tracing::debug!("Split due to escape");
     }
     if takeoff {
-        println!("Split due to takeoff");
+        tracing::debug!("Split due to takeoff");
     }
     if nonStandardCategoryFinish {
-        println!("Split due to non standard category finish");
+        tracing::debug!("Split due to non standard category finish");
     }
 
     pickup
@@ -1628,9 +1644,9 @@ pub enum Width {
 
 #[derive(Clone)]
 pub struct MemoryWatcher {
-    address: u32,
-    current: u32,
-    old: u32,
+    pub address: u32,
+    pub current: u32,
+    pub old: u32,
     width: Width,
 }
 
@@ -1644,7 +1660,7 @@ impl MemoryWatcher {
         }
     }
 
-    fn update_value(&mut self, memory: &[u8]) {
+    pub fn update_value(&mut self, memory: &[u8]) {
         match self.width {
             Width::Byte => {
                 self.old = self.current;
@@ -1666,8 +1682,7 @@ pub struct SNESState {
     vars: HashMap<&'static str, MemoryWatcher>,
     pickedUpHundredthMissile: bool,
     pickedUpSporeSpawnSuper: bool,
-    latency_samples: VecDeque<u128>,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     // The MemoryWatchers are not in a good
     // state until they've been updated
     // twice, due to having both old and current
@@ -1676,15 +1691,12 @@ pub struct SNESState {
     do_extra_update: bool,
 }
 
-const NUM_LATENCY_SAMPLES: usize = 10;
-
 impl SNESState {
     pub fn new() -> SNESState {
         let data = vec![0; 0x10000];
         SNESState {
             do_extra_update: true,
             data,
-            latency_samples: VecDeque::from([]),
             pickedUpHundredthMissile: false,
             pickedUpSporeSpawnSuper: false,
             vars: HashMap::from([
@@ -1694,6 +1706,7 @@ impl SNESState {
                 ("enemyHP", MemoryWatcher::new(0x0F8C, Width::Word)),
                 ("shipAI", MemoryWatcher::new(0x0FB2, Width::Word)),
                 ("motherBrainHP", MemoryWatcher::new(0x0FCC, Width::Word)),
+                ("motherBrainPhase", MemoryWatcher::new(0x178c, Width::Word)),
                 // Byte
                 ("mapInUse", MemoryWatcher::new(0x079F, Width::Byte)),
                 ("gameState", MemoryWatcher::new(0x0998, Width::Byte)),
@@ -1738,7 +1751,7 @@ impl SNESState {
         }
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         for watcher in self.vars.iter_mut() {
             if self.do_extra_update {
                 watcher.1.update_value(&self.data);
@@ -1748,66 +1761,36 @@ impl SNESState {
         }
     }
 
-    #[expect(clippy::needless_range_loop)]
     pub fn fetch_all(
         &mut self,
         client: &mut crate::usb2snes::SyncClient,
         settings: &Settings,
     ) -> Result<SNESSummary> {
-        let start_time = Instant::now();
-        let snes_data = client.get_addresses(&[
-            (0xF5008B, 2),  // Controller 1 Input
-            (0xF5079B, 3),  // ROOM ID + ROOM # for region + Region Number
-            (0xF50998, 1),  // GAME STATE
-            (0xF509A4, 61), // ITEMS
-            (0xF50A28, 1),
-            (0xF50F8C, 66),
-            (0xF5D821, 14),
-            (0xF5D870, 20),
-        ])?;
-        // TODO: refactor this
-        for i in 0..2 {
-            self.data[0x008b + i] = snes_data[0][i];
-        }
-        for i in 0..3 {
-            self.data[0x079b + i] = snes_data[1][i];
-        }
-        self.data[0x0998] = snes_data[2][0];
-        for i in 0..61 {
-            self.data[0x09a4 + i] = snes_data[3][i];
-        }
-        self.data[0x0a28] = snes_data[4][0];
-        for i in 0..66 {
-            self.data[0x0f8c + i] = snes_data[5][i];
-        }
-        for i in 0..14 {
-            self.data[0xd821 + i] = snes_data[6][i];
-        }
-        for i in 0..20 {
-            self.data[0xd870 + i] = snes_data[7][i];
+        // We're only allowed to read 8 regions in a single request
+        // This is currently 8 regions, so things will need to be
+        // merged if you want to add more. That increases read latency.
+        // Basically, we should avoid adding anything more to this.
+        let regions = [
+            (0x008B, 2),  // Controller 1 Input
+            (0x079B, 5),  // ROOM ID + ROOM # for region + Region Number
+            (0x0998, 1),  // GAME STATE
+            (0x09A4, 61), // ITEMS
+            (0x0A28, 1),  // Pose
+            (0x0F8C, 66), // Enemy HP
+            (0x178C, 2),  // MB Phase hack
+            (0xD821, 99), // Event array + Items collected
+        ];
+        let snes_data =
+            client.get_addresses(&regions.map(|(base, size)| (0xF50000 + base, size)))?;
+        for ((base, size), snes_data) in regions.into_iter().zip(snes_data.iter()) {
+            let base = base as usize;
+            self.data[base..base + size].copy_from_slice(&snes_data[..size]);
         }
         self.update();
         let start = self.start();
         let reset = self.reset();
         let split = split(settings, self);
-        let elapsed = start_time.elapsed().as_millis();
-        if self.latency_samples.len() == NUM_LATENCY_SAMPLES {
-            self.latency_samples.pop_front();
-        }
-        self.latency_samples.push_back(elapsed);
-        let average_latency: f32 =
-            self.latency_samples.iter().sum::<u128>() as f32 / self.latency_samples.len() as f32;
-        let mut s = 0;
-        for x in self.latency_samples.iter() {
-            let y = *x as i128;
-            let avg = average_latency as i128;
-            let diff = y - avg;
-            s += diff * diff;
-        }
-        let stddev = (s as f32 / (self.latency_samples.len() as f32 - 1.0)).sqrt();
         Ok(SNESSummary {
-            latency_average: average_latency,
-            latency_stddev: stddev,
             start,
             reset,
             split,
@@ -1849,7 +1832,9 @@ impl Index<&str> for SNESState {
     type Output = MemoryWatcher;
 
     fn index(&self, var: &str) -> &Self::Output {
-        self.vars.get(var).unwrap()
+        self.vars
+            .get(var)
+            .unwrap_or_else(|| panic!("unknown SNES variable: {var}"))
     }
 }
 

@@ -127,7 +127,7 @@ impl SyncClient {
         args: &[Cow<str>],
     ) -> Result<()> {
         if self.devel {
-            println!("Send command : {command:?}");
+            tracing::debug!("Send command : {command:?}");
         }
         let nspace = space.map(|sp| sp.to_string());
         let query = USB2SnesQuery {
@@ -139,7 +139,7 @@ impl SyncClient {
         let json = serde_json::to_string(&query)?;
         if self.devel {
             let json = serde_json::to_string_pretty(&query)?;
-            println!("{json}");
+            tracing::debug!("{json}");
         }
         let message = Message::text(json);
         Ok(self.client.send(message)?)
@@ -155,8 +155,8 @@ impl SyncClient {
             _ => Err(anyhow!("Error getting a reply"))?,
         };
         if self.devel {
-            println!("Reply:");
-            println!("{textreply}");
+            tracing::debug!("Reply:");
+            tracing::debug!("{textreply}");
         }
         Ok(serde_json::from_str(&textreply)?)
     }

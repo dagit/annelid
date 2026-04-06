@@ -24,6 +24,10 @@ pub struct AppConfig {
     pub reset_game_on_timer_reset: Option<YesOrNo>,
     #[clap(name = "global-hotkeys", long, short = 'g', value_parser)]
     pub global_hotkeys: Option<YesOrNo>,
+    #[clap(name = "renderer", long, short = 'r', value_parser)]
+    pub renderer: Option<RendererType>,
+    #[clap(skip)]
+    pub transparent_window: Option<YesOrNo>,
     #[clap(skip)]
     pub hot_key_start: Option<HotKey>,
     #[clap(skip)]
@@ -47,42 +51,50 @@ pub enum YesOrNo {
     No,
 }
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum RendererType {
+    Software,
+    #[default]
+    Gpu,
+}
+
 pub const DEFAULT_FRAME_RATE: f32 = 30.0;
 pub const DEFAULT_POLLING_RATE: f32 = 20.0;
 
 impl AppConfig {
     fn new() -> Self {
-        let modifiers = ::egui::Modifiers::default();
+        use crate::hotkey::{KeyCode, Modifiers};
+        let modifiers = Modifiers::default();
         AppConfig {
             recent_splits: None,
             recent_layout: None,
             recent_autosplitter: None,
             hot_key_start: Some(HotKey {
-                key: egui::Key::Num1,
+                key: KeyCode::Num1,
                 modifiers,
             }),
             hot_key_reset: Some(HotKey {
-                key: egui::Key::Num3,
+                key: KeyCode::Num3,
                 modifiers,
             }),
             hot_key_undo: Some(HotKey {
-                key: egui::Key::Num8,
+                key: KeyCode::Num8,
                 modifiers,
             }),
             hot_key_skip: Some(HotKey {
-                key: egui::Key::Num2,
+                key: KeyCode::Num2,
                 modifiers,
             }),
             hot_key_pause: Some(HotKey {
-                key: egui::Key::Num5,
+                key: KeyCode::Num5,
                 modifiers,
             }),
             hot_key_comparison_next: Some(HotKey {
-                key: egui::Key::Num6,
+                key: KeyCode::Num6,
                 modifiers,
             }),
             hot_key_comparison_prev: Some(HotKey {
-                key: egui::Key::Num4,
+                key: KeyCode::Num4,
                 modifiers,
             }),
             use_autosplitter: Some(YesOrNo::Yes),
@@ -91,6 +103,8 @@ impl AppConfig {
             reset_timer_on_game_reset: Some(YesOrNo::No),
             reset_game_on_timer_reset: Some(YesOrNo::No),
             global_hotkeys: Some(YesOrNo::Yes),
+            renderer: Some(RendererType::Gpu),
+            transparent_window: None,
         }
     }
 }
