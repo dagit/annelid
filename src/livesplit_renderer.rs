@@ -3,6 +3,7 @@ use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
 use anyhow::{anyhow, Context};
 use eframe::egui;
+use glow::HasContext;
 use livesplit_core::{Layout, SharedTimer};
 use livesplit_hotkey::Hook;
 use parking_lot::RwLock;
@@ -244,6 +245,7 @@ impl eframe::App for LiveSplitCoreRenderer {
             let ppp = ctx.input(|i| i.pixels_per_point());
             let width = (viewport.width() * ppp) as u32;
             let height = (viewport.height() * ppp) as u32;
+            let opaque_window = self.app_config.read().transparent_window != Some(YesOrNo::Yes);
             if width > 0 && height > 0 {
                 let gpu = self.gpu_renderer.clone();
                 let ls = self.layout_state.clone();
@@ -252,7 +254,7 @@ impl eframe::App for LiveSplitCoreRenderer {
                 painter.add(egui::PaintCallback {
                     rect: viewport,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
-                        move |_info, _painter| {
+                        move |_info, painter| {
                             let _span = span!(Level::TRACE, "gpu_render").entered();
                             let ls_guard = ls.read();
                             let ic_guard = ic.read();
@@ -271,6 +273,27 @@ impl eframe::App for LiveSplitCoreRenderer {
                                             true,
                                         );
                                     }
+                                }
+                            }
+
+                            // On Wayland the compositor reads the EGL
+                            // surface's alpha channel even when the window is
+                            // marked opaque (GL may report alpha_bits=0 yet
+                            // the underlying buffer still has alpha storage).
+                            // The GPU renderer outputs premultiplied-alpha
+                            // pixels, so transparent layout regions end up
+                            // with alpha < 1.  The compositor then treats
+                            // those pixels as see-through, showing stale
+                            // content from previous frames.  Fix: stamp
+                            // alpha = 1 when the window is meant to be
+                            // opaque.
+                            if opaque_window {
+                                let gl = painter.gl();
+                                unsafe {
+                                    gl.color_mask(false, false, false, true);
+                                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                                    gl.clear(glow::COLOR_BUFFER_BIT);
+                                    gl.color_mask(true, true, true, true);
                                 }
                             }
                         },
