@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::autosplitters::supermetroid::Settings;
 use crate::config::app_config::*;
 use crate::livesplit_renderer::{LiveSplitCoreRenderer, ThreadEvent};
+use crate::utils::DialogParent;
 
 pub(crate) enum UiAction {
     // File
@@ -176,7 +177,7 @@ impl LiveSplitCoreRenderer {
         );
     }
 
-    pub(crate) fn process_ui_actions(&mut self, ctx: &egui::Context) {
+    pub(crate) fn process_ui_actions(&mut self, ctx: &egui::Context, parent: &dyn DialogParent) {
         let empty_path = "".to_owned();
         let document_dir = match directories::UserDirs::new() {
             None => empty_path,
@@ -192,22 +193,22 @@ impl LiveSplitCoreRenderer {
         for action in actions {
             match action {
                 UiAction::OpenLayoutDialog => {
-                    if let Err(e) = self.open_layout_dialog(&document_dir, ctx) {
+                    if let Err(e) = self.open_layout_dialog(parent, &document_dir, ctx) {
                         tracing::warn!("Failed to open layout dialog: {e}");
                     }
                 }
                 UiAction::OpenSplitsDialog => {
-                    if let Err(e) = self.open_splits_dialog(&document_dir) {
+                    if let Err(e) = self.open_splits_dialog(parent, &document_dir) {
                         tracing::warn!("Failed to open splits dialog: {e}");
                     }
                 }
                 UiAction::SaveSplitsDialog => {
-                    if let Err(e) = self.save_splits_dialog(&document_dir) {
+                    if let Err(e) = self.save_splits_dialog(parent, &document_dir) {
                         tracing::warn!("Failed to save splits: {e}");
                     }
                 }
                 UiAction::SaveLayoutDialog => {
-                    if let Err(e) = self.save_layout_dialog(&document_dir, ctx) {
+                    if let Err(e) = self.save_layout_dialog(parent, &document_dir) {
                         tracing::warn!("Failed to save layout: {e}");
                     }
                 }
@@ -261,12 +262,12 @@ impl LiveSplitCoreRenderer {
                     self.ui.show_settings_editor.store(true, Ordering::Relaxed);
                 }
                 UiAction::OpenAutosplitterDialog => {
-                    if let Err(e) = self.open_autosplitter_dialog(&document_dir) {
+                    if let Err(e) = self.open_autosplitter_dialog(parent, &document_dir) {
                         tracing::warn!("Failed to open autosplitter dialog: {e}");
                     }
                 }
                 UiAction::SaveAutosplitterDialog => {
-                    if let Err(e) = self.save_autosplitter_dialog(&document_dir) {
+                    if let Err(e) = self.save_autosplitter_dialog(parent, &document_dir) {
                         tracing::warn!("Failed to save autosplitter: {e}");
                     }
                 }
@@ -342,7 +343,7 @@ impl LiveSplitCoreRenderer {
                 }
                 UiAction::ApplySettings(new_config) => {
                     *self.app_config.write() = new_config;
-                    self.save_app_config();
+                    self.save_app_config(parent);
                 }
                 UiAction::OpenLogViewer => {
                     self.ui

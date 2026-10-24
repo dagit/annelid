@@ -19,12 +19,50 @@ pub fn inject_layout_meta(
 }
 
 impl LiveSplitCoreRenderer {
+    /// Record the window's current geometry. Called every frame so the layout
+    /// is saved with real geometry even when the window has none at the
+    /// moment, such as when it's closed from the taskbar while minimized.
+    pub fn track_window_geometry(&mut self, ctx: &egui::Context) {
+        if let Some(geometry) = LayoutMeta::from_context(ctx) {
+            self.window_geometry = Some(geometry);
+        }
+    }
+
+    /// The window geometry that saving the layout would write.
+    pub fn window_geometry(&self) -> Option<&LayoutMeta> {
+        self.window_geometry.as_ref()
+    }
+
+    /// Whether the layout has changes worth saving: the editor changed it, or
+    /// the user moved/resized the window beyond the WM's normal adjustments.
+    pub fn layout_needs_save(&self) -> bool {
+        self.ui.layout_modified
+            || match (&self.saved_layout_meta, &self.window_geometry) {
+                (Some(saved), Some(current)) => {
+                    // On Wayland, from_context() returns None for position since
+                    // the compositor controls it.  Clear position on the saved
+                    // side too so we only compare size.
+                    if crate::platform::is_wayland() {
+                        let saved_size_only = LayoutMeta {
+                            window_x: None,
+                            window_y: None,
+                            ..saved.clone()
+                        };
+                        saved_size_only.differs_from(current)
+                    } else {
+                        saved.differs_from(current)
+                    }
+                }
+                _ => false,
+            }
+    }
+
     // TODO: we need to update this so that whatever the file is saved as becomes the default file
     // to load next time.
     pub fn confirm_save(
         &mut self,
+        parent: &dyn DialogParent,
         gl: &std::sync::Arc<eframe::glow::Context>,
-        ctx: &egui::Context,
     ) -> Result<()> {
         use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
         let empty_path = "".to_owned();
@@ -43,50 +81,31 @@ impl LiveSplitCoreRenderer {
             .has_been_modified()
         {
             let save_requested = MessageDialog::new()
+                .set_parent(parent)
                 .set_level(MessageLevel::Warning)
                 .set_title("Save Splits")
                 .set_description("Splits have been modified. Save splits?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested == MessageDialogResult::Yes {
-                self.save_splits_dialog(&document_dir)?;
+                self.save_splits_dialog(parent, &document_dir)?;
             }
         }
-        // Check if layout needs saving: either the editor changed it, or the
-        // user moved/resized the window beyond the WM's normal adjustments.
-        let layout_changed = self.ui.layout_modified || {
-            if let Some(ref saved) = self.saved_layout_meta {
-                let current = LayoutMeta::from_context(ctx);
-                // On Wayland, from_context() returns None for position since
-                // the compositor controls it.  Clear position on the saved
-                // side too so we only compare size.
-                if crate::platform::is_wayland() {
-                    let saved_size_only = LayoutMeta {
-                        window_x: None,
-                        window_y: None,
-                        ..saved.clone()
-                    };
-                    saved_size_only.differs_from(&current)
-                } else {
-                    saved.differs_from(&current)
-                }
-            } else {
-                false
-            }
-        };
-        if layout_changed {
+        if self.layout_needs_save() {
             let save_requested = MessageDialog::new()
+                .set_parent(parent)
                 .set_level(MessageLevel::Warning)
                 .set_title("Save Layout")
                 .set_description("Layout has been modified. Save layout?")
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested == MessageDialogResult::Yes {
-                self.save_layout_dialog(&document_dir, ctx)?;
+                self.save_layout_dialog(parent, &document_dir)?;
             }
         }
         if self.settings.read().has_been_modified() {
             let save_requested = MessageDialog::new()
+                .set_parent(parent)
                 .set_level(MessageLevel::Warning)
                 .set_title("Save Autosplitter Config")
                 .set_description(
@@ -95,7 +114,7 @@ impl LiveSplitCoreRenderer {
                 .set_buttons(MessageButtons::YesNo)
                 .show();
             if save_requested == MessageDialogResult::Yes {
-                self.save_autosplitter_dialog(&document_dir)?;
+                self.save_autosplitter_dialog(parent, &document_dir)?;
             }
         }
         self.can_exit = true;
@@ -103,8 +122,8 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_app_config(&self) {
-        messagebox_on_error(|| {
+    pub fn save_app_config(&self, parent: &dyn DialogParent) {
+        messagebox_on_error(parent, || {
             use std::io::Write;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
@@ -122,8 +141,8 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    pub fn load_app_config(&mut self) {
-        messagebox_on_error(|| {
+    pub fn load_app_config(&mut self, parent: &dyn DialogParent) {
+        messagebox_on_error(parent, || {
             use std::io::Read;
             let mut config_path = self.project_dirs.preference_dir().to_path_buf();
             config_path.push("settings.toml");
@@ -325,7 +344,11 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_splits_dialog(&mut self, default_dir: &str) -> Result<()> {
+    pub fn save_splits_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+    ) -> Result<()> {
         let mut fname = self
             .timer
             .read()
@@ -365,6 +388,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.save_dialog(
+            parent,
             &dir,
             &splits.clone(),
             ("LiveSplit Splits", "lss"),
@@ -383,7 +407,11 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_autosplitter_dialog(&mut self, default_dir: &str) -> Result<()> {
+    pub fn save_autosplitter_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+    ) -> Result<()> {
         let mut fname = self
             .timer
             .read()
@@ -423,6 +451,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.save_dialog(
+            parent,
             &dir,
             &autosplitter.clone(),
             ("Autosplitter Configuration", "asc"),
@@ -434,7 +463,11 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn save_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) -> Result<()> {
+    pub fn save_layout_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+    ) -> Result<()> {
         let layout_path: String = self
             .app_config
             .read()
@@ -461,10 +494,15 @@ impl LiveSplitCoreRenderer {
             .unwrap_or("annelid.ls1l")
             .to_owned();
 
-        let meta = LayoutMeta::from_context(ctx);
+        let meta = self
+            .window_geometry
+            .clone()
+            .or_else(|| self.saved_layout_meta.clone())
+            .unwrap_or_default();
         use rfd::FileDialog;
-        messagebox_on_error(|| {
+        messagebox_on_error(parent, || {
             let path = FileDialog::new()
+                .set_parent(parent)
                 .set_directory(&dir)
                 .set_file_name(&default_fname)
                 .add_filter("LiveSplit One Layout", &["ls1l"])
@@ -497,14 +535,16 @@ impl LiveSplitCoreRenderer {
 
     pub fn save_dialog(
         &mut self,
+        parent: &dyn DialogParent,
         default_dir: &str,
         default_fname: &str,
         file_type: (&str, &str),
         save_action: impl FnOnce(&mut Self, std::fs::File) -> Result<()>,
     ) {
         use rfd::FileDialog;
-        messagebox_on_error(|| {
+        messagebox_on_error(parent, || {
             let path = FileDialog::new()
+                .set_parent(parent)
                 .set_directory(default_dir)
                 .set_file_name(default_fname)
                 .add_filter(file_type.0, &[file_type.1])
@@ -524,7 +564,12 @@ impl LiveSplitCoreRenderer {
         });
     }
 
-    pub fn open_layout_dialog(&mut self, default_dir: &str, ctx: &egui::Context) -> Result<()> {
+    pub fn open_layout_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+        ctx: &egui::Context,
+    ) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
@@ -539,6 +584,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.open_dialog(
+            parent,
             &dir,
             &[
                 ("LiveSplit Layout", "lsl"),
@@ -554,7 +600,11 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn open_splits_dialog(&mut self, default_dir: &str) -> Result<()> {
+    pub fn open_splits_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+    ) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
@@ -568,7 +618,7 @@ impl LiveSplitCoreRenderer {
             .into_os_string()
             .into_string()
             .expect("utf8");
-        self.open_dialog(&dir, &[("LiveSplit Splits", "lss")], |me, path| {
+        self.open_dialog(parent, &dir, &[("LiveSplit Splits", "lss")], |me, path| {
             me.load_splits(path.clone())?;
             me.app_config.write().recent_splits =
                 Some(path.into_os_string().into_string().expect("utf8"));
@@ -577,7 +627,11 @@ impl LiveSplitCoreRenderer {
         Ok(())
     }
 
-    pub fn open_autosplitter_dialog(&mut self, default_dir: &str) -> Result<()> {
+    pub fn open_autosplitter_dialog(
+        &mut self,
+        parent: &dyn DialogParent,
+        default_dir: &str,
+    ) -> Result<()> {
         let default_path_buf = std::path::Path::new(default_dir).to_path_buf();
         let dir = self
             .app_config
@@ -592,6 +646,7 @@ impl LiveSplitCoreRenderer {
             .into_string()
             .expect("utf8");
         self.open_dialog(
+            parent,
             &dir,
             &[("Autosplitter Configuration", "asc")],
             |me, path| {
@@ -607,13 +662,16 @@ impl LiveSplitCoreRenderer {
 
     pub fn open_dialog(
         &mut self,
+        parent: &dyn DialogParent,
         default_dir: &str,
         file_types: &[(&str, &str)],
         open_action: impl FnOnce(&mut Self, std::path::PathBuf) -> Result<()>,
     ) {
         use rfd::FileDialog;
-        messagebox_on_error(|| {
-            let mut dialog = FileDialog::new().set_directory(default_dir);
+        messagebox_on_error(parent, || {
+            let mut dialog = FileDialog::new()
+                .set_parent(parent)
+                .set_directory(default_dir);
             for file_type in file_types {
                 dialog = dialog.add_filter(file_type.0, &[file_type.1])
             }
