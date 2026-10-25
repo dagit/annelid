@@ -27,6 +27,9 @@ pub enum LogLevel {
     Debug,
 }
 
+/// The log level used unless `RUST_LOG` says otherwise.
+pub const DEFAULT_LEVEL: LogLevel = LogLevel::Info;
+
 impl LogLevel {
     pub const ALL: &[LogLevel] = &[
         LogLevel::Error,
@@ -35,11 +38,11 @@ impl LogLevel {
         LogLevel::Debug,
     ];
 
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             LogLevel::Error => "error",
             LogLevel::Warn => "warn",
-            LogLevel::Info => "info",
+            LogLevel::Info => "annelid=info,warn",
             LogLevel::Debug => "annelid=debug,warn",
         }
     }
@@ -47,8 +50,8 @@ impl LogLevel {
     pub fn label(self) -> &'static str {
         match self {
             LogLevel::Error => "Error",
-            LogLevel::Warn => "Warn (default)",
-            LogLevel::Info => "Info",
+            LogLevel::Warn => "Warn",
+            LogLevel::Info => "Info (default)",
             LogLevel::Debug => "Debug",
         }
     }
@@ -151,7 +154,8 @@ fn init_file_logging(log_dir: &Path, log_buffer: LogBuffer) {
 
     let file_appender = rolling::daily(log_dir, "annelid.log");
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(DEFAULT_LEVEL.as_str()));
     let (filter_layer, reload_handle) = tracing_subscriber::reload::Layer::new(filter);
     FILTER_HANDLE.set(reload_handle).ok();
 

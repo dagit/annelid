@@ -21,6 +21,32 @@ fn error_report_says_why_loading_failed() {
 }
 
 #[test]
+fn error_report_does_not_repeat_a_cause_the_message_already_includes() {
+    // tungstenite's errors put their cause in their own message, so a user's
+    // log said "... (os error 10054): ... (os error 10054)".
+    use anyhow::Context;
+    let reset = std::io::Error::new(
+        std::io::ErrorKind::ConnectionReset,
+        "An existing connection was forcibly closed by the remote host. (os error 10054)",
+    );
+    let err = anyhow::Error::from(tungstenite::Error::Io(reset));
+    assert_eq!(
+        error_report(&err),
+        "IO error: An existing connection was forcibly closed by the remote host. (os error 10054)"
+    );
+
+    let err = Err::<(), _>(tungstenite::Error::Url(
+        tungstenite::error::UrlError::UnableToConnect("ws://localhost:23074/".into()),
+    ))
+    .context("creating usb2snes connection")
+    .unwrap_err();
+    assert_eq!(
+        error_report(&err),
+        "creating usb2snes connection: URL error: Unable to connect to ws://localhost:23074/"
+    );
+}
+
+#[test]
 fn from_de_error_produces_invalid_data() {
     let toml_err = toml::from_str::<toml::Value>("{{{{bad").unwrap_err();
     let io_err = from_de_error(toml_err);

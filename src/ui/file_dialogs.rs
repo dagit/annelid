@@ -73,13 +73,7 @@ impl LiveSplitCoreRenderer {
                 Some(d) => d.to_str().unwrap_or("").to_owned(),
             },
         };
-        if self
-            .timer
-            .read()
-            .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))?
-            .run()
-            .has_been_modified()
-        {
+        if read_timer(&self.timer)?.run().has_been_modified() {
             let save_requested = MessageDialog::new()
                 .set_parent(parent)
                 .set_level(MessageLevel::Warning)
@@ -331,10 +325,7 @@ impl LiveSplitCoreRenderer {
         use std::io::{BufReader, Read};
         let f = std::fs::File::open(&path)?;
         let file_contents: std::result::Result<Vec<_>, _> = BufReader::new(f).bytes().collect();
-        *self
-            .timer
-            .write()
-            .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))? =
+        *write_timer(&self.timer)? =
             Timer::new(composite::parse(&file_contents?, path.parent())?.run)?;
         Ok(())
     }
@@ -349,12 +340,7 @@ impl LiveSplitCoreRenderer {
         parent: &dyn DialogParent,
         default_dir: &str,
     ) -> Result<()> {
-        let mut fname = self
-            .timer
-            .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on timer: {e}"))?
-            .run()
-            .extended_file_name(false);
+        let mut fname = read_timer(&self.timer)?.run().extended_file_name(false);
         let splits = self
             .app_config
             .read()
@@ -396,9 +382,7 @@ impl LiveSplitCoreRenderer {
                 use livesplit_core::run::saver::livesplit::IoWrite;
                 let writer = IoWrite(&f);
                 livesplit_core::run::saver::livesplit::save_timer(
-                    &*me.timer
-                        .read()
-                        .map_err(|e| anyhow!("failed to acquire read lock on config: {e}"))?,
+                    &*read_timer(&me.timer)?,
                     writer,
                 )?;
                 Ok(())
@@ -412,12 +396,7 @@ impl LiveSplitCoreRenderer {
         parent: &dyn DialogParent,
         default_dir: &str,
     ) -> Result<()> {
-        let mut fname = self
-            .timer
-            .read()
-            .map_err(|e| anyhow!("failed to acquire read lock on timer: {e}"))?
-            .run()
-            .extended_file_name(false);
+        let mut fname = read_timer(&self.timer)?.run().extended_file_name(false);
         let autosplitter: String = self
             .app_config
             .read()

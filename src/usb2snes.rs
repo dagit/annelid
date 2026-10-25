@@ -101,6 +101,25 @@ pub struct SyncClient {
     devel: bool,
 }
 
+/// An unexpected message from the server, for error messages.
+fn describe(message: &Message) -> String {
+    match message {
+        Message::Text(text) => format!("the text {:?}", text.as_str()),
+        Message::Binary(data) => format!("{} bytes of binary data", data.len()),
+        Message::Ping(_) => "a ping".to_string(),
+        Message::Pong(_) => "a pong".to_string(),
+        Message::Close(Some(frame)) => {
+            format!(
+                "a close frame ({}: {:?})",
+                frame.code,
+                frame.reason.as_str()
+            )
+        }
+        Message::Close(None) => "a close frame".to_string(),
+        Message::Frame(_) => "a raw frame".to_string(),
+    }
+}
+
 impl SyncClient {
     pub fn connect() -> Result<SyncClient> {
         Ok(SyncClient {
@@ -152,7 +171,7 @@ impl SyncClient {
             Message::Text(value) => {
                 textreply = value.to_string();
             }
-            _ => Err(anyhow!("Error getting a reply"))?,
+            other => Err(anyhow!("Expected a text reply, got {}", describe(&other)))?,
         };
         if self.devel {
             tracing::debug!("Reply:");
@@ -256,7 +275,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err(anyhow!("Error getting a reply"))?,
+                other => Err(anyhow!("Expected binary data, got {}", describe(&other)))?,
             }
             if data.len() == size {
                 break;
@@ -285,7 +304,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err(anyhow!("Error getting a reply"))?,
+                other => Err(anyhow!("Expected binary data, got {}", describe(&other)))?,
             }
             if data.len() == size {
                 break;
@@ -311,7 +330,7 @@ impl SyncClient {
                 Message::Binary(msgdata) => {
                     data.extend(&msgdata);
                 }
-                _ => Err(anyhow!("Error getting a reply"))?,
+                other => Err(anyhow!("Expected binary data, got {}", describe(&other)))?,
             }
             if data.len() == total_size {
                 break;

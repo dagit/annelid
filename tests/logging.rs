@@ -1,5 +1,22 @@
-use annelid::logging::sanitize_path;
+use annelid::logging::{sanitize_path, DEFAULT_LEVEL};
 use std::path::Path;
+use tracing::Level;
+use tracing_subscriber::prelude::*;
+
+#[test]
+fn default_log_level_keeps_annelids_info_and_quiets_dependencies() {
+    // A user's logs couldn't say when annelid started or exited, or when the
+    // autosplitter connected: annelid logs those at info, which the default
+    // level dropped.
+    let filter = tracing_subscriber::EnvFilter::new(DEFAULT_LEVEL.as_str());
+    let subscriber = tracing_subscriber::registry().with(filter);
+    tracing::subscriber::with_default(subscriber, || {
+        assert!(tracing::enabled!(target: "annelid::livesplit_renderer", Level::INFO));
+        assert!(!tracing::enabled!(target: "annelid::livesplit_renderer", Level::DEBUG));
+        assert!(tracing::enabled!(target: "eframe", Level::WARN));
+        assert!(!tracing::enabled!(target: "eframe", Level::INFO));
+    });
+}
 
 #[test]
 fn sanitize_replaces_home_dir() {

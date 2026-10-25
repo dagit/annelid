@@ -59,7 +59,15 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(log_dir)?;
     let log_buffer = logging::init(log_dir);
 
-    tracing::debug!("Annelid starting up");
+    tracing::info!(
+        "Annelid {} ({}) starting on {} {}, pid {}",
+        env!("CARGO_PKG_VERSION"),
+        // Set by GitHub Actions, which builds the releases.
+        option_env!("GITHUB_SHA").map_or("local build", |sha| sha.get(..7).unwrap_or(sha)),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        std::process::id()
+    );
     tracing::debug!("Config dir: {}", logging::sanitize_path(preference_dir));
     tracing::debug!("Log dir: {}", logging::sanitize_path(log_dir));
     tracing::debug!(

@@ -1,5 +1,23 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use livesplit_core::{SharedTimer, Timer};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use std::sync::{RwLockReadGuard, RwLockWriteGuard};
+
+/// Locks the timer for reading. Fails if the lock is poisoned, i.e. a thread
+/// panicked while holding it. (anyhow's `.context()` can't take the lock's
+/// error itself, because that error holds the guard.)
+pub fn read_timer(timer: &SharedTimer) -> Result<RwLockReadGuard<'_, Timer>> {
+    timer
+        .read()
+        .map_err(|e| anyhow!("failed to acquire read lock on timer: {e}"))
+}
+
+/// Locks the timer for writing; see [`read_timer`].
+pub fn write_timer(timer: &SharedTimer) -> Result<RwLockWriteGuard<'_, Timer>> {
+    timer
+        .write()
+        .map_err(|e| anyhow!("failed to acquire write lock on timer: {e}"))
+}
 
 /// A window that native dialogs can be owned by, e.g. eframe's `Frame` or
 /// `CreationContext`.
@@ -18,7 +36,16 @@ impl<T: HasWindowHandle + HasDisplayHandle + ?Sized> DialogParent for T {}
 /// context, down to the root cause, e.g. `Failed to load splits file "x.lss":
 /// The system cannot find the file specified. (os error 2)`.
 pub fn error_report(e: &anyhow::Error) -> String {
-    format!("{e:#}")
+    let mut report = e.to_string();
+    for cause in e.chain().skip(1) {
+        let cause = cause.to_string();
+        // Some errors, e.g. tungstenite's, already end with their cause's message.
+        if !report.ends_with(&cause) {
+            report.push_str(": ");
+            report.push_str(&cause);
+        }
+    }
+    report
 }
 
 pub fn messagebox_on_error<F>(parent: &dyn DialogParent, f: F)
