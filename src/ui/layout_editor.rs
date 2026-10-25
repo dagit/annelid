@@ -956,7 +956,7 @@ fn layout_editor_ui(
                     ui.separator();
                     ui.strong(format!(
                         "Settings: {}",
-                        &snapshot.components[snapshot.selected_component as usize]
+                        snapshot.components[snapshot.selected_component as usize]
                     ));
                     component_changes = show_settings_editable(
                         ui,

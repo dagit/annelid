@@ -82,6 +82,8 @@ pub struct LiveSplitCoreRenderer {
     /// The window geometry that was last loaded from or saved to a layout file.
     /// Used to detect whether the user has moved/resized the window.
     pub(crate) saved_layout_meta: Option<crate::config::layout_meta::LayoutMeta>,
+    /// The window's geometry as of the most recent frame that had one.
+    pub(crate) window_geometry: Option<crate::config::layout_meta::LayoutMeta>,
     pub(crate) log_buffer: crate::logging::LogBuffer,
     pub(crate) ui: UiState,
 }
@@ -116,6 +118,7 @@ impl LiveSplitCoreRenderer {
             global_hotkey_hook: None,
             load_errors: vec![],
             saved_layout_meta: None,
+            window_geometry: None,
             log_buffer,
             ui: UiState::new(),
         }
@@ -138,24 +141,25 @@ impl eframe::App for LiveSplitCoreRenderer {
             let mut queue: Vec<anyhow::Error> = vec![];
             std::mem::swap(&mut queue, &mut self.load_errors);
             for e in queue.into_iter() {
-                messagebox_on_error(move || Err(e))
+                messagebox_on_error(&*frame, move || Err(e))
             }
         }
         if !self.app_config_processed {
             self.process_app_config(ctx);
             self.app_config_processed = true;
         }
+        self.track_window_geometry(ctx);
         let close_requested = ctx.input(|i| i.viewport().close_requested());
         if close_requested {
             self.is_exiting = true;
             if let Some(gl) = frame.gl() {
-                if let Err(e) = self.confirm_save(gl, ctx) {
-                    tracing::error!("Error during save on exit: {e}");
+                if let Err(e) = self.confirm_save(&*frame, gl) {
+                    tracing::error!("Error during save on exit: {}", error_report(&e));
                 }
             } else {
                 tracing::error!("No GL context available during exit");
             }
-            self.save_app_config();
+            self.save_app_config(&*frame);
         }
         if self.can_exit {
             ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
@@ -354,7 +358,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         self.show_splits_editor(ctx);
         self.show_layout_editor(ctx);
         self.show_log_viewer(ctx);
-        self.process_ui_actions(ctx);
+        self.process_ui_actions(ctx, &*frame);
         ctx.input(|i| {
             let scroll_delta = i.raw_scroll_delta;
             if scroll_delta.y > 0.0 {
@@ -386,7 +390,7 @@ pub fn app_init(
 ) {
     let context = cc.egui_ctx.clone();
     context.set_visuals(egui::Visuals::dark());
-    app.load_app_config();
+    app.load_app_config(cc);
     if app.app_config.read().renderer == Some(RendererType::Gpu) {
         let gl = cc
             .gl
@@ -404,7 +408,7 @@ pub fn app_init(
         }
     }
     if app.app_config.read().global_hotkeys == Some(YesOrNo::Yes) {
-        messagebox_on_error(|| app.enable_global_hotkeys());
+        messagebox_on_error(cc, || app.enable_global_hotkeys());
     }
     let frame_rate = app
         .app_config

@@ -203,6 +203,7 @@ dependencies = [
  "memoffset",
  "parking_lot",
  "proptest",
+ "raw-window-handle",
  "rfd",
  "roxmltree",
  "serde",
@@ -220,6 +221,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-tracy",
  "tungstenite",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

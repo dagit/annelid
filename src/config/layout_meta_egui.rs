@@ -1,47 +1,52 @@
 use eframe::egui;
 
-use super::layout_meta::{LayoutMeta, WindowGeometry};
-
-const DEFAULT_WIDTH: f32 = 800.0;
-const DEFAULT_HEIGHT: f32 = 600.0;
+use super::layout_meta::LayoutMeta;
 
 impl LayoutMeta {
-    /// Read current window geometry from the egui context.
-    pub fn from_context(ctx: &egui::Context) -> Self {
-        let (width, height) = ctx.input(|i| {
-            i.viewport().inner_rect.map_or_else(
-                || {
-                    tracing::warn!("Could not read window inner rect, using defaults");
-                    (DEFAULT_WIDTH, DEFAULT_HEIGHT)
-                },
-                |r| (r.width(), r.height()),
+    /// Read current window geometry from the egui context, or `None` while the
+    /// window is minimized and has none.
+    pub fn from_context(ctx: &egui::Context) -> Option<Self> {
+        ctx.input(|i| {
+            Self::from_viewport(
+                i.viewport(),
+                i.content_rect(),
+                crate::platform::is_wayland(),
             )
-        });
+        })
+    }
+
+    /// Window geometry from a viewport's info, or `None` while the window is
+    /// minimized and has none. `content_rect` is the area egui lays out into,
+    /// and `wayland` says whether the window is on Wayland.
+    pub fn from_viewport(
+        viewport: &egui::ViewportInfo,
+        content_rect: egui::Rect,
+        wayland: bool,
+    ) -> Option<Self> {
+        if viewport.minimized == Some(true) {
+            return None;
+        }
+        let size = match viewport.inner_rect {
+            Some(inner) => inner.size(),
+            // egui never has an inner rect on Wayland, which can't report
+            // window positions, but the content rect is the same size.
+            None if wayland => content_rect.size(),
+            // Anywhere else, a missing inner rect means the window is minimized.
+            None => return None,
+        };
         // Wayland does not support reading window position; avoid storing
         // bogus (0, 0) values that would overwrite valid X11 positions in
         // shared layout files.
-        if crate::platform::is_wayland() {
-            return LayoutMeta {
-                window_x: None,
-                window_y: None,
-                window_width: Some(width),
-                window_height: Some(height),
-            };
-        }
-        let (x, y) = ctx.input(|i| {
-            i.viewport().outer_rect.map_or_else(
-                || {
-                    tracing::warn!("Could not read window outer rect, using defaults");
-                    (0.0, 0.0)
-                },
-                |r| (r.left(), r.top()),
-            )
-        });
-        Self::from_geometry(WindowGeometry {
-            x,
-            y,
-            width,
-            height,
+        let position = if wayland {
+            None
+        } else {
+            viewport.outer_rect.map(|outer| outer.min)
+        };
+        Some(LayoutMeta {
+            window_x: position.map(|p| p.x),
+            window_y: position.map(|p| p.y),
+            window_width: Some(size.x),
+            window_height: Some(size.y),
         })
     }
 
