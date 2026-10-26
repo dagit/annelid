@@ -1867,4 +1867,16 @@ impl AutoSplitter for SuperMetroidAutoSplitter {
     fn reset_game_tracking(&mut self) {
         self.snes = SNESState::new();
     }
+
+    fn game_status(&self) -> String {
+        let snes = &self.snes;
+        format!(
+            "game state {:#04x}, room {:#06x}, IGT {}:{:02}:{:02}",
+            snes["gameState"].current,
+            snes["roomID"].current,
+            snes["igtHours"].current,
+            snes["igtMinutes"].current,
+            snes["igtSeconds"].current
+        )
+    }
 }

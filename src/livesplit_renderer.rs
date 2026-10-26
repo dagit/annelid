@@ -1,3 +1,4 @@
+use crate::autosplitters::connection_log::{ConnectionLog, LogLine};
 use crate::autosplitters::supermetroid::Settings;
 use crate::autosplitters::supermetroid::SuperMetroidAutoSplitter;
 use crate::autosplitters::AutoSplitter;
@@ -151,6 +152,7 @@ impl eframe::App for LiveSplitCoreRenderer {
         self.track_window_geometry(ctx);
         let close_requested = ctx.input(|i| i.viewport().close_requested());
         if close_requested {
+            tracing::info!("Close requested");
             self.is_exiting = true;
             if let Some(gl) = frame.gl() {
                 if let Err(e) = self.confirm_save(&*frame, gl) {
@@ -371,6 +373,10 @@ impl eframe::App for LiveSplitCoreRenderer {
 
         //println!("Time to update: {}μs", update_timer.elapsed().as_micros());
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        tracing::info!("Exiting");
+    }
 }
 
 fn panic_payload_to_string(payload: &Box<dyn std::any::Any + Send>) -> String {
@@ -457,17 +463,19 @@ pub fn app_init(
                 if let Err(panic) =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         if polling_rate > 0.0 {
+                            let mut connection_log = ConnectionLog::new(std::time::Instant::now());
                             loop {
                                 let period = std::time::Duration::from_secs_f32(1.0 / polling_rate);
-                                print_on_error(|| -> anyhow::Result<()> {
+                                let result = (|| -> anyhow::Result<()> {
                                     let mut client = crate::usb2snes::SyncClient::connect()
                                         .context("creating usb2snes connection")?;
                                     client.set_name("annelid")?;
-                                    tracing::info!("Server version is {:?}", client.app_version()?);
+                                    // e.g. SNI-0.0.103, for the log.
+                                    let server = client.app_version()?;
                                     let mut devices = client.list_device()?.to_vec();
                                     if devices.len() != 1 {
                                         if devices.is_empty() {
-                                            Err(anyhow!("No devices present"))?;
+                                            Err(anyhow!("No devices present (server: {server})"))?;
                                         } else {
                                             Err(anyhow!(
                                                 "You need to select a device: {:#?}",
@@ -477,55 +485,79 @@ pub fn app_init(
                                     }
                                     let device =
                                         devices.pop().ok_or(anyhow!("Device list was empty"))?;
-                                    tracing::info!("Using device: {device}");
                                     client.attach(&device)?;
-                                    tracing::info!("Connected.");
                                     tracing::debug!("{:#?}", client.info()?);
                                     let mut autosplitter: Box<dyn AutoSplitter> =
                                         Box::new(SuperMetroidAutoSplitter::new(settings.clone()));
                                     let mut next = std::time::Instant::now() + period;
                                     loop {
+                                        let read_started = std::time::Instant::now();
                                         let summary = autosplitter.update(&mut client)?;
+                                        if let Some(line) = connection_log.read(
+                                            &server,
+                                            &device,
+                                            read_started.elapsed(),
+                                            std::time::Instant::now(),
+                                            || autosplitter.game_status(),
+                                        ) {
+                                            line.emit();
+                                        }
                                         if summary.start {
-                                            timer
-                                        .write()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire write lock on timer: {e}")
-                                        })?
-                                        .start()
-                                        .ok();
+                                            let started = write_timer(&timer)?.start();
+                                            let line = match started {
+                                                Ok(_) => format!(
+                                                    "Autosplitter started the timer; {}",
+                                                    autosplitter.game_status()
+                                                ),
+                                                Err(e) => format!(
+                                                    "Autosplitter saw the game start, but didn't start the timer: {e}"
+                                                ),
+                                            };
+                                            if let Some(line) =
+                                                connection_log.event(LogLine::Info(line), std::time::Instant::now())
+                                            {
+                                                line.emit();
+                                            }
                                         }
                                         if summary.reset
                                             && app_config.read().reset_timer_on_game_reset
                                                 == Some(YesOrNo::Yes)
                                         {
-                                            timer
-                                        .write()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire write lock on timer: {e}")
-                                        })?
-                                        .reset(true)
-                                        .ok();
+                                            let reset = write_timer(&timer)?.reset(true);
+                                            let line = match reset {
+                                                Ok(_) => format!(
+                                                    "Autosplitter reset the timer; {}",
+                                                    autosplitter.game_status()
+                                                ),
+                                                Err(e) => format!(
+                                                    "Autosplitter saw the game reset, but didn't reset the timer: {e}"
+                                                ),
+                                            };
+                                            if let Some(line) =
+                                                connection_log.event(LogLine::Info(line), std::time::Instant::now())
+                                            {
+                                                line.emit();
+                                            }
                                         }
                                         if summary.split {
                                             if let Some(t) = autosplitter.gametime_to_seconds() {
-                                                timer
-                                                    .write()
-                                                    .map_err(|e| {
-                                                        anyhow!(
-                                                    "failed to acquire write lock on timer: {e}"
-                                                )
-                                                    })?
-                                                    .set_game_time(t)
-                                                    .ok();
+                                                write_timer(&timer)?.set_game_time(t).ok();
                                             }
-                                            timer
-                                        .write()
-                                        .map_err(|e| {
-                                            anyhow!("failed to acquire write lock on timer: {e}")
-                                        })?
-                                        .split()
-                                        .ok();
+                                            let split = write_timer(&timer)?.split();
+                                            let line = match split {
+                                                Ok(_) => format!(
+                                                    "Autosplitter split; {}",
+                                                    autosplitter.game_status()
+                                                ),
+                                                Err(e) => format!(
+                                                    "Autosplitter saw a split, but didn't split: {e}"
+                                                ),
+                                            };
+                                            if let Some(line) =
+                                                connection_log.event(LogLine::Info(line), std::time::Instant::now())
+                                            {
+                                                line.emit();
+                                            }
                                         }
                                         // If the timer gets reset, we need to make a fresh snes state
                                         if let Ok(ThreadEvent::TimerReset) =
@@ -536,6 +568,15 @@ pub fn app_init(
                                             if app_config.read().reset_game_on_timer_reset
                                                 == Some(YesOrNo::Yes)
                                             {
+                                                if let Some(line) = connection_log.event(
+                                                    LogLine::Info(
+                                                        "Resetting the SNES because the timer was reset"
+                                                            .to_string(),
+                                                    ),
+                                                    std::time::Instant::now(),
+                                                ) {
+                                                    line.emit();
+                                                }
                                                 client.reset()?;
                                             }
                                         }
@@ -548,7 +589,14 @@ pub fn app_init(
                                             next = now + period;
                                         }
                                     }
-                                });
+                                })();
+                                if let Err(e) = result {
+                                    if let Some(line) = connection_log
+                                        .failed(error_report(&e), std::time::Instant::now())
+                                    {
+                                        line.emit();
+                                    }
+                                }
                                 std::thread::sleep(std::time::Duration::from_millis(1000));
                             }
                         }

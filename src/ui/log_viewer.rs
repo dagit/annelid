@@ -5,7 +5,7 @@ use crate::livesplit_renderer::LiveSplitCoreRenderer;
 use crate::logging::{LogBuffer, LogLevel};
 
 /// Tracks the currently selected log level index (indexes into LogLevel::ALL).
-static CURRENT_LEVEL: AtomicU8 = AtomicU8::new(1); // default = Warn
+static CURRENT_LEVEL: AtomicU8 = AtomicU8::new(2); // default = Info
 
 fn log_viewer_ui(ctx: &egui::Context, log_buffer: &LogBuffer, open: &AtomicBool) {
     if ctx.input(|i| i.viewport().close_requested()) {
